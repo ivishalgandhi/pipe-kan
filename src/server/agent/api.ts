@@ -2,9 +2,12 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { loadAgentConfig } from "./config.ts";
 import { createAcpBackend } from "./session.ts";
+import { createSkillRegistry, skillContextBlock } from "./skills.ts";
+import type { SkillRegistry } from "./skills.ts";
 import type { AgentContextBlock, AgentEvent, AgentSession } from "./types.ts";
 
 const sessions = new Map<string, AgentSession>();
+const skills = createSkillRegistry();
 
 function json(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status;
@@ -41,6 +44,15 @@ export function handleAgentApi(req: IncomingMessage, res: ServerResponse): boole
     return true;
   }
 
+  if (url.pathname === "/api/agent/skills" && method === "GET") {
+    json(
+      res,
+      200,
+      skills.list().map((s) => ({ id: s.id, name: s.name, description: s.description })),
+    );
+    return true;
+  }
+
   if (url.pathname === "/api/agent/session" && method === "POST") {
     const cfg = loadAgentConfig();
     const backendConfig = cfg.agents[cfg.defaultAgent];
@@ -66,13 +78,19 @@ export function handleAgentApi(req: IncomingMessage, res: ServerResponse): boole
           sessionId?: string;
           prompt?: string;
           context?: AgentContextBlock[];
+          skillId?: string;
         };
         const session = sessions.get(body.sessionId ?? "");
         if (!session) {
           json(res, 404, { error: "Session not found" });
           return;
         }
-        return session.prompt(String(body.prompt ?? ""), body.context ?? []).then(() => {
+        const context: AgentContextBlock[] = [...(body.context ?? [])];
+        if (body.skillId) {
+          const skill = skills.load(body.skillId);
+          if (skill) context.push(skillContextBlock(skill));
+        }
+        return session.prompt(String(body.prompt ?? ""), context).then(() => {
           json(res, 200, { ok: true });
         });
       })
