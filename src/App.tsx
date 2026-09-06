@@ -882,6 +882,7 @@ export function App() {
   const [presetError, setPresetError] = useState("");
   const [boardKind, setBoardKind] = useState<"stories" | "epics">(readOpener);
   const lastBoard = useRef<Board | null>(null);
+  const [pipeBoard, setPipeBoard] = useState<Board | null>(null);
 
   const visibleOpts: VisibleOpts = { ...chrome, epics };
   const epicBoard = boardKind === "epics";
@@ -941,6 +942,8 @@ export function App() {
   }
 
   function paintBoard(next: Board, kind: "stories" | "epics") {
+    lastBoard.current = next;
+    setPipeBoard(next);
     const listed = next.epics ?? [];
     setColumns(kind === "epics" ? toValue(epicsToColumns(listed)) : toValue(next.columns));
     setEpics(listed);
@@ -950,6 +953,7 @@ export function App() {
 
   function applyBoard(next: Board) {
     lastBoard.current = next;
+    setPipeBoard(next);
     const listed = next.epics ?? [];
     setColumns(boardKind === "epics" ? toValue(epicsToColumns(listed)) : toValue(next.columns));
     setEpics(listed);
@@ -1551,9 +1555,62 @@ export function App() {
               open={agentOpen}
               onClose={() => setAgentOpen(false)}
               selectedIssueKey={openKey ?? selectedEpic ?? undefined}
-              boardFilter={chrome.filter}
-              boardSort={chrome.sort}
-              boardHide={chrome.hide}
+              boardView={{
+                scope: "view",
+                kind: boardKind,
+                selectedEpic: epicBoard ? null : selectedEpic,
+                search,
+                filter: chrome.filter,
+                sort: chrome.sort,
+                hide: chrome.hide,
+                columns: Object.entries(visible).map(([title, cards]) => ({
+                  title,
+                  cards: cards.map((card) => ({
+                    key: card.key,
+                    summary: card.summary,
+                    epic: card.epic,
+                    assignee: card.assignee,
+                    priority: card.priority,
+                    labels: card.labels,
+                    dueDate: card.dueDate,
+                  })),
+                })),
+                epics: visibleEpics.map((epic) => ({
+                  key: epic.key,
+                  summary: epic.summary,
+                  status: epic.status,
+                })),
+              }}
+              pipeView={
+                pipeBoard
+                  ? {
+                      scope: "pipe",
+                      kind: "stories",
+                      selectedEpic: null,
+                      search: "",
+                      filter: {},
+                      sort: "payload",
+                      hide: [],
+                      columns: pipeBoard.columns.map((column) => ({
+                        title: column.title,
+                        cards: column.cards.map((card) => ({
+                          key: card.key,
+                          summary: card.summary,
+                          epic: card.epic,
+                          assignee: card.assignee,
+                          priority: card.priority,
+                          labels: card.labels,
+                          dueDate: card.dueDate,
+                        })),
+                      })),
+                      epics: pipeBoard.epics.map((epic) => ({
+                        key: epic.key,
+                        summary: epic.summary,
+                        status: epic.status,
+                      })),
+                    }
+                  : undefined
+              }
               onApplyPreset={applyNamedPreset}
               onSetFilter={(filter) => persistChrome({ ...chrome, filter })}
             />

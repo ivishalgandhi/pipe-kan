@@ -194,6 +194,7 @@
 
   --animate-marquee: marquee var(--duration) infinite linear;
   --animate-marquee-vertical: marquee-vertical var(--duration) linear infinite;
+  --animate-shimmer: shimmer 1.6s linear infinite;
 
   @keyframes marquee {
     from { transform: translateX(0); }
@@ -203,6 +204,28 @@
     from { transform: translateY(0); }
     to   { transform: translateY(calc(-100% - var(--gap))); }
   }
+  @keyframes shimmer {
+    from { background-position: 100% 0; }
+    to   { background-position: -100% 0; }
+  }
+}
+
+@utility shimmer {
+  background-image: linear-gradient(
+    90deg,
+    currentColor 40%,
+    color-mix(in oklab, currentColor 35%, transparent) 50%,
+    currentColor 60%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: var(--animate-shimmer);
+}
+
+@utility scroll-fade {
+  mask-image: linear-gradient(to bottom, transparent, #000 12px, #000 calc(100% - 12px), transparent);
 }
 
 @layer base {

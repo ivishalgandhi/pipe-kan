@@ -4,6 +4,12 @@ export type AgentConfig = {
   agents: Record<string, AgentBackendConfig>;
 };
 
+export type AgentModel = {
+  id: string;
+  name: string;
+  description?: string;
+};
+
 export type AgentBackendConfig = {
   command: string;
   args?: string[];
@@ -21,6 +27,7 @@ export type AgentEvent =
   | { type: "tool_call"; requestId: string; name: string; args: unknown }
   | { type: "tool_result"; requestId: string; name: string; result: unknown }
   | { type: "request_permission"; requestId: string; kind: string; description: string }
+  | { type: "config"; models: AgentModel[]; selectedModel: string | null }
   | { type: "stop_reason"; reason: string }
   | { type: "error"; message: string }
   | { type: "connected" }
@@ -43,6 +50,10 @@ export type AgentSession = {
   pendingToolCalls(): Map<string, ToolCall>;
   resolveToolCall(requestId: string, resultText: string, rawResult?: unknown): void;
   approve(requestId: string, decision: "once" | "always" | "reject"): void;
+  models(): AgentModel[];
+  selectedModel(): string | null;
+  setModel(id: string): Promise<void>;
+  subscribe(listener: (event: AgentEvent) => void): () => void;
   cancel(): void;
   events(): AsyncIterable<AgentEvent>;
   close(): Promise<void>;

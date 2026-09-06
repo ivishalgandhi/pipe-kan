@@ -2,7 +2,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { expect, test } from "vitest";
 
-import { createAcpBackend } from "./session.ts";
+import { createAcpBackend, createAcpSession } from "./session.ts";
 
 const fakeAgentPath = join(dirname(fileURLToPath(import.meta.url)), "fake-agent.ts");
 
@@ -139,4 +139,113 @@ test("ACP backend auto-executes read-only tools and emits tool_result", async ()
 
   expect(events.some((e) => (e as { type: string }).type === "tool_result")).toBe(true);
   expect(events.some((e) => (e as { type: string }).type === "tool_call")).toBe(false);
+});
+
+test("ACP session exposes live models and applies a requested model", async () => {
+  const backend = createAcpBackend("fake", "Fake");
+  const session = await backend.spawn({
+    command: "bun",
+    args: ["run", fakeAgentPath],
+    model: "sonnet",
+  });
+
+  expect(session.models().map((m) => m.id)).toEqual(["swe-1-6-slow", "swe-1-6-fast", "sonnet"]);
+  expect(session.selectedModel()).toBe("sonnet");
+
+  await session.setModel("swe-1-6-slow");
+  expect(session.selectedModel()).toBe("swe-1-6-slow");
+  await session.close();
+});
+
+test("ACP session maps swe-1-6 to swe-1-6-slow and stays connected", async () => {
+  const backend = createAcpBackend("fake", "Fake");
+  const session = await backend.spawn({
+    command: "bun",
+    args: ["run", fakeAgentPath],
+    model: "swe-1-6",
+  });
+
+  expect(session.selectedModel()).toBe("swe-1-6-slow");
+  await session.close();
+});
+
+test("ACP session stays connected when requested model is unknown", async () => {
+  const backend = createAcpBackend("fake", "Fake");
+  const session = await backend.spawn({
+    command: "bun",
+    args: ["run", fakeAgentPath],
+    model: "claude-sonnet-5-max",
+  });
+
+  expect(session.selectedModel()).toBe("swe-1-6-slow");
+  const stop = Promise.withResolvers<void>();
+  session.subscribe((event) => {
+    if (event.type === "stop_reason") stop.resolve();
+  });
+  await session.prompt("hello");
+  await stop.promise;
+  await session.close();
+});
+
+test("unsubscribed listener does not swallow later events", async () => {
+  const backend = createAcpBackend("fake", "Fake");
+  const session = await backend.spawn({
+    command: "bun",
+    args: ["run", fakeAgentPath],
+  });
+
+  const first: string[] = [];
+  const unsub = session.subscribe((event) => {
+    if (event.type === "agent_message_chunk") first.push(event.text);
+  });
+  unsub();
+
+  const second: string[] = [];
+  const stop = Promise.withResolvers<void>();
+  session.subscribe((event) => {
+    if (event.type === "agent_message_chunk") second.push(event.text);
+    if (event.type === "stop_reason") stop.resolve();
+  });
+
+  await session.prompt("hello world");
+  await stop.promise;
+  await session.close();
+
+  expect(first.join("")).toBe("");
+  expect(second.join("").trim()).toBe("hello world");
+});
+
+test("closing an ACP session during connect fails fast instead of waiting for timeout", async () => {
+  const session = createAcpSession({ command: "sleep", args: ["30"] });
+  const started = Date.now();
+  const connecting = session.connect();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  await session.close();
+  await expect(connecting).rejects.toThrow(/ACP session closed/);
+  expect(Date.now() - started).toBeLessThan(5_000);
+});
+
+test("ACP session includes attached board context in the prompt", async () => {
+  const backend = createAcpBackend("fake", "Fake");
+  const session = await backend.spawn({
+    command: "bun",
+    args: ["run", fakeAgentPath],
+  });
+
+  const chunks: string[] = [];
+  const stop = Promise.withResolvers<void>();
+  session.subscribe((event) => {
+    if (event.type === "agent_message_chunk") chunks.push(event.text);
+    if (event.type === "stop_reason") stop.resolve();
+  });
+
+  await session.prompt("list epics", [
+    { type: "text", text: "The user attached the current Jira Kanban board.\n- DEMO-100 Ship agent panel" },
+  ]);
+  await stop.promise;
+  await session.close();
+
+  const echoed = chunks.join("");
+  expect(echoed).toContain("DEMO-100");
+  expect(echoed).toContain("list epics");
 });

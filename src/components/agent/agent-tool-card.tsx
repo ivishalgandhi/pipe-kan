@@ -1,5 +1,8 @@
+import { ChevronDownIcon, WrenchIcon } from "lucide-react";
+
 import { Button } from "~/components/ui/button";
-import { Card, CardContent, CardHeader } from "~/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "~/components/ui/collapsible";
+import { Marker, MarkerContent, MarkerIcon } from "~/components/ui/marker";
 import { cn } from "~/lib/utils";
 
 type AgentToolCardProps = {
@@ -19,44 +22,61 @@ export function AgentToolCard({
   onAllowAlways,
   onReject,
 }: AgentToolCardProps) {
-  const statusDot = {
-    pending: "bg-muted",
-    in_progress: "bg-blue-500",
-    completed: "bg-green-500",
-    failed: "bg-red-500",
-  }[status];
+  const argEntries = Object.keys(args);
+  const pending = status === "pending" && (onApprove || onAllowAlways || onReject);
 
   return (
-    <Card className={cn("my-2 border", status === "pending" && "border-amber-500/50")}>
-      <CardHeader className="flex flex-row items-center justify-between py-2">
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <span className={cn("size-2 rounded-full", statusDot)} />
-          {name}
-        </div>
-        <span className="text-muted-foreground text-xs uppercase">{status}</span>
-      </CardHeader>
-      <CardContent className="pb-3 pt-0">
-        <pre className="bg-muted rounded-md p-2 text-xs">{JSON.stringify(args, null, 2)}</pre>
-        {status === "pending" && (onApprove || onAllowAlways || onReject) ? (
-          <div className="mt-2 flex gap-2">
-            {onApprove && (
-              <Button size="sm" variant="default" onClick={onApprove}>
-                Allow once
-              </Button>
-            )}
-            {onAllowAlways && (
-              <Button size="sm" variant="secondary" onClick={onAllowAlways}>
-                Allow always
-              </Button>
-            )}
-            {onReject && (
-              <Button size="sm" variant="outline" onClick={onReject}>
-                Reject
-              </Button>
-            )}
-          </div>
-        ) : null}
-      </CardContent>
-    </Card>
+    <Collapsible defaultOpen={status === "pending"} className="w-full">
+      <div
+        className={cn(
+          "rounded-lg border px-2 py-1.5",
+          status === "pending" && "border-warning/50",
+          status === "failed" && "border-destructive/40",
+        )}
+      >
+        <CollapsibleTrigger asChild>
+          <button type="button" className="hover:bg-muted/50 flex w-full items-center gap-2 rounded-md text-left">
+            <Marker className="min-h-0 py-0.5">
+              <MarkerIcon>
+                <WrenchIcon />
+              </MarkerIcon>
+              <MarkerContent className="flex min-w-0 flex-1 items-center gap-2 text-foreground">
+                <span className="truncate font-medium">{name}</span>
+                <span className="text-muted-foreground ml-auto shrink-0 text-[11px] uppercase">
+                  {status.replace("_", " ")}
+                </span>
+                <ChevronDownIcon className="text-muted-foreground size-3.5 shrink-0" />
+              </MarkerContent>
+            </Marker>
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          {argEntries.length > 0 ? (
+            <pre className="text-muted-foreground mt-1 max-h-24 overflow-auto px-1 text-[11px] leading-snug">
+              {JSON.stringify(args, null, 2)}
+            </pre>
+          ) : null}
+          {pending ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {onApprove && (
+                <Button size="sm" variant="default" onClick={onApprove}>
+                  Allow once
+                </Button>
+              )}
+              {onAllowAlways && (
+                <Button size="sm" variant="secondary" onClick={onAllowAlways}>
+                  Allow always
+                </Button>
+              )}
+              {onReject && (
+                <Button size="sm" variant="outline" onClick={onReject}>
+                  Reject
+                </Button>
+              )}
+            </div>
+          ) : null}
+        </CollapsibleContent>
+      </div>
+    </Collapsible>
   );
 }

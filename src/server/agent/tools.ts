@@ -143,7 +143,9 @@ const EXECUTORS: Record<string, ToolExecutor> = {
   },
 };
 
-const SYSTEM_TEXT = `You can call tools by emitting a single JSON code block matching this schema:
+const SYSTEM_TEXT = `Your working context is the attached Jira issues from the pipe. Answer from that payload. Do not search GitHub, git history, or local source files unless the user explicitly asks about the pipe-kan app itself.
+
+You can call tools by emitting a single JSON code block matching this schema:
 
 {"tool": "<name>", "args": {...}}
 

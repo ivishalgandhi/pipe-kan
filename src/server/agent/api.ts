@@ -1,14 +1,21 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import type { App } from "../../app.ts";
-import { loadAgentConfig } from "./config.ts";
-import { createAcpBackend } from "./session.ts";
+import { withPipedBoardContext } from "../../agent-context.ts";
+import {
+  commandOnPath,
+  FALLBACK_MODELS,
+  loadAgentConfig,
+  saveAgentConfig,
+} from "./config.ts";
+import { createAcpSession } from "./session.ts";
 import { createSkillRegistry, skillContextBlock } from "./skills.ts";
-import type { SkillRegistry } from "./skills.ts";
 import { createToolRegistry } from "./tools.ts";
-import type { AgentContextBlock, AgentEvent, AgentSession } from "./types.ts";
+import type { AgentConfig, AgentContextBlock, AgentEvent, AgentSession } from "./types.ts";
 
 const sessions = new Map<string, AgentSession>();
+let connecting: AgentSession | null = null;
+let startEpoch = 0;
 const skills = createSkillRegistry();
 const tools = createToolRegistry();
 
@@ -31,22 +38,65 @@ function pathOf(req: IncomingMessage): URL {
   return new URL(req.url ?? "/", "http://127.0.0.1");
 }
 
+function publicConfig(cfg: AgentConfig) {
+  return {
+    defaultAgent: cfg.defaultAgent,
+    defaultSkill: cfg.defaultSkill ?? null,
+    agents: Object.entries(cfg.agents).map(([id, c]) => ({
+      id,
+      command: [c.command, ...(c.args ?? [])].join(" "),
+      model: c.model ?? null,
+      options: c.options,
+      available: commandOnPath(c.command),
+      models: FALLBACK_MODELS[id] ?? [],
+    })),
+  };
+}
+
+function attachTools(session: AgentSession, app: App) {
+  session.setToolParser((text) => {
+    const call = tools.parse(text);
+    return call ? { requestId: call.requestId, name: call.name, args: call.args } : undefined;
+  });
+  session.setToolExecutor(
+    (name) => !tools.isMutating(name),
+    async (call) => {
+      const result = await tools.execute(call.name, call.args, app);
+      return {
+        text: result.ok ? `Result: ${JSON.stringify(result.value)}` : `Error: ${result.error}`,
+        result: result.ok ? result.value : undefined,
+      };
+    },
+  );
+}
+
+export async function closeAgentSessions(): Promise<void> {
+  startEpoch += 1;
+  const inflight = connecting;
+  connecting = null;
+  const ready = [...sessions.values()];
+  sessions.clear();
+  await Promise.all(
+    [inflight, ...ready].filter((session): session is AgentSession => session != null).map((session) => session.close().catch(() => undefined)),
+  );
+}
+
 export function handleAgentApi(req: IncomingMessage, res: ServerResponse, app: App): boolean {
   const url = pathOf(req);
   const method = (req.method ?? "GET").toUpperCase();
 
   if (url.pathname === "/api/agent/config" && method === "GET") {
-    const cfg = loadAgentConfig();
-    json(res, 200, {
-      defaultAgent: cfg.defaultAgent,
-      defaultSkill: cfg.defaultSkill,
-      agents: Object.entries(cfg.agents).map(([id, c]) => ({
-        id,
-        command: [c.command, ...(c.args ?? [])].join(" "),
-        model: c.model,
-        options: c.options,
-      })),
-    });
+    json(res, 200, publicConfig(loadAgentConfig()));
+    return true;
+  }
+
+  if (url.pathname === "/api/agent/config" && method === "POST") {
+    readBody(req)
+      .then((text) => {
+        const body = (text ? JSON.parse(text) : {}) as Parameters<typeof saveAgentConfig>[0];
+        json(res, 200, publicConfig(saveAgentConfig(body)));
+      })
+      .catch((err) => json(res, 500, { error: String(err) }));
     return true;
   }
 
@@ -60,32 +110,68 @@ export function handleAgentApi(req: IncomingMessage, res: ServerResponse, app: A
   }
 
   if (url.pathname === "/api/agent/session" && method === "POST") {
-    const cfg = loadAgentConfig();
-    const backendConfig = cfg.agents[cfg.defaultAgent];
-    if (!backendConfig) {
-      json(res, 500, { error: `No agent config for ${cfg.defaultAgent}` });
-      return true;
-    }
-    const backend = createAcpBackend(cfg.defaultAgent, cfg.defaultAgent);
-    backend
-      .spawn(backendConfig)
-      .then((session) => {
-        session.setToolParser((text) => {
-          const call = tools.parse(text);
-          return call ? { requestId: call.requestId, name: call.name, args: call.args } : undefined;
+    readBody(req)
+      .then(async (text) => {
+        const body = (text ? JSON.parse(text) : {}) as { agentId?: string; model?: string | null };
+        const cfg = loadAgentConfig();
+        const agentId = body.agentId || cfg.defaultAgent;
+        const backendConfig = cfg.agents[agentId];
+        if (!backendConfig) {
+          json(res, 500, { error: `No agent config for ${agentId}` });
+          return;
+        }
+        if (!commandOnPath(backendConfig.command)) {
+          json(res, 500, { error: `${backendConfig.command} is not on PATH` });
+          return;
+        }
+        const session = createAcpSession({
+          ...backendConfig,
+          model: body.model || backendConfig.model,
         });
-        session.setToolExecutor(
-          (name) => !tools.isMutating(name),
-          async (call) => {
-            const result = await tools.execute(call.name, call.args, app);
-            return {
-              text: result.ok ? `Result: ${JSON.stringify(result.value)}` : `Error: ${result.error}`,
-              result: result.ok ? result.value : undefined,
-            };
-          },
+        const epoch = ++startEpoch;
+        const previous = connecting;
+        const old = [...sessions.values()];
+        connecting = session;
+        sessions.clear();
+        await Promise.all(
+          [previous, ...old].filter((item): item is AgentSession => item != null).map((item) => item.close().catch(() => undefined)),
         );
-        sessions.set(session.id, session);
-        json(res, 200, { sessionId: session.id });
+        try {
+          await session.connect();
+          if (epoch !== startEpoch) {
+            await session.close().catch(() => undefined);
+            json(res, 500, { error: "Session replaced" });
+            return;
+          }
+          connecting = null;
+          attachTools(session, app);
+          sessions.set(session.id, session);
+          json(res, 200, {
+            sessionId: session.id,
+            agentId,
+            models: session.models().length ? session.models() : (FALLBACK_MODELS[agentId] ?? []),
+            selectedModel: session.selectedModel(),
+          });
+        } catch (err) {
+          if (connecting === session) connecting = null;
+          throw err;
+        }
+      })
+      .catch((err) => json(res, 500, { error: String(err) }));
+    return true;
+  }
+
+  if (url.pathname === "/api/agent/model" && method === "POST") {
+    readBody(req)
+      .then(async (text) => {
+        const body = JSON.parse(text) as { sessionId?: string; model?: string };
+        const session = sessions.get(body.sessionId ?? "");
+        if (!session) {
+          json(res, 404, { error: "Session not found" });
+          return;
+        }
+        await session.setModel(String(body.model ?? ""));
+        json(res, 200, { ok: true, models: session.models(), selectedModel: session.selectedModel() });
       })
       .catch((err) => json(res, 500, { error: String(err) }));
     return true;
@@ -105,7 +191,7 @@ export function handleAgentApi(req: IncomingMessage, res: ServerResponse, app: A
           json(res, 404, { error: "Session not found" });
           return;
         }
-        const context: AgentContextBlock[] = [tools.systemBlock(), ...(body.context ?? [])];
+        const context: AgentContextBlock[] = [tools.systemBlock(), ...withPipedBoardContext(app.board(), body.context ?? [])];
         if (body.skillId) {
           const skill = skills.load(body.skillId);
           if (skill) context.push(skillContextBlock(skill));
@@ -189,20 +275,13 @@ export function handleAgentApi(req: IncomingMessage, res: ServerResponse, app: A
       res.write(`data: ${JSON.stringify(event)}\n\n`);
     };
 
-    (async () => {
-      for await (const event of session.events()) {
-        writeEvent(event);
-        if (event.type === "disconnected") {
-          break;
-        }
-      }
-      if (!res.writableEnded) res.end();
-    })().catch((err) => {
-      writeEvent({ type: "error", message: String(err) });
-      if (!res.writableEnded) res.end();
+    const unsubscribe = session.subscribe((event) => {
+      writeEvent(event);
+      if (event.type === "disconnected" && !res.writableEnded) res.end();
     });
 
     req.on("close", () => {
+      unsubscribe();
       if (!res.writableEnded) res.end();
     });
     return true;
