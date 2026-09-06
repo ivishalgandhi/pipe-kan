@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUpDownIcon,
+  BotIcon,
   ChevronDownIcon,
   Columns3Icon,
   EyeOffIcon,
@@ -44,6 +45,7 @@ import {
   type Preset,
   type VisibleOpts,
 } from "./visible.ts";
+import { AgentPanel } from "~/components/agent/agent-panel.tsx";
 import { Avatar, AvatarFallback } from "~/components/ui/avatar";
 import { Button } from "~/components/ui/button";
 import {
@@ -860,6 +862,7 @@ export function App() {
   const [columns, setColumns] = useState<Record<string, Card[]>>({});
   const [epics, setEpics] = useState<Epic[]>([]);
   const [epicChildren, setEpicChildren] = useState<Card[] | null>(null);
+  const [agentOpen, setAgentOpen] = useState(false);
   const [selectedEpic, setSelectedEpic] = useState<string | null>(null);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [openUrl, setOpenUrl] = useState<string | null>(null);
@@ -1380,6 +1383,15 @@ export function App() {
                 </Button>
                 <Button
                   variant="ghost"
+                  size="sm"
+                  onClick={() => setAgentOpen((o) => !o)}
+                  aria-pressed={agentOpen}
+                >
+                  <BotIcon className="mr-1 size-4" />
+                  Agent
+                </Button>
+                <Button
+                  variant="ghost"
                   size="icon-xs"
                   onClick={toggleTheme}
                   aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
@@ -1532,6 +1544,12 @@ export function App() {
             </div>
           </div>
         </ResizablePanel>
+        {agentOpen ? (
+          <>
+            <ResizableHandle />
+            <AgentPanel open={agentOpen} onClose={() => setAgentOpen(false)} />
+          </>
+        ) : null}
       </ResizablePanelGroup>
     </div>
   );

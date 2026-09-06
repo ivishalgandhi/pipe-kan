@@ -33,6 +33,19 @@ test("/api/agent/config returns default agent", async () => {
   expect(body.agents).toContainEqual({ id: "devin", command: "devin acp" });
 });
 
+test("/api/agent/skills lists bundled skills", async () => {
+  const base = await listen();
+  const res = await fetch(`${base}/api/agent/skills`);
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body).toContainEqual(
+    expect.objectContaining({ id: "triage" }),
+  );
+  expect(body).toContainEqual(
+    expect.objectContaining({ id: "ask-matt" }),
+  );
+});
+
 test("unknown /api/agent route returns false", async () => {
   const base = await listen();
   const res = await fetch(`${base}/api/agent/nope`);
