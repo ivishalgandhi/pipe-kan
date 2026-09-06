@@ -4,10 +4,12 @@ import { loadAgentConfig } from "./config.ts";
 import { createAcpBackend } from "./session.ts";
 import { createSkillRegistry, skillContextBlock } from "./skills.ts";
 import type { SkillRegistry } from "./skills.ts";
+import { createToolRegistry } from "./tools.ts";
 import type { AgentContextBlock, AgentEvent, AgentSession } from "./types.ts";
 
 const sessions = new Map<string, AgentSession>();
 const skills = createSkillRegistry();
+const tools = createToolRegistry();
 
 function json(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status;
@@ -64,6 +66,10 @@ export function handleAgentApi(req: IncomingMessage, res: ServerResponse): boole
     backend
       .spawn(backendConfig)
       .then((session) => {
+        session.setToolParser((text) => {
+          const call = tools.parse(text);
+          return call ? { requestId: call.requestId, name: call.name, args: call.args } : undefined;
+        });
         sessions.set(session.id, session);
         json(res, 200, { sessionId: session.id });
       })
@@ -85,7 +91,7 @@ export function handleAgentApi(req: IncomingMessage, res: ServerResponse): boole
           json(res, 404, { error: "Session not found" });
           return;
         }
-        const context: AgentContextBlock[] = [...(body.context ?? [])];
+        const context: AgentContextBlock[] = [tools.systemBlock(), ...(body.context ?? [])];
         if (body.skillId) {
           const skill = skills.load(body.skillId);
           if (skill) context.push(skillContextBlock(skill));

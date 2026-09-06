@@ -25,6 +25,9 @@ export type AgentEvent =
 export type AgentSession = {
   id: string;
   prompt(text: string, context?: AgentContextBlock[]): Promise<void>;
+  setToolParser(
+    parser: (text: string) => { requestId: string; name: string; args: Record<string, unknown> } | undefined,
+  ): void;
   approve(requestId: string, decision: "once" | "always" | "reject"): void;
   cancel(): void;
   events(): AsyncIterable<AgentEvent>;

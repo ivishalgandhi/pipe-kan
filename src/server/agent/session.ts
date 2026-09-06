@@ -38,6 +38,8 @@ class AcpSession implements AgentSession {
   private closed = false;
   private lifetime: { promise: Promise<void>; resolve(): void } | null = null;
   private ready = Promise.withResolvers<void>();
+  private textBuffer = "";
+  private detectToolCall: ((text: string) => { requestId: string; name: string; args: Record<string, unknown> } | undefined) | null = null;
 
   constructor(private config: AgentBackendConfig) {
     this.id = crypto.randomUUID();
@@ -48,6 +50,12 @@ class AcpSession implements AgentSession {
     const blocks: ContentBlock[] = (context ?? []).map(toContentBlock);
     blocks.push({ type: "text", text });
     await this.activeSession.prompt(blocks);
+  }
+
+  setToolParser(
+    parser: (text: string) => { requestId: string; name: string; args: Record<string, unknown> } | undefined,
+  ): void {
+    this.detectToolCall = parser;
   }
 
   approve(requestId: string, decision: "once" | "always" | "reject"): void {
@@ -159,6 +167,12 @@ class AcpSession implements AgentSession {
 
   private handleUpdate(update: SessionUpdate): void {
     if (update.sessionUpdate === "agent_message_chunk" && update.content?.type === "text") {
+      this.textBuffer += update.content.text;
+      const tool = this.detectToolCall?.(this.textBuffer);
+      if (tool) {
+        this.push({ type: "tool_call", ...tool });
+        return;
+      }
       this.push({ type: "agent_message_chunk", text: update.content.text });
     } else if (update.sessionUpdate === "tool_call") {
       this.push({
