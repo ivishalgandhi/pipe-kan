@@ -59,3 +59,40 @@ test("ACP backend emits permission request and resolves it", async () => {
 
   expect(events.some((e) => (e as { type: string }).type === "request_permission")).toBe(true);
 });
+
+test("ACP backend detects tool call in streamed text", async () => {
+  const backend = createAcpBackend("fake", "Fake");
+  const session = await backend.spawn({
+    command: "bun",
+    args: ["run", fakeAgentPath],
+  });
+  session.setToolParser((text) => {
+    const match = text.match(/```json\s*\n?\s*(\{[\s\S]*?\})\s*\n?```/);
+    if (!match) return undefined;
+    try {
+      const parsed = JSON.parse(match[1]) as { tool?: string; args?: Record<string, unknown> };
+      if (!parsed.tool) return undefined;
+      return { requestId: "tc-1", name: parsed.tool, args: parsed.args ?? {} };
+    } catch {
+      return undefined;
+    }
+  });
+
+  const events: unknown[] = [];
+  let toolCallSeen = Promise.withResolvers<void>();
+
+  const reader = (async () => {
+    for await (const event of session.events()) {
+      events.push(event);
+      if (event.type === "tool_call") toolCallSeen.resolve();
+      if (event.type === "stop_reason") break;
+    }
+  })();
+
+  await session.prompt('Use the tool.\n```json\n{"tool":"board_state","args":{}}\n```');
+  await toolCallSeen.promise;
+  await reader;
+  await session.close();
+
+  expect(events.some((e) => (e as { type: string }).type === "tool_call")).toBe(true);
+});

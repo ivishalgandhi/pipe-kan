@@ -22,12 +22,20 @@ export type AgentEvent =
   | { type: "connected" }
   | { type: "disconnected" };
 
+export type ToolCall = {
+  requestId: string;
+  name: string;
+  args: Record<string, unknown>;
+};
+
 export type AgentSession = {
   id: string;
   prompt(text: string, context?: AgentContextBlock[]): Promise<void>;
   setToolParser(
-    parser: (text: string) => { requestId: string; name: string; args: Record<string, unknown> } | undefined,
+    parser: (text: string) => ToolCall | undefined,
   ): void;
+  pendingToolCalls(): Map<string, ToolCall>;
+  resolveToolCall(requestId: string, resultText: string): void;
   approve(requestId: string, decision: "once" | "always" | "reject"): void;
   cancel(): void;
   events(): AsyncIterable<AgentEvent>;

@@ -12,7 +12,14 @@ import type {
   SessionUpdate,
 } from "@agentclientprotocol/sdk";
 
-import type { AgentBackend, AgentBackendConfig, AgentContextBlock, AgentEvent, AgentSession } from "./types.ts";
+import type {
+  AgentBackend,
+  AgentBackendConfig,
+  AgentContextBlock,
+  AgentEvent,
+  AgentSession,
+  ToolCall,
+} from "./types.ts";
 
 export function createAcpBackend(id: string, label: string): AgentBackend {
   return {
@@ -39,7 +46,8 @@ class AcpSession implements AgentSession {
   private lifetime: { promise: Promise<void>; resolve(): void } | null = null;
   private ready = Promise.withResolvers<void>();
   private textBuffer = "";
-  private detectToolCall: ((text: string) => { requestId: string; name: string; args: Record<string, unknown> } | undefined) | null = null;
+  private detectToolCall: ((text: string) => ToolCall | undefined) | null = null;
+  private toolCalls = new Map<string, ToolCall>();
 
   constructor(private config: AgentBackendConfig) {
     this.id = crypto.randomUUID();
@@ -52,10 +60,21 @@ class AcpSession implements AgentSession {
     await this.activeSession.prompt(blocks);
   }
 
-  setToolParser(
-    parser: (text: string) => { requestId: string; name: string; args: Record<string, unknown> } | undefined,
-  ): void {
+  setToolParser(parser: (text: string) => ToolCall | undefined): void {
     this.detectToolCall = parser;
+  }
+
+  pendingToolCalls(): Map<string, ToolCall> {
+    return this.toolCalls;
+  }
+
+  resolveToolCall(requestId: string, resultText: string): void {
+    const call = this.toolCalls.get(requestId);
+    if (!call) return;
+    this.toolCalls.delete(requestId);
+    void this.prompt(
+      `Tool result for ${call.name}(${JSON.stringify(call.args)}):\n${resultText}`,
+    );
   }
 
   approve(requestId: string, decision: "once" | "always" | "reject"): void {
@@ -170,6 +189,7 @@ class AcpSession implements AgentSession {
       this.textBuffer += update.content.text;
       const tool = this.detectToolCall?.(this.textBuffer);
       if (tool) {
+        this.toolCalls.set(tool.requestId, tool);
         this.push({ type: "tool_call", ...tool });
         return;
       }

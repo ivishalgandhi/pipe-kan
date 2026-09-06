@@ -11,5 +11,5 @@ export function handleRequest(
   res: ServerResponse,
   ctx: { app: App; store: IssueStore },
 ): boolean {
-  return handleAppApi(req, res, ctx.app) || handleAgentApi(req, res) || handleFakeJira(req, res, ctx.store);
+  return handleAppApi(req, res, ctx.app) || handleAgentApi(req, res, ctx.app) || handleFakeJira(req, res, ctx.store);
 }

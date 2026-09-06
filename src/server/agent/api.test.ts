@@ -1,7 +1,18 @@
 import { createServer } from "node:http";
 import { afterEach, expect, test } from "vitest";
 
+import type { App } from "../../app.ts";
 import { handleAgentApi } from "./api.ts";
+
+const mockApp = {
+  flags: "",
+  hydrate: () => ({ columns: [], epics: [] }),
+  refresh: async () => ({ columns: [], epics: [] }),
+  children: async () => ({ columns: [], epics: [] }),
+  board: () => ({ columns: [], epics: [] }),
+  move: async () => ({ ok: true, board: { columns: [], epics: [] } }),
+  open: async () => ({ url: "", fields: [] }),
+} satisfies App;
 
 const servers: { close(): void }[] = [];
 
@@ -11,7 +22,7 @@ afterEach(() => {
 
 async function listen() {
   const server = createServer((req, res) => {
-    if (!handleAgentApi(req, res)) {
+    if (!handleAgentApi(req, res, mockApp)) {
       res.statusCode = 404;
       res.end("no");
     }

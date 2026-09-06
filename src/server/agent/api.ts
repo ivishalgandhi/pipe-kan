@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
+import type { App } from "../../app.ts";
 import { loadAgentConfig } from "./config.ts";
 import { createAcpBackend } from "./session.ts";
 import { createSkillRegistry, skillContextBlock } from "./skills.ts";
@@ -30,7 +31,7 @@ function pathOf(req: IncomingMessage): URL {
   return new URL(req.url ?? "/", "http://127.0.0.1");
 }
 
-export function handleAgentApi(req: IncomingMessage, res: ServerResponse): boolean {
+export function handleAgentApi(req: IncomingMessage, res: ServerResponse, app: App): boolean {
   const url = pathOf(req);
   const method = (req.method ?? "GET").toUpperCase();
 
@@ -122,7 +123,7 @@ export function handleAgentApi(req: IncomingMessage, res: ServerResponse): boole
 
   if (url.pathname === "/api/agent/approve" && method === "POST") {
     readBody(req)
-      .then((text) => {
+      .then(async (text) => {
         const body = JSON.parse(text) as {
           sessionId?: string;
           requestId?: string;
@@ -133,7 +134,23 @@ export function handleAgentApi(req: IncomingMessage, res: ServerResponse): boole
           json(res, 404, { error: "Session not found" });
           return;
         }
-        session.approve(String(body.requestId ?? ""), body.decision ?? "reject");
+        const requestId = String(body.requestId ?? "");
+        const decision = body.decision ?? "reject";
+        const toolCall = session.pendingToolCalls().get(requestId);
+        if (toolCall) {
+          if (decision === "reject") {
+            session.resolveToolCall(requestId, "Tool call was rejected by the user.");
+          } else {
+            const result = await tools.execute(toolCall.name, toolCall.args, app);
+            const resultText = result.ok
+              ? `Result: ${JSON.stringify(result.value)}`
+              : `Error: ${result.error}`;
+            session.resolveToolCall(requestId, resultText);
+          }
+          json(res, 200, { ok: true });
+          return;
+        }
+        session.approve(requestId, decision);
         json(res, 200, { ok: true });
       })
       .catch((err) => json(res, 500, { error: String(err) }));
@@ -162,7 +179,7 @@ export function handleAgentApi(req: IncomingMessage, res: ServerResponse): boole
     (async () => {
       for await (const event of session.events()) {
         writeEvent(event);
-        if (event.type === "disconnected" || event.type === "stop_reason") {
+        if (event.type === "disconnected") {
           break;
         }
       }
