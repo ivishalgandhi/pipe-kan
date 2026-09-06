@@ -87,6 +87,30 @@ _Avoid_: view, browse (when meaning this)
 Changing Jira from the Board, only by running jira-cli. Never a direct Jira API call from this app.
 _Avoid_: sync, persist, save (when meaning a Jira mutation)
 
+**Agent**:
+An external coding agent (Cursor today, Devin when available) spawned by pipe-kan over ACP to assist the user inside the app. The agent does not hold Jira credentials.
+_Avoid_: AI assistant, copilot, chatbot (when meaning this integration)
+
+**Agent Sidepanel**:
+The resizable right-side panel where the user chats with the Agent, attaches context, and approves actions.
+_Avoid_: chat panel, assistant window, copilot pane
+
+**ACP**:
+Agent Client Protocol, the JSON-RPC-over-stdio protocol pipe-kan uses to drive the Agent. Not a direct LLM API.
+_Avoid_: MCP, agent API, model protocol
+
+**Skill**:
+A Markdown instruction file in the mattpocock/skills format that guides the Agent's behavior for a specific task. Selected by the user and injected into the ACP prompt as context.
+_Avoid_: plugin, extension, tool (when meaning the instruction file)
+
+**Attached Context**:
+The set of Issue keys, board state, and selected Skill the user adds to the current Agent conversation. Sent as resource blocks in the ACP prompt.
+_Avoid_: prompt, input, attachments
+
+**Agent Action**:
+A mutation the Agent proposes that requires user approval before pipe-kan executes it: Move a Card, Refresh the Board, edit a repo file, or run a terminal command.
+_Avoid_: tool call, command, automation
+
 **Fixture**:
 Checked-in fake `jira issue list --raw` JSON that seeds the Board and the Fake Jira when no Pipe is given.
 _Avoid_: mock, stub, sample (when meaning this file)
