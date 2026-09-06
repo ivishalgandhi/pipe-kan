@@ -1,5 +1,6 @@
 export type AgentConfig = {
   defaultAgent: string;
+  defaultSkill?: string | null;
   agents: Record<string, AgentBackendConfig>;
 };
 
@@ -7,6 +8,8 @@ export type AgentBackendConfig = {
   command: string;
   args?: string[];
   env?: Record<string, string>;
+  model?: string;
+  options?: Record<string, unknown>;
 };
 
 export type AgentContextBlock =
@@ -16,6 +19,7 @@ export type AgentContextBlock =
 export type AgentEvent =
   | { type: "agent_message_chunk"; text: string }
   | { type: "tool_call"; requestId: string; name: string; args: unknown }
+  | { type: "tool_result"; requestId: string; name: string; result: unknown }
   | { type: "request_permission"; requestId: string; kind: string; description: string }
   | { type: "stop_reason"; reason: string }
   | { type: "error"; message: string }
@@ -31,11 +35,13 @@ export type ToolCall = {
 export type AgentSession = {
   id: string;
   prompt(text: string, context?: AgentContextBlock[]): Promise<void>;
-  setToolParser(
-    parser: (text: string) => ToolCall | undefined,
+  setToolParser(parser: (text: string) => ToolCall | undefined): void;
+  setToolExecutor(
+    shouldAutoApprove: (name: string) => boolean,
+    execute: (call: ToolCall) => Promise<{ text: string; result?: unknown }>,
   ): void;
   pendingToolCalls(): Map<string, ToolCall>;
-  resolveToolCall(requestId: string, resultText: string): void;
+  resolveToolCall(requestId: string, resultText: string, rawResult?: unknown): void;
   approve(requestId: string, decision: "once" | "always" | "reject"): void;
   cancel(): void;
   events(): AsyncIterable<AgentEvent>;

@@ -1547,7 +1547,16 @@ export function App() {
         {agentOpen ? (
           <>
             <ResizableHandle />
-            <AgentPanel open={agentOpen} onClose={() => setAgentOpen(false)} />
+            <AgentPanel
+              open={agentOpen}
+              onClose={() => setAgentOpen(false)}
+              selectedIssueKey={openKey ?? selectedEpic ?? undefined}
+              boardFilter={chrome.filter}
+              boardSort={chrome.sort}
+              boardHide={chrome.hide}
+              onApplyPreset={applyNamedPreset}
+              onSetFilter={(filter) => persistChrome({ ...chrome, filter })}
+            />
           </>
         ) : null}
       </ResizablePanelGroup>

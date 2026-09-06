@@ -96,3 +96,47 @@ test("ACP backend detects tool call in streamed text", async () => {
 
   expect(events.some((e) => (e as { type: string }).type === "tool_call")).toBe(true);
 });
+
+test("ACP backend auto-executes read-only tools and emits tool_result", async () => {
+  const backend = createAcpBackend("fake", "Fake");
+  const session = await backend.spawn({
+    command: "bun",
+    args: ["run", fakeAgentPath],
+  });
+  session.setToolParser((text) => {
+    const match = text.match(/```json\s*\n?\s*(\{[\s\S]*?\})\s*\n?```/);
+    if (!match) return undefined;
+    try {
+      const parsed = JSON.parse(match[1]) as { tool?: string; args?: Record<string, unknown> };
+      if (!parsed.tool) return undefined;
+      return { requestId: "tc-auto", name: parsed.tool, args: parsed.args ?? {} };
+    } catch {
+      return undefined;
+    }
+  });
+  session.setToolExecutor(
+    () => true,
+    async (call) => ({ text: `Auto result for ${call.name}`, result: { auto: true } }),
+  );
+
+  const events: unknown[] = [];
+  let toolResultSeen = Promise.withResolvers<void>();
+
+  const reader = (async () => {
+    for await (const event of session.events()) {
+      events.push(event);
+      if (event.type === "tool_result") {
+        toolResultSeen.resolve();
+        break;
+      }
+    }
+  })();
+
+  await session.prompt('Auto tool.\n```json\n{"tool":"board_state","args":{}}\n```');
+  await toolResultSeen.promise;
+  await reader;
+  await session.close().catch(() => void 0);
+
+  expect(events.some((e) => (e as { type: string }).type === "tool_result")).toBe(true);
+  expect(events.some((e) => (e as { type: string }).type === "tool_call")).toBe(false);
+});

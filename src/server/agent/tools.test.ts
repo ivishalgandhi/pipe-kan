@@ -73,3 +73,45 @@ test("execute returns error for unknown tool", async () => {
   const result = await registry.execute("unknown", {}, mockApp);
   expect(result.ok).toBe(false);
 });
+
+test("isMutating returns false for read-only tools and true for mutating tools", () => {
+  const registry = createToolRegistry();
+  expect(registry.isMutating("board_state")).toBe(false);
+  expect(registry.isMutating("issue_details")).toBe(false);
+  expect(registry.isMutating("run_skill")).toBe(false);
+  expect(registry.isMutating("read_repo_file")).toBe(false);
+  expect(registry.isMutating("move_card")).toBe(true);
+  expect(registry.isMutating("refresh_board")).toBe(true);
+});
+
+test("apply_preset returns a UI directive", async () => {
+  const registry = createToolRegistry();
+  const result = await registry.execute("apply_preset", { name: "my-preset" }, mockApp);
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(result.value).toEqual({ __ui_action: "apply_preset", preset: "my-preset" });
+});
+
+test("set_filter returns a UI directive", async () => {
+  const registry = createToolRegistry();
+  const result = await registry.execute("set_filter", { filter: { status: ["Done"] } }, mockApp);
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(result.value).toEqual({ __ui_action: "set_filter", filter: { status: ["Done"] } });
+});
+
+test("run_skill returns skill resource", async () => {
+  const registry = createToolRegistry();
+  const result = await registry.execute("run_skill", { skillId: "triage" }, mockApp);
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect((result.value as { uri: string }).uri).toBe("skill://triage");
+});
+
+test("read_repo_file rejects traversal and reads existing file", async () => {
+  const registry = createToolRegistry();
+  const bad = await registry.execute("read_repo_file", { path: "../package.json" }, mockApp);
+  expect(bad.ok).toBe(false);
+  const good = await registry.execute("read_repo_file", { path: "package.json" }, mockApp);
+  expect(good.ok).toBe(true);
+});

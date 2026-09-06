@@ -34,14 +34,19 @@ async function listen() {
   return `http://127.0.0.1:${addr.port}`;
 }
 
-test("/api/agent/config returns default agent", async () => {
+test("/api/agent/config returns default agent, skill, and model options", async () => {
   const base = await listen();
   const res = await fetch(`${base}/api/agent/config`);
   expect(res.status).toBe(200);
   const body = await res.json();
   expect(body.defaultAgent).toBe("cursor");
-  expect(body.agents).toContainEqual({ id: "cursor", command: "cursor-agent acp" });
-  expect(body.agents).toContainEqual({ id: "devin", command: "devin acp" });
+  expect(body.defaultSkill).toBeNull();
+  expect(body.agents).toContainEqual(
+    expect.objectContaining({ id: "cursor", command: "cursor-agent acp", model: "claude-sonnet-4" }),
+  );
+  expect(body.agents).toContainEqual(
+    expect.objectContaining({ id: "devin", command: "devin acp", model: "devin" }),
+  );
 });
 
 test("/api/agent/skills lists bundled skills", async () => {

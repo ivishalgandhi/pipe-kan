@@ -1,17 +1,15 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import type { App } from "../../app.ts";
-import type { AgentContextBlock } from "./types.ts";
+import { createSkillRegistry, skillContextBlock } from "./skills.ts";
+import type { AgentContextBlock, ToolCall } from "./types.ts";
 
 export type ToolSchema = {
   name: string;
   description: string;
   parameters: Record<string, { type: string; description: string }>;
   mutates: boolean;
-};
-
-export type ToolCall = {
-  requestId: string;
-  name: string;
-  args: Record<string, unknown>;
 };
 
 export type ToolResult =
@@ -24,6 +22,7 @@ export type ToolRegistry = {
   definitions(): ToolSchema[];
   systemBlock(): AgentContextBlock;
   parse(text: string): ToolCall | undefined;
+  isMutating(name: string): boolean;
   execute(name: string, args: Record<string, unknown>, app: App): Promise<ToolResult>;
 };
 
@@ -41,12 +40,23 @@ const TOOLS: ToolSchema[] = [
     mutates: false,
   },
   {
+    name: "run_skill",
+    description: "Load a skill by id and return its instructions as context.",
+    parameters: { skillId: { type: "string", description: "Skill id, e.g. triage" } },
+    mutates: false,
+  },
+  {
+    name: "read_repo_file",
+    description: "Read a file under the repo root as plain text.",
+    parameters: { path: { type: "string", description: "Relative repo path" } },
+    mutates: false,
+  },
+  {
     name: "move_card",
     description: "Move a card to a new status. Requires user approval because it changes Jira via jira-cli.",
     parameters: {
       key: { type: "string", description: "Issue key" },
-      status: { type: "string", description: "Target status name" },
-    },
+      status: { type: "string", description: "Target status name" }},
     mutates: true,
   },
   {
@@ -69,6 +79,8 @@ const TOOLS: ToolSchema[] = [
   },
 ];
 
+const skills = createSkillRegistry();
+
 const EXECUTORS: Record<string, ToolExecutor> = {
   board_state(_, app) {
     const board = app.board();
@@ -84,6 +96,27 @@ const EXECUTORS: Record<string, ToolExecutor> = {
     const result = await app.open(key);
     if (result.error) return { ok: false, error: result.error };
     return { ok: true, value: { url: result.url, fields: result.fields } };
+  },
+  run_skill(args) {
+    const skillId = String(args.skillId ?? "");
+    if (!skillId) return { ok: false, error: "Missing skillId" };
+    const skill = skills.load(skillId);
+    if (!skill) return { ok: false, error: `Skill not found: ${skillId}` };
+    const block = skillContextBlock(skill);
+    if (block.type !== "resource") return { ok: false, error: "Skill produced unexpected block" };
+    return { ok: true, value: block.resource };
+  },
+  read_repo_file(args) {
+    const relPath = String(args.path ?? "");
+    if (!relPath) return { ok: false, error: "Missing path" };
+    if (relPath.includes("..")) return { ok: false, error: "Path traversal not allowed" };
+    const repoRoot = process.cwd();
+    try {
+      const text = readFileSync(join(repoRoot, relPath), "utf8");
+      return { ok: true, value: { path: relPath, text } };
+    } catch (err) {
+      return { ok: false, error: String(err) };
+    }
   },
   async move_card(args, app) {
     const key = String(args.key ?? "");
@@ -101,12 +134,12 @@ const EXECUTORS: Record<string, ToolExecutor> = {
   apply_preset(args) {
     const name = String(args.name ?? "");
     if (!name) return { ok: false, error: "Missing preset name" };
-    return { ok: true, value: `Preset '${name}' would be applied by the UI when tool execution is wired there.` };
+    return { ok: true, value: { __ui_action: "apply_preset", preset: name } };
   },
   set_filter(args) {
     const filter = args.filter;
     if (!filter || typeof filter !== "object") return { ok: false, error: "Missing filter object" };
-    return { ok: true, value: `Filter set to ${JSON.stringify(filter)}. UI should apply this filter.` };
+    return { ok: true, value: { __ui_action: "set_filter", filter } };
   },
 };
 
@@ -143,6 +176,9 @@ export function createToolRegistry(): ToolRegistry {
       } catch {
         return undefined;
       }
+    },
+    isMutating(name) {
+      return TOOLS.find((t) => t.name === name)?.mutates ?? true;
     },
     async execute(name, args, app) {
       const executor = EXECUTORS[name];

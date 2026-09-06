@@ -7,10 +7,18 @@ type AgentToolCardProps = {
   args: Record<string, unknown>;
   status?: "pending" | "in_progress" | "completed" | "failed";
   onApprove?: () => void;
+  onAllowAlways?: () => void;
   onReject?: () => void;
 };
 
-export function AgentToolCard({ name, args, status = "pending", onApprove, onReject }: AgentToolCardProps) {
+export function AgentToolCard({
+  name,
+  args,
+  status = "pending",
+  onApprove,
+  onAllowAlways,
+  onReject,
+}: AgentToolCardProps) {
   const statusDot = {
     pending: "bg-muted",
     in_progress: "bg-blue-500",
@@ -29,11 +37,16 @@ export function AgentToolCard({ name, args, status = "pending", onApprove, onRej
       </CardHeader>
       <CardContent className="pb-3 pt-0">
         <pre className="bg-muted rounded-md p-2 text-xs">{JSON.stringify(args, null, 2)}</pre>
-        {status === "pending" && (onApprove || onReject) ? (
+        {status === "pending" && (onApprove || onAllowAlways || onReject) ? (
           <div className="mt-2 flex gap-2">
             {onApprove && (
               <Button size="sm" variant="default" onClick={onApprove}>
                 Allow once
+              </Button>
+            )}
+            {onAllowAlways && (
+              <Button size="sm" variant="secondary" onClick={onAllowAlways}>
+                Allow always
               </Button>
             )}
             {onReject && (

@@ -39,9 +39,12 @@ export function handleAgentApi(req: IncomingMessage, res: ServerResponse, app: A
     const cfg = loadAgentConfig();
     json(res, 200, {
       defaultAgent: cfg.defaultAgent,
+      defaultSkill: cfg.defaultSkill,
       agents: Object.entries(cfg.agents).map(([id, c]) => ({
         id,
         command: [c.command, ...(c.args ?? [])].join(" "),
+        model: c.model,
+        options: c.options,
       })),
     });
     return true;
@@ -71,6 +74,16 @@ export function handleAgentApi(req: IncomingMessage, res: ServerResponse, app: A
           const call = tools.parse(text);
           return call ? { requestId: call.requestId, name: call.name, args: call.args } : undefined;
         });
+        session.setToolExecutor(
+          (name) => !tools.isMutating(name),
+          async (call) => {
+            const result = await tools.execute(call.name, call.args, app);
+            return {
+              text: result.ok ? `Result: ${JSON.stringify(result.value)}` : `Error: ${result.error}`,
+              result: result.ok ? result.value : undefined,
+            };
+          },
+        );
         sessions.set(session.id, session);
         json(res, 200, { sessionId: session.id });
       })
@@ -145,7 +158,7 @@ export function handleAgentApi(req: IncomingMessage, res: ServerResponse, app: A
             const resultText = result.ok
               ? `Result: ${JSON.stringify(result.value)}`
               : `Error: ${result.error}`;
-            session.resolveToolCall(requestId, resultText);
+            session.resolveToolCall(requestId, resultText, result.ok ? result.value : undefined);
           }
           json(res, 200, { ok: true });
           return;

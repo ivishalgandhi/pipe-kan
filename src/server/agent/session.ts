@@ -48,6 +48,8 @@ class AcpSession implements AgentSession {
   private textBuffer = "";
   private detectToolCall: ((text: string) => ToolCall | undefined) | null = null;
   private toolCalls = new Map<string, ToolCall>();
+  private shouldAutoApproveTool: ((name: string) => boolean) | null = null;
+  private executeTool: ((call: ToolCall) => Promise<{ text: string; result?: unknown }>) | null = null;
 
   constructor(private config: AgentBackendConfig) {
     this.id = crypto.randomUUID();
@@ -64,17 +66,26 @@ class AcpSession implements AgentSession {
     this.detectToolCall = parser;
   }
 
+  setToolExecutor(
+    shouldAutoApprove: (name: string) => boolean,
+    execute: (call: ToolCall) => Promise<{ text: string; result?: unknown }>,
+  ): void {
+    this.shouldAutoApproveTool = shouldAutoApprove;
+    this.executeTool = execute;
+  }
+
   pendingToolCalls(): Map<string, ToolCall> {
     return this.toolCalls;
   }
 
-  resolveToolCall(requestId: string, resultText: string): void {
+  resolveToolCall(requestId: string, resultText: string, rawResult?: unknown): void {
     const call = this.toolCalls.get(requestId);
     if (!call) return;
     this.toolCalls.delete(requestId);
+    this.push({ type: "tool_result", requestId, name: call.name, result: rawResult ?? resultText });
     void this.prompt(
       `Tool result for ${call.name}(${JSON.stringify(call.args)}):\n${resultText}`,
-    );
+    ).catch(() => void 0);
   }
 
   approve(requestId: string, decision: "once" | "always" | "reject"): void {
@@ -190,7 +201,11 @@ class AcpSession implements AgentSession {
       const tool = this.detectToolCall?.(this.textBuffer);
       if (tool) {
         this.toolCalls.set(tool.requestId, tool);
-        this.push({ type: "tool_call", ...tool });
+        if (this.shouldAutoApproveTool?.(tool.name)) {
+          void this.executeTool?.(tool).then(({ text, result }) => this.resolveToolCall(tool.requestId, text, result));
+        } else {
+          this.push({ type: "tool_call", ...tool });
+        }
         return;
       }
       this.push({ type: "agent_message_chunk", text: update.content.text });
