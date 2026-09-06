@@ -58,19 +58,25 @@ export function AgentPanel({ open, onClose }: AgentPanelProps) {
 
   useEffect(() => {
     if (!open || sessionId) return;
+    let cancelled = false;
     fetch("/api/agent/session", { method: "POST" })
       .then((r) => r.json())
       .then((body: { sessionId?: string }) => {
-        if (body.sessionId) {
-          setSessionId(body.sessionId);
-          connectEvents(body.sessionId);
-        }
+        if (cancelled) return;
+        if (body.sessionId) setSessionId(body.sessionId);
       })
-      .catch((err) => setMessages((m) => [...m, { role: "agent", text: `Failed to start session: ${String(err)}` }]));
+      .catch((err) => {
+        if (cancelled) return;
+        setMessages((m) => [...m, { role: "agent", text: `Failed to start session: ${String(err)}` }]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [open, sessionId]);
 
-  const connectEvents = (sid: string) => {
-    const es = new EventSource(`/api/agent/events?sessionId=${encodeURIComponent(sid)}`);
+  useEffect(() => {
+    if (!sessionId) return;
+    const es = new EventSource(`/api/agent/events?sessionId=${encodeURIComponent(sessionId)}`);
     es.addEventListener("message", (e) => {
       const event = JSON.parse(e.data) as {
         type: string;
@@ -120,7 +126,8 @@ export function AgentPanel({ open, onClose }: AgentPanelProps) {
         es.close();
       }
     });
-  };
+    return () => es.close();
+  }, [sessionId]);
 
   const send = () => {
     if (!sessionId || !input.trim() || busy) return;
