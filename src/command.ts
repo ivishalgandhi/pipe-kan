@@ -8,7 +8,7 @@ export type CommandJump =
   | { kind: "agent" }
   | { kind: "preset"; name: string }
   | { kind: "epic"; key: string }
-  | { kind: "card"; key: string };
+  | { kind: "card"; key: string; epic?: string };
 
 export type CommandRow = {
   label: string;
@@ -68,7 +68,11 @@ export function commandCatalog(input: CommandCatalogInput): CommandGroup[] {
     .map((card) => ({
       label: card.summary,
       key: card.key,
-      jump: { kind: "card" as const, key: card.key },
+      jump: {
+        kind: "card" as const,
+        key: card.key,
+        ...(card.epic ? { epic: card.epic } : {}),
+      },
     }));
   if (cards.length) groups.push({ id: "cards", title: "Cards", rows: cards });
   return groups;

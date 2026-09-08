@@ -1183,10 +1183,14 @@ export function App() {
     else if (jump.kind === "agent") setAgentOpen(true);
     else if (jump.kind === "preset") applyNamedPreset(jump.name);
     else if (jump.kind === "epic") {
-      openEpics();
-      void open(jump.key);
+      setOpenKey(null);
+      setOpenUrl(null);
+      setOpenFields([]);
+      setOpenError("");
+      void selectEpic(jump.key);
     } else {
-      openStories();
+      if (jump.epic) void selectEpic(jump.epic);
+      else openStories();
       void open(jump.key);
     }
   }

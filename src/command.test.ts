@@ -125,7 +125,13 @@ test("typing lists matching Epics then Cards after filtered Actions", () => {
     {
       id: "cards",
       title: "Cards",
-      rows: [{ label: "Drag a Card to Move", key: "DEMO-3", jump: { kind: "card", key: "DEMO-3" } }],
+      rows: [
+        {
+          label: "Drag a Card to Move",
+          key: "DEMO-3",
+          jump: { kind: "card", key: "DEMO-3", epic: "DEMO-1" },
+        },
+      ],
     },
   ]);
   expect(
@@ -257,7 +263,17 @@ test("pick yields card and epic intents", () => {
   const epic = groups.find((group) => group.id === "epics")?.rows[0];
   const card = groups.find((group) => group.id === "cards")?.rows[0];
   expect(epic && commandPick(epic)).toEqual({ kind: "epic", key: "DEMO-1" });
-  expect(card && commandPick(card)).toEqual({ kind: "card", key: "DEMO-2" });
+  expect(card && commandPick(card)).toEqual({ kind: "card", key: "DEMO-2", epic: "DEMO-1" });
+});
+
+test("a Card without a parent Epic picks without an epic", () => {
+  const orphan = { key: "DEMO-7", summary: "Loose story" };
+  const row = commandCatalog({
+    presets: [],
+    query: "loose",
+    cards: [orphan],
+  }).find((group) => group.id === "cards")?.rows[0];
+  expect(row && commandPick(row)).toEqual({ kind: "card", key: "DEMO-7" });
 });
 
 test("a miss is an empty list with no Issue rows", () => {

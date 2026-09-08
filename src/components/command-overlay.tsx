@@ -107,9 +107,10 @@ export function CommandOverlay({
                         className={cn(
                           "flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px]",
                           index === highlight
-                            ? "bg-accent text-accent-foreground"
+                            ? "bg-primary/20 text-foreground shadow-[inset_0_0_0_1px_var(--ring)]"
                             : "hover:bg-foreground/5",
                         )}
+                        aria-current={index === highlight ? "true" : undefined}
                         onMouseDown={(event) => event.preventDefault()}
                         onMouseEnter={() => setActive(index)}
                         onClick={() => onPick(commandPick(row))}
