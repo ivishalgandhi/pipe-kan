@@ -82,6 +82,47 @@ process.exit(1);
   };
 }
 
+
+function rateLimitJira(fails: number) {
+  const dir = mkdtempSync(join(tmpdir(), "pipe-kan-"));
+  const bin = join(dir, "jira");
+  const log = join(dir, "calls.jsonl");
+  const count = join(dir, "count");
+  writeFileSync(count, "0");
+  writeFileSync(
+    bin,
+    `#!/usr/bin/env bun
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+appendFileSync(${JSON.stringify(log)}, JSON.stringify({ args: process.argv.slice(2) }) + "\\n");
+const countPath = ${JSON.stringify(count)};
+const n = Number(readFileSync(countPath, "utf8")) + 1;
+writeFileSync(countPath, String(n));
+if (n <= ${fails}) {
+  console.error("✗ Unexpected response '429' from jira. Received following response: Rate limit exceeded");
+  process.exit(1);
+}
+console.log(JSON.stringify([{
+  key: "DEMO-1",
+  fields: { summary: "from jira", status: { name: "To Do" } },
+}]));
+`,
+  );
+  chmodSync(bin, 0o755);
+  return {
+    bin,
+    calls() {
+      try {
+        return readFileSync(log, "utf8")
+          .trim()
+          .split("\n")
+          .map((line) => JSON.parse(line) as { args: string[] });
+      } catch {
+        return [];
+      }
+    },
+  };
+}
+
 function pagingJira(total: number) {
   const dir = mkdtempSync(join(tmpdir(), "pipe-kan-"));
   const bin = join(dir, "jira");
@@ -149,6 +190,21 @@ test("createJiraCli treats an empty jira list as no Issues", async () => {
   const cli = createJiraCli({ bin });
   expect(JSON.parse(await cli.list("-q EMPTY"))).toEqual([]);
 });
+
+test("createJiraCli retries a 429 list until Jira answers", async () => {
+  const { bin, calls } = rateLimitJira(2);
+  const cli = createJiraCli({ bin, retryDelayMs: 0 });
+  expect(JSON.parse(await cli.list("")).map((issue: { key: string }) => issue.key)).toEqual(["DEMO-1"]);
+  expect(calls()).toHaveLength(3);
+});
+
+test("createJiraCli still fails a 429 that does not recover", async () => {
+  const { bin, calls } = rateLimitJira(99);
+  const cli = createJiraCli({ bin, retryDelayMs: 0 });
+  await expect(cli.list("")).rejects.toThrow(/429/);
+  expect(calls()).toHaveLength(5);
+});
+
 
 test("createJiraCli lists every Epic with -tEpic", async () => {
   const { bin, calls } = fakeJira();

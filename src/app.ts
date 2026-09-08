@@ -106,13 +106,11 @@ export function createApp(opts: { store: IssueStore; cli?: Cli }): App {
         nextChildren = JSON.parse(await cli.listChildren(keys));
         const cards = cardsOf(nextChildren);
         if (cards.length > 0 && !cards.some((card) => card.epic)) {
-          nextChildren = (
-            await Promise.all(
-              keys.map(async (key) =>
-                stampRawParent(JSON.parse(await cli.listEpic(key)), key),
-              ),
-            )
-          ).flat();
+          const stamped: unknown[] = [];
+          for (const key of keys) {
+            stamped.push(...stampRawParent(JSON.parse(await cli.listEpic(key)), key));
+          }
+          nextChildren = stamped;
         }
         nextHasCache = true;
       } catch (err) {

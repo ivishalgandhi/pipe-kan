@@ -19,6 +19,12 @@ function emptyList(text: string) {
   return /no result found/i.test(text);
 }
 
+function rateLimited(text: string) {
+  return /\b429\b/.test(text);
+}
+
+const RETRY_LIMIT = 4;
+
 const LIST_PAGE = 100;
 
 function issueKey(issue: unknown): string | undefined {
@@ -83,9 +89,11 @@ export function createJiraCli(
     bin?: string;
     configPath?: string;
     token?: string;
+    retryDelayMs?: number;
   } = {},
 ): Cli {
   const bin = opts.bin ?? "jira";
+  const retryDelayMs = opts.retryDelayMs ?? 1000;
 
   function run(args: string[]) {
     return new Promise<{ code: number; stdout: string; stderr: string }>(
@@ -110,8 +118,20 @@ export function createJiraCli(
     );
   }
 
+  async function runRetry(args: string[]) {
+    let result = await run(args);
+    for (let attempt = 0; attempt < RETRY_LIMIT; attempt++) {
+      if (result.code === 0 || !rateLimited(result.stderr || result.stdout)) return result;
+      if (retryDelayMs) {
+        await new Promise((resolve) => setTimeout(resolve, retryDelayMs * 2 ** attempt));
+      }
+      result = await run(args);
+    }
+    return result;
+  }
+
   async function listOnce(args: string[]): Promise<unknown[]> {
-    const result = await run(args);
+    const result = await runRetry(args);
     if (result.code !== 0) {
       const text = result.stderr || result.stdout || "jira issue list failed";
       if (emptyList(text)) return [];
@@ -174,7 +194,7 @@ export function createJiraCli(
       ]);
     },
     async move(key, status) {
-      const result = await run(["issue", "move", key, status]);
+      const result = await runRetry(["issue", "move", key, status]);
       if (result.code !== 0) {
         return {
           ok: false,
@@ -184,11 +204,11 @@ export function createJiraCli(
       return { ok: true };
     },
     async open(key) {
-      const result = await run(["open", key, "--no-browser"]);
+      const result = await runRetry(["open", key, "--no-browser"]);
       return result.stdout.trim().split("\n").pop() ?? `/browse/${key}`;
     },
     async view(key) {
-      const result = await run(["issue", "view", key, "--raw"]);
+      const result = await runRetry(["issue", "view", key, "--raw"]);
       if (result.code !== 0) {
         throw new Error((result.stderr || result.stdout || "jira issue view failed").trim());
       }
