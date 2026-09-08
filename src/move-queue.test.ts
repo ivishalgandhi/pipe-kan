@@ -156,6 +156,38 @@ describe("createMoveQueue", () => {
     });
   });
 
+  test("bulk selection moves fail independently", async () => {
+    const { promise, resolve } = Promise.withResolvers<void>();
+    const run = vi.fn(async (req: MoveRequest) => {
+      if (req.key === "DEMO-6") return { ok: false, error: "nope" };
+      if (req.key === "DEMO-7") resolve();
+      return { ok: true };
+    });
+    const onRollback = vi.fn();
+    const toast = {
+      loading: vi.fn(() => "toast-1"),
+      success: vi.fn(),
+      error: vi.fn(),
+    };
+    const queue = createMoveQueue({ run, onRollback, toast });
+
+    queue.move([
+      { key: "DEMO-6", target: "Done", source: "In Progress", kind: "card" },
+      { key: "DEMO-5", target: "Done", source: "In Progress", kind: "card" },
+      { key: "DEMO-7", target: "Done", source: "In Progress", kind: "card" },
+    ]);
+    await promise;
+    await Promise.resolve();
+
+    expect(run).toHaveBeenCalledTimes(3);
+    expect(onRollback).toHaveBeenCalledTimes(1);
+    expect(toast.success).toHaveBeenCalledTimes(2);
+    expect(toast.error).toHaveBeenCalledWith("Move DEMO-6 failed", {
+      id: "toast-1",
+      description: "nope",
+    });
+  });
+
   test("enqueue while running is picked up by the active loop", async () => {
     const { promise, resolve } = Promise.withResolvers<void>();
     let calls = 0;
