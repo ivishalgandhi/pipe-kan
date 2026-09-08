@@ -218,7 +218,22 @@ function byPriorityThenKey(
   return rank !== 0 ? rank : a.key.localeCompare(b.key);
 }
 
-function sortCards(cards: Card[], sort?: BoardSort) {
+function sortCards(cards: Card[], sort?: BoardSort): Card[];
+function sortCards(columns: { title: string; cards: Card[] }[], sort?: BoardSort): { title: string; cards: Card[] }[];
+function sortCards(
+  input: Card[] | { title: string; cards: Card[] }[],
+  sort?: BoardSort,
+): Card[] | { title: string; cards: Card[] }[] {
+  if (Array.isArray(input) && input.length > 0 && !(typeof input[0] === "object" && "title" in input[0])) {
+    return sortCardList(input as Card[], sort);
+  }
+  return (input as { title: string; cards: Card[] }[]).map(({ title, cards }) => ({
+    title,
+    cards: sortCardList(cards, sort),
+  }));
+}
+
+function sortCardList(cards: Card[], sort?: BoardSort): Card[] {
   if (!sort || sort === "payload") return cards;
   return [...cards].sort((a, b) => {
     let cmp = 0;
@@ -252,6 +267,52 @@ export function mergeSearchHits(
     }
   }
   return next;
+}
+
+export function combinedBoard(
+  columns: Record<string, Card[]>,
+  epics: Epic[],
+  query = "",
+  opts?: VisibleOpts,
+): Record<string, Card[]> {
+  const hide = new Set(opts?.hide ?? []);
+  const filter = opts?.filter;
+  const matchedEpics = epics.filter(
+    (epic) => cardMatches(epic, query) && epicMatchesFilter(epic, filter),
+  );
+  const epicCards: Card[] = matchedEpics.map((epic) => ({
+    key: epic.key,
+    summary: epic.summary,
+    priority: epic.priority,
+    assignee: epic.assignee,
+    dueDate: epic.dueDate,
+    labels: epic.labels,
+    type: "Epic",
+  }));
+  const storyCards = Object.values(columns)
+    .flat()
+    .filter(
+      (card) =>
+        !matchedEpics.some((epic) => epic.key === card.key) &&
+        cardMatches(card, query) &&
+        cardMatchesFilter(card, filter, epics),
+    );
+  const allCards = [...epicCards, ...storyCards];
+  const byStatus = new Map<string, Card[]>();
+  for (const card of allCards) {
+    const status = card.type === "Epic"
+      ? epics.find((epic) => epic.key === card.key)?.status ?? "To Do"
+      : Object.entries(columns).find(([, cards]) => cards.some((c) => c.key === card.key))?.[0] ?? "To Do";
+    const list = byStatus.get(status) ?? [];
+    list.push(card);
+    byStatus.set(status, list);
+  }
+  const sorted = sortCards([...byStatus.entries()].map(([title, cards]) => ({ title, cards })), opts?.sort);
+  return Object.fromEntries(
+    sorted
+      .filter(({ title }) => !hide.has(title))
+      .map(({ title, cards }) => [title, cards]),
+  );
 }
 
 export function filterValue(
@@ -548,24 +609,26 @@ export type Preset = {
   filter: BoardFilter;
   sort: BoardSort;
   hide: string[];
+  boardKind?: "stories" | "epics" | "combined";
 };
 
 function presetOf(name: string, presets: Preset[]) {
   return presets.find((preset) => preset.name.toLowerCase() === name.trim().toLowerCase());
 }
 
-function snapshotChrome(chrome: Pick<Preset, "filter" | "sort" | "hide">) {
+function snapshotChrome(chrome: Pick<Preset, "filter" | "sort" | "hide" | "boardKind">) {
   return {
     filter: { ...chrome.filter },
     sort: chrome.sort,
     hide: [...chrome.hide],
+    boardKind: chrome.boardKind,
   };
 }
 
 export function addPreset(
   presets: Preset[],
   name: string,
-  chrome: Pick<Preset, "filter" | "sort" | "hide">,
+  chrome: Pick<Preset, "filter" | "sort" | "hide" | "boardKind">,
 ): { ok: true; presets: Preset[] } | { ok: false } {
   const trimmed = name.trim();
   if (!trimmed || presetOf(trimmed, presets)) return { ok: false };
@@ -581,7 +644,7 @@ export function addPreset(
 export function applyPreset(
   presets: Preset[],
   name: string,
-): { ok: true; chrome: Pick<Preset, "filter" | "sort" | "hide"> } | { ok: false } {
+): { ok: true; chrome: Pick<Preset, "filter" | "sort" | "hide" | "boardKind"> } | { ok: false } {
   const current = presetOf(name, presets);
   if (!current) return { ok: false };
   return { ok: true, chrome: snapshotChrome(current) };
@@ -590,7 +653,7 @@ export function applyPreset(
 export function overwritePreset(
   presets: Preset[],
   name: string,
-  chrome: Pick<Preset, "filter" | "sort" | "hide">,
+  chrome: Pick<Preset, "filter" | "sort" | "hide" | "boardKind">,
 ): { ok: true; presets: Preset[] } | { ok: false } {
   const current = presetOf(name, presets);
   if (!current) return { ok: false };

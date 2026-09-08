@@ -4,6 +4,7 @@ import { cardMatches, epicMatches } from "./visible.ts";
 export type CommandJump =
   | { kind: "all-stories" }
   | { kind: "all-epics" }
+  | { kind: "all-combined" }
   | { kind: "refresh" }
   | { kind: "agent" }
   | { kind: "preset"; name: string }
@@ -36,6 +37,7 @@ export function commandCatalog(input: CommandCatalogInput): CommandGroup[] {
   const actions: CommandRow[] = [
     { label: "All stories", jump: { kind: "all-stories" } },
     { label: "All epics", jump: { kind: "all-epics" } },
+    { label: "All combined", jump: { kind: "all-combined" } },
     { label: "Refresh", jump: { kind: "refresh" } },
     { label: "Agent", jump: { kind: "agent" } },
     ...input.presets.map((name) => ({
