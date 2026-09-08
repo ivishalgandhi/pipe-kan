@@ -14,6 +14,7 @@ import {
   SunIcon,
   XIcon,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { cardAge, epicsToColumns, type Board, type Card, type Column, type Epic } from "./board.ts";
 import { type CommandJump } from "./command.ts";
@@ -49,6 +50,8 @@ import {
 } from "./visible.ts";
 import { AgentPanel } from "~/components/agent/agent-panel.tsx";
 import { CommandOverlay } from "~/components/command-overlay.tsx";
+import { Toaster } from "~/components/ui/sonner.tsx";
+import { Spinner } from "~/components/ui/spinner.tsx";
 import { Avatar, AvatarFallback } from "~/components/ui/avatar";
 import { Button } from "~/components/ui/button";
 import {
@@ -1033,14 +1036,21 @@ export function App() {
   async function refresh() {
     setBusy(true);
     setError("");
+    const toastId = toast.loading("Refreshing…", { description: "Listing Issues and Epics" });
     try {
       const data = await api<BoardPayload>("/api/refresh", {
         method: "POST",
         body: JSON.stringify({ flags }),
       });
       applyBoard(data);
+      toast.success("Refreshed", {
+        id: toastId,
+        description: `${data.epics.length} epics`,
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Refresh failed");
+      const message = err instanceof Error ? err.message : "Refresh failed";
+      setError(message);
+      toast.error("Refresh failed", { id: toastId, description: message });
     } finally {
       setBusy(false);
     }
@@ -1049,6 +1059,7 @@ export function App() {
   async function move(key: string, status: string) {
     setBusy(true);
     setError("");
+    const toastId = toast.loading("Moving…");
     try {
       const data = await api<{
         ok: boolean;
@@ -1059,7 +1070,17 @@ export function App() {
         body: JSON.stringify({ key, status }),
       });
       applyBoard(data.board);
-      if (!data.ok) setError(data.error ?? "Move failed");
+      if (!data.ok) {
+        const message = data.error ?? "Move failed";
+        setError(message);
+        toast.error("Move failed", { id: toastId, description: message });
+      } else {
+        toast.success("Moved", { id: toastId });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Move failed";
+      setError(message);
+      toast.error("Move failed", { id: toastId, description: message });
     } finally {
       setBusy(false);
     }
@@ -1148,14 +1169,18 @@ export function App() {
     if (cards.filter((card) => card.epic === key && cardMatches(card, search)).length > 0) return;
     setBusy(true);
     setError("");
+    const toastId = toast.loading("Listing children…");
     try {
       const data = await api<Board>("/api/epic", {
         method: "POST",
         body: JSON.stringify({ key }),
       });
       setColumns((current) => stampEpic(current, toValue(data.columns), key));
+      toast.success("Listed children", { id: toastId });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Epic list failed");
+      const message = err instanceof Error ? err.message : "Epic list failed";
+      setError(message);
+      toast.error("Epic list failed", { id: toastId, description: message });
     } finally {
       setBusy(false);
     }
@@ -1460,7 +1485,8 @@ export function App() {
                     ))}
                   </DropdownMenuContent>
                 </DropdownMenu>
-                <Button variant="ghost" size="sm" onClick={() => void refresh()} disabled={busy}>
+                <Button variant="ghost" size="sm" onClick={() => void refresh()} disabled={busy} aria-busy={busy}>
+                  {busy ? <Spinner className="size-3.5" /> : null}
                   Refresh
                 </Button>
                 <Button
@@ -1695,6 +1721,7 @@ export function App() {
           </>
         ) : null}
       </ResizablePanelGroup>
+      <Toaster theme={theme} />
       {commandOpen ? (
         <CommandOverlay
           presets={presets.map((preset) => preset.name)}
