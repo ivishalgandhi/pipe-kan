@@ -18,7 +18,7 @@ import { toast } from "sonner";
 
 import { cardAge, epicsToColumns, type Board, type Card, type Column, type Epic } from "./board.ts";
 import { type CommandJump } from "./command.ts";
-import { createMoveQueue, type MoveQueue } from "./move-queue.ts";
+import { createMoveQueue, type MoveQueue, type MoveRequest } from "./move-queue.ts";
 import { frameSrc, type OpenField } from "./open.ts";
 import {
   addFolder,
@@ -453,17 +453,24 @@ function IssueCard({
   asHandle,
   isOverlay,
   disabled,
-  onOpen,
+  selected,
+  onClick,
 }: {
   card: Card;
   asHandle?: boolean;
   isOverlay?: boolean;
   disabled?: boolean;
-  onOpen?: () => void;
+  selected?: boolean;
+  onClick?: (event: React.MouseEvent) => void;
 }) {
   const age = cardAge(card.created);
   const body = (
-    <div className="bg-card hover:bg-foreground/5 rounded-[9px] border px-3 pt-2 pb-3">
+    <div
+      className={cn(
+        "bg-card hover:bg-foreground/5 rounded-[9px] border px-3 pt-2 pb-3",
+        selected && "ring-primary ring-2",
+      )}
+    >
       <div className="flex h-[22px] items-center justify-between gap-2">
         <span className="flex min-w-0 items-baseline gap-1.5">
           <span className="text-muted-foreground text-[12px] font-medium tabular-nums">
@@ -521,7 +528,7 @@ function IssueCard({
   return (
     <KanbanItem value={card.key} disabled={disabled}>
       {asHandle && !isOverlay ? (
-        <KanbanItemHandle onClick={onOpen}>{body}</KanbanItemHandle>
+        <KanbanItemHandle onClick={onClick}>{body}</KanbanItemHandle>
       ) : (
         body
       )}
@@ -534,14 +541,16 @@ function StatusColumn({
   cards,
   isOverlay,
   disabled,
-  onOpen,
+  selected,
+  onClick,
   onHide,
 }: {
   title: string;
   cards: Card[];
   isOverlay?: boolean;
   disabled?: boolean;
-  onOpen?: (key: string) => void;
+  selected?: Set<string>;
+  onClick?: (key: string, event: React.MouseEvent) => void;
   onHide?: () => void;
 }) {
   const [open, setOpen] = useState(
@@ -614,7 +623,8 @@ function StatusColumn({
                   asHandle={!isOverlay}
                   isOverlay={isOverlay}
                   disabled={disabled}
-                  onOpen={() => onOpen?.(card.key)}
+                  selected={selected?.has(card.key)}
+                  onClick={(event) => onClick?.(card.key, event)}
                 />
               ))}
             </KanbanColumnContent>
@@ -926,6 +936,7 @@ export function App() {
     });
   }
   const queue = queueRef.current;
+  const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set());
 
   const visibleOpts: VisibleOpts = { ...chrome, epics };
   const epicBoard = boardKind === "epics";
@@ -1124,6 +1135,26 @@ export function App() {
     queue.move({ key, target, source: from, kind: "card" });
   }
 
+  function handleCardClick(key: string, event: React.MouseEvent) {
+    if (event.ctrlKey || event.metaKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      setSelectedCards((current) => {
+        const next = new Set(current);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+      return;
+    }
+    setSelectedCards(new Set());
+    void open(key);
+  }
+
+  function clearSelection() {
+    setSelectedCards(new Set());
+  }
+
   async function open(key: string) {
     const scopeCards = lastBoard.current?.columns.flatMap((column) => column.cards) ?? [];
     const card =
@@ -1157,6 +1188,21 @@ export function App() {
     setOpenFields(data.fields);
   }
 
+  function collectSelectedRequests(
+    target: string,
+    previousValue: Record<string, Card[]>,
+  ): MoveRequest[] {
+    const requests: MoveRequest[] = [];
+    for (const [title, cards] of Object.entries(previousValue)) {
+      for (const card of cards) {
+        if (selectedCards.has(card.key)) {
+          requests.push({ key: card.key, target, source: title, kind: "card" });
+        }
+      }
+    }
+    return requests;
+  }
+
   function commit(_next: Record<string, Card[]>, meta: KanbanCommitMeta<Card>) {
     if (
       meta.kind === "column" ||
@@ -1169,10 +1215,32 @@ export function App() {
       return;
     }
     const key = String(meta.event.active.id);
+    if (selectedCards.has(key) && selectedCards.size > 1) {
+      const requests = collectSelectedRequests(meta.overContainer, meta.previousValue);
+      if (requests.length === 0) return;
+      setColumns((current) => {
+        const next: Record<string, Card[]> = {};
+        const moving: Card[] = [];
+        for (const [title, cards] of Object.entries(current)) {
+          const kept: Card[] = [];
+          for (const card of cards) {
+            if (selectedCards.has(card.key)) moving.push(card);
+            else kept.push(card);
+          }
+          next[title] = kept;
+        }
+        next[meta.overContainer] = [...(next[meta.overContainer] ?? []), ...moving];
+        return next;
+      });
+      clearSelection();
+      queue.move(requests);
+      return;
+    }
     const source = Object.entries(meta.previousValue).find(([, cards]) =>
       cards.some((card) => card.key === key),
     )?.[0];
     if (!source) return;
+    clearSelection();
     move(key, meta.overContainer, source);
   }
 
@@ -1603,7 +1671,8 @@ export function App() {
                                   title={title}
                                   cards={cards}
                                   disabled={busy}
-                                  onOpen={(key) => void open(key)}
+                                  selected={selectedCards}
+                                  onClick={handleCardClick}
                                   onHide={() =>
                                     persistChrome({ ...chrome, hide: [...chrome.hide, title] })
                                   }
@@ -1629,7 +1698,17 @@ export function App() {
                             .flat()
                             .find((item) => item.key === value);
                           if (!card) return null;
-                          return <IssueCard card={card} isOverlay />;
+                          const count = selectedCards.has(card.key) ? selectedCards.size : 1;
+                          return (
+                            <div className="relative">
+                              <IssueCard card={card} isOverlay />
+                              {count > 1 ? (
+                                <span className="absolute -top-2 -right-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-medium text-primary-foreground">
+                                  {count}
+                                </span>
+                              ) : null}
+                            </div>
+                          );
                         }}
                       </KanbanOverlay>
                     </Kanban>
