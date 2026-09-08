@@ -1,4 +1,8 @@
+import type { Dispatch, SetStateAction } from "react";
+import { useRef } from "react";
 import { toast as sonnerToast } from "sonner";
+
+import type { Card, Epic } from "./board.ts";
 
 export type MoveRequest = {
   key: string;
@@ -67,3 +71,47 @@ export function createMoveQueue(deps: MoveQueueDeps): MoveQueue {
 
   return { move };
 }
+
+export function useMoveQueue(
+  setColumns: Dispatch<SetStateAction<Record<string, Card[]>>>,
+  setEpics: Dispatch<SetStateAction<Epic[]>>,
+): MoveQueue {
+  const queueRef = useRef<MoveQueue | null>(null);
+  if (!queueRef.current) {
+    queueRef.current = createMoveQueue({
+      run: async (req) => {
+        const res = await fetch("/api/move", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ key: req.key, status: req.target, raw: true }),
+        });
+        return (await res.json()) as MoveResult;
+      },
+      onRollback: (req) => {
+        if (req.kind === "card") {
+          setColumns((current) => {
+            const targetCards = current[req.target] ?? [];
+            const index = targetCards.findIndex((card) => card.key === req.key);
+            if (index === -1) return current;
+            const card = targetCards[index];
+            const next = { ...current };
+            next[req.target] = targetCards.filter((card) => card.key !== req.key);
+            next[req.source] = [...(current[req.source] ?? []), card];
+            return next;
+          });
+          return;
+        }
+        setEpics((current) => {
+          const index = current.findIndex((epic) => epic.key === req.key);
+          if (index === -1) return current;
+          const next = [...current];
+          next[index] = { ...next[index], status: req.source };
+          return next;
+        });
+      },
+    });
+  }
+  return queueRef.current;
+}
+
+

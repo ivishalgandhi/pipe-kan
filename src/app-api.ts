@@ -61,7 +61,7 @@ export function handleAppApi(
       const body = text ? JSON.parse(text) : {};
       const key = String(body.key ?? "");
       const status = String(body.status ?? "");
-      if (body.raw) {
+      if (body.raw === true) {
         const result = await app.moveRaw(key, status);
         json(res, result.ok ? 200 : 409, result);
         return;

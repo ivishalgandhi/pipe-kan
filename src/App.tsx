@@ -18,7 +18,7 @@ import { toast } from "sonner";
 
 import { cardAge, epicsToColumns, type Board, type Card, type Column, type Epic } from "./board.ts";
 import { type CommandJump } from "./command.ts";
-import { createMoveQueue, type MoveQueue, type MoveRequest } from "./move-queue.ts";
+import { type MoveQueue, type MoveRequest, useMoveQueue } from "./move-queue.ts";
 import { frameSrc, type OpenField } from "./open.ts";
 import {
   addFolder,
@@ -903,39 +903,7 @@ export function App() {
   const [commandOpen, setCommandOpen] = useState(false);
   const commandOpenRef = useRef(false);
   const commandReturnFocus = useRef<HTMLElement | null>(null);
-  const queueRef = useRef<MoveQueue | null>(null);
-  if (!queueRef.current) {
-    queueRef.current = createMoveQueue({
-      run: async (req) =>
-        api<{ ok: boolean; error?: string }>("/api/move", {
-          method: "POST",
-          body: JSON.stringify({ key: req.key, status: req.target, raw: true }),
-        }),
-      onRollback: (req) => {
-        if (req.kind === "card") {
-          setColumns((current) => {
-            const targetCards = current[req.target] ?? [];
-            const index = targetCards.findIndex((card) => card.key === req.key);
-            if (index === -1) return current;
-            const card = targetCards[index];
-            const next = { ...current };
-            next[req.target] = targetCards.filter((card) => card.key !== req.key);
-            next[req.source] = [...(current[req.source] ?? []), card];
-            return next;
-          });
-          return;
-        }
-        setEpics((current) => {
-          const index = current.findIndex((epic) => epic.key === req.key);
-          if (index === -1) return current;
-          const next = [...current];
-          next[index] = { ...next[index], status: req.source };
-          return next;
-        });
-      },
-    });
-  }
-  const queue = queueRef.current;
+  const queue = useMoveQueue(setColumns, setEpics);
   const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set());
 
   const visibleOpts: VisibleOpts = { ...chrome, epics };
@@ -1011,6 +979,10 @@ export function App() {
     writePresets(next);
   }
 
+  function clearSelection() {
+    setSelectedCards(new Set());
+  }
+
   function paintBoard(next: Board, kind: "stories" | "epics") {
     lastBoard.current = next;
     setPipeBoard(next);
@@ -1022,6 +994,7 @@ export function App() {
   }
 
   function applyBoard(next: Board) {
+    clearSelection();
     lastBoard.current = next;
     setPipeBoard(next);
     const listed = next.epics ?? [];
@@ -1126,6 +1099,9 @@ export function App() {
         if (index === -1) return current;
         const next = [...current];
         next[index] = { ...next[index], status: target };
+        if (boardKind === "epics") {
+          setColumns(toValue(epicsToColumns(next)));
+        }
         return next;
       });
       queue.move({ key, target, source: from, kind: "epic" });
@@ -1147,12 +1123,8 @@ export function App() {
       });
       return;
     }
-    setSelectedCards(new Set());
+    clearSelection();
     void open(key);
-  }
-
-  function clearSelection() {
-    setSelectedCards(new Set());
   }
 
   async function open(key: string) {
