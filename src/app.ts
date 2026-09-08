@@ -14,6 +14,7 @@ export type App = {
     key: string,
     status: string,
   ): Promise<{ ok: boolean; noop?: boolean; error?: string; board: Board }>;
+  moveRaw(key: string, status: string): Promise<{ ok: boolean; noop?: boolean; error?: string }>;
   open(key: string): Promise<{ url: string; fields: OpenField[]; error?: string }>;
 };
 
@@ -55,6 +56,27 @@ export function createApp(opts: { store: IssueStore; cli?: Cli }): App {
     childrenRaw = opts.store.childrenOf(listedEpicKeys());
     hasChildrenCache = true;
     childrenError = undefined;
+  }
+
+  function currentStatus(key: string): string | undefined {
+    const fromPayload = (payload as { key?: string; fields?: { status?: { name?: string } } }[])
+      .find((issue) => issue.key === key)?.fields?.status?.name;
+    return (
+      fromPayload ??
+      issuesToBoard(epicsPayload).epics.find((epic) => epic.key === key)?.status ??
+      app.board().epics.find((epic) => epic.key === key)?.status
+    );
+  }
+
+  async function tryMove(key: string, status: string) {
+    const current = currentStatus(key);
+    if (current === status) {
+      return { ok: true as const, noop: true, error: undefined };
+    }
+    const result = await cli.move(key, status);
+    return result.ok
+      ? { ok: true as const, noop: false, error: undefined }
+      : { ok: false as const, noop: false, error: result.error };
   }
 
   const app: App = {
@@ -141,21 +163,22 @@ export function createApp(opts: { store: IssueStore; cli?: Cli }): App {
       return stampMissingEpic(issuesToBoard(JSON.parse(await cli.listEpic(epic))), epic);
     },
     async move(key, status) {
-      const fromPayload = (payload as { key?: string; fields?: { status?: { name?: string } } }[])
-        .find((issue) => issue.key === key)?.fields?.status?.name;
-      const current =
-        fromPayload ??
-        issuesToBoard(epicsPayload).epics.find((epic) => epic.key === key)?.status ??
-        app.board().epics.find((epic) => epic.key === key)?.status;
-      if (current === status) {
-        return { ok: true, noop: true, board: app.board() };
-      }
-      const result = await cli.move(key, status);
+      const result = await tryMove(key, status);
       if (!result.ok) {
         return { ok: false, error: result.error, board: app.board() };
       }
+      if (result.noop) {
+        return { ok: true, noop: true, board: app.board() };
+      }
       await app.refresh();
       return { ok: true, board: app.board() };
+    },
+
+    async moveRaw(key, status) {
+      const result = await tryMove(key, status);
+      return result.ok
+        ? { ok: true, noop: result.noop }
+        : { ok: false, error: result.error };
     },
     async open(key) {
       const urlP = cli.open(key);

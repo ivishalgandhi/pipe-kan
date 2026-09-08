@@ -19,6 +19,7 @@ const mockApp = {
     epics: [],
   }),
   move: async () => ({ ok: true, board: { columns: [], epics: [] } }),
+  moveRaw: async () => ({ ok: true }),
   open: async () => ({ url: "https://jira/1", fields: [{ label: "Summary", value: "Test" }] }),
 } satisfies App;
 

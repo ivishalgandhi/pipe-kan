@@ -59,7 +59,14 @@ export function handleAppApi(
   if (url.pathname === "/api/move" && method === "POST") {
     reply(req, res, async (text) => {
       const body = text ? JSON.parse(text) : {};
-      const result = await app.move(String(body.key ?? ""), String(body.status ?? ""));
+      const key = String(body.key ?? "");
+      const status = String(body.status ?? "");
+      if (body.raw) {
+        const result = await app.moveRaw(key, status);
+        json(res, result.ok ? 200 : 409, result);
+        return;
+      }
+      const result = await app.move(key, status);
       json(res, result.ok ? 200 : 409, result);
     });
     return true;

@@ -18,6 +18,7 @@ import { toast } from "sonner";
 
 import { cardAge, epicsToColumns, type Board, type Card, type Column, type Epic } from "./board.ts";
 import { type CommandJump } from "./command.ts";
+import { createMoveQueue, type MoveQueue } from "./move-queue.ts";
 import { frameSrc, type OpenField } from "./open.ts";
 import {
   addFolder,
@@ -892,6 +893,39 @@ export function App() {
   const [commandOpen, setCommandOpen] = useState(false);
   const commandOpenRef = useRef(false);
   const commandReturnFocus = useRef<HTMLElement | null>(null);
+  const queueRef = useRef<MoveQueue | null>(null);
+  if (!queueRef.current) {
+    queueRef.current = createMoveQueue({
+      run: async (req) =>
+        api<{ ok: boolean; error?: string }>("/api/move", {
+          method: "POST",
+          body: JSON.stringify({ key: req.key, status: req.target, raw: true }),
+        }),
+      onRollback: (req) => {
+        if (req.kind === "card") {
+          setColumns((current) => {
+            const targetCards = current[req.target] ?? [];
+            const index = targetCards.findIndex((card) => card.key === req.key);
+            if (index === -1) return current;
+            const card = targetCards[index];
+            const next = { ...current };
+            next[req.target] = targetCards.filter((card) => card.key !== req.key);
+            next[req.source] = [...(current[req.source] ?? []), card];
+            return next;
+          });
+          return;
+        }
+        setEpics((current) => {
+          const index = current.findIndex((epic) => epic.key === req.key);
+          if (index === -1) return current;
+          const next = [...current];
+          next[index] = { ...next[index], status: req.source };
+          return next;
+        });
+      },
+    });
+  }
+  const queue = queueRef.current;
 
   const visibleOpts: VisibleOpts = { ...chrome, epics };
   const epicBoard = boardKind === "epics";
@@ -1064,34 +1098,30 @@ export function App() {
     }
   }
 
-  async function move(key: string, status: string) {
-    setBusy(true);
-    setError("");
-    const toastId = toast.loading("Moving…");
-    try {
-      const data = await api<{
-        ok: boolean;
-        error?: string;
-        board: Board;
-      }>("/api/move", {
-        method: "POST",
-        body: JSON.stringify({ key, status }),
-      });
-      applyBoard(data.board);
-      if (!data.ok) {
-        const message = data.error ?? "Move failed";
-        setError(message);
-        toast.error("Move failed", { id: toastId, description: message });
-      } else {
-        toast.success("Moved", { id: toastId });
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Move failed";
-      setError(message);
-      toast.error("Move failed", { id: toastId, description: message });
-    } finally {
-      setBusy(false);
+  function findCardSource(key: string): string {
+    for (const [title, cards] of Object.entries(columns)) {
+      if (cards.some((card) => card.key === key)) return title;
     }
+    return "";
+  }
+
+  function move(key: string, target: string, source?: string) {
+    setError("");
+    const epic = epics.find((item) => item.key === key);
+    if (epic) {
+      const from = source ?? epic.status ?? "To Do";
+      setEpics((current) => {
+        const index = current.findIndex((item) => item.key === key);
+        if (index === -1) return current;
+        const next = [...current];
+        next[index] = { ...next[index], status: target };
+        return next;
+      });
+      queue.move({ key, target, source: from, kind: "epic" });
+      return;
+    }
+    const from = source ?? findCardSource(key);
+    queue.move({ key, target, source: from, kind: "card" });
   }
 
   async function open(key: string) {
@@ -1138,7 +1168,12 @@ export function App() {
       );
       return;
     }
-    void move(String(meta.event.active.id), meta.overContainer);
+    const key = String(meta.event.active.id);
+    const source = Object.entries(meta.previousValue).find(([, cards]) =>
+      cards.some((card) => card.key === key),
+    )?.[0];
+    if (!source) return;
+    move(key, meta.overContainer, source);
   }
 
   function toggleTheme() {
