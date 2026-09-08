@@ -13,7 +13,7 @@ export type BoardViewCard = {
 
 export type BoardViewSnapshot = {
   scope?: "pipe" | "view";
-  kind: "stories" | "epics";
+  kind: "stories" | "epics" | "combined";
   selectedEpic: string | null;
   search: string;
   filter: BoardFilter;
@@ -69,7 +69,8 @@ export function withPipedBoardContext(
 }
 
 function formatBoardView(view: BoardViewSnapshot): string {
-  const opener = view.kind === "epics" ? "All epics" : "All stories";
+  const opener =
+    view.kind === "epics" ? "All epics" : view.kind === "combined" ? "All combined" : "All stories";
   const scope = view.selectedEpic ? `${opener}, children of ${view.selectedEpic}` : opener;
   const lines = [
     view.scope === "pipe"

@@ -8,6 +8,7 @@ import {
   overwritePreset,
   removePreset,
   renamePreset,
+  combinedBoard,
   epicChildCount,
   favouriteGroup,
   filterEpics,
@@ -740,4 +741,63 @@ test("Delete drops a Preset and leaves the others", () => {
   const remaining = removePreset(second.presets, "Later");
   expect(remaining.map((preset) => preset.name)).toEqual(["Now"]);
   expect(applyPreset(remaining, "Now")).toEqual({ ok: true, chrome: nowChrome });
+});
+
+test("combinedBoard mixes Epics and Stories into status Columns", () => {
+  const columns = {
+    "To Do": [{ key: "DEMO-2", summary: "story todo" }],
+    "In Progress": [{ key: "DEMO-3", summary: "story progress" }],
+  };
+  const epics: Epic[] = [
+    { key: "DEMO-1", summary: "epic todo", status: "To Do" },
+    { key: "DEMO-4", summary: "epic progress", status: "In Progress" },
+  ];
+  const result = combinedBoard(columns, epics);
+  expect(Object.keys(result)).toEqual(["To Do", "In Progress"]);
+  expect(result["To Do"].map((c) => c.key)).toEqual(["DEMO-1", "DEMO-2"]);
+  expect(result["In Progress"].map((c) => c.key)).toEqual(["DEMO-4", "DEMO-3"]);
+  expect(result["To Do"][0].type).toBe("Epic");
+});
+
+test("combinedBoard filters by assignee on Epics and Stories", () => {
+  const columns = {
+    "To Do": [
+      { key: "DEMO-2", summary: "mine", assignee: "Person A" },
+      { key: "DEMO-5", summary: "other", assignee: "Person B" },
+    ],
+  };
+  const epics: Epic[] = [
+    { key: "DEMO-1", summary: "my epic", status: "To Do", assignee: "Person A" },
+    { key: "DEMO-6", summary: "other epic", status: "To Do", assignee: "Person B" },
+  ];
+  const result = combinedBoard(columns, epics, "", { filter: { assignee: ["Person A"] } });
+  expect(result["To Do"].map((c) => c.key)).toEqual(["DEMO-1", "DEMO-2"]);
+});
+
+test("combinedBoard hides empty statuses and respects Hide", () => {
+  const columns = { "To Do": [{ key: "DEMO-2", summary: "story" }] };
+  const epics: Epic[] = [{ key: "DEMO-1", summary: "epic", status: "Done" }];
+  const result = combinedBoard(columns, epics, "", { hide: ["Done"] });
+  expect(Object.keys(result)).toEqual(["To Do"]);
+});
+
+test("combinedBoard searches both Epics and Stories", () => {
+  const columns = { "To Do": [{ key: "DEMO-2", summary: "find me" }] };
+  const epics: Epic[] = [{ key: "DEMO-1", summary: "hidden epic", status: "To Do" }];
+  const result = combinedBoard(columns, epics, "find");
+  expect(result["To Do"].map((c) => c.key)).toEqual(["DEMO-2"]);
+});
+
+test("combinedBoard applies sort across mixed Cards", () => {
+  const columns = {
+    "To Do": [
+      { key: "DEMO-2", summary: "medium", priority: "Medium" },
+      { key: "DEMO-3", summary: "low", priority: "Low" },
+    ],
+  };
+  const epics: Epic[] = [
+    { key: "DEMO-1", summary: "high epic", status: "To Do", priority: "High" },
+  ];
+  const result = combinedBoard(columns, epics, "", { sort: "priority" });
+  expect(result["To Do"].map((c) => c.key)).toEqual(["DEMO-1", "DEMO-2", "DEMO-3"]);
 });

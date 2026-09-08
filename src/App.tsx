@@ -25,6 +25,7 @@ import {
   addPreset,
   applyPreset,
   cardMatches,
+  combinedBoard,
   epicChildCount,
   filterEpics,
   filterFacets,
@@ -261,15 +262,17 @@ function writePresets(next: Preset[]) {
   localStorage.setItem(PRESET_KEY, JSON.stringify(next));
 }
 
-function readOpener(): "stories" | "epics" {
+function readOpener(): "stories" | "epics" | "combined" {
   try {
-    return localStorage.getItem(OPENER_KEY) === "epics" ? "epics" : "stories";
+    const value = localStorage.getItem(OPENER_KEY);
+    if (value === "epics" || value === "combined") return value;
+    return "stories";
   } catch {
     return "stories";
   }
 }
 
-function writeOpener(next: "stories" | "epics") {
+function writeOpener(next: "stories" | "epics" | "combined") {
   localStorage.setItem(OPENER_KEY, next);
 }
 
@@ -455,6 +458,7 @@ function IssueCard({
   disabled,
   selected,
   onClick,
+  variant = "story",
 }: {
   card: Card;
   asHandle?: boolean;
@@ -462,13 +466,16 @@ function IssueCard({
   disabled?: boolean;
   selected?: boolean;
   onClick?: (event: React.MouseEvent) => void;
+  variant?: "story" | "epic";
 }) {
+  const isEpic = variant === "epic" || (card.type ?? "").toLowerCase() === "epic";
   const age = cardAge(card.created);
   const body = (
     <div
       className={cn(
         "bg-card hover:bg-foreground/5 rounded-[9px] border px-3 pt-2 pb-3",
         selected && "ring-primary ring-2",
+        isEpic && "bg-muted/40 border-l-4 border-l-primary",
       )}
     >
       <div className="flex h-[22px] items-center justify-between gap-2">
@@ -624,6 +631,7 @@ function StatusColumn({
                   isOverlay={isOverlay}
                   disabled={disabled}
                   selected={selected?.has(card.key)}
+                  variant={(card.type ?? "").toLowerCase() === "epic" ? "epic" : "story"}
                   onClick={(event) => onClick?.(card.key, event)}
                 />
               ))}
@@ -897,7 +905,7 @@ export function App() {
   const [folderError, setFolderError] = useState("");
   const [presetName, setPresetName] = useState("");
   const [presetError, setPresetError] = useState("");
-  const [boardKind, setBoardKind] = useState<"stories" | "epics">(readOpener);
+  const [boardKind, setBoardKind] = useState<"stories" | "epics" | "combined">(readOpener);
   const lastBoard = useRef<Board | null>(null);
   const [pipeBoard, setPipeBoard] = useState<Board | null>(null);
   const [commandOpen, setCommandOpen] = useState(false);
@@ -908,16 +916,17 @@ export function App() {
 
   const visibleOpts: VisibleOpts = { ...chrome, epics };
   const epicBoard = boardKind === "epics";
-  const visible = useMemo(
-    () =>
-      filterValue(
-        epicBoard ? columns : mergeSearchHits(columns, pipeBoard?.children, search),
-        epicBoard ? null : selectedEpic,
-        search,
-        visibleOpts,
-      ),
-    [columns, selectedEpic, search, chrome, epics, epicBoard, pipeBoard],
-  );
+  const visible = useMemo(() => {
+    if (boardKind === "combined") {
+      return combinedBoard(columns, epics, search, visibleOpts);
+    }
+    return filterValue(
+      epicBoard ? columns : mergeSearchHits(columns, pipeBoard?.children, search),
+      epicBoard ? null : selectedEpic,
+      search,
+      visibleOpts,
+    );
+  }, [columns, selectedEpic, search, chrome, epics, epicBoard, pipeBoard, boardKind]);
   const allCards = useMemo(() => Object.values(columns).flat(), [columns]);
   const childrenList = epicChildren ?? allCards;
   const commandCards = useMemo(() => {
@@ -983,12 +992,16 @@ export function App() {
     setSelectedCards(new Set());
   }
 
-  function paintBoard(next: Board, kind: "stories" | "epics") {
+  function paintBoard(next: Board, kind: "stories" | "epics" | "combined") {
     lastBoard.current = next;
     setPipeBoard(next);
     const listed = next.epics ?? [];
-    setColumns(kind === "epics" ? toValue(epicsToColumns(listed)) : toValue(next.columns));
     setEpics(listed);
+    if (kind === "epics") {
+      setColumns(toValue(epicsToColumns(listed)));
+    } else {
+      setColumns(toValue(next.columns));
+    }
     setEpicChildren(next.children ? Object.values(next.children).flat() : null);
     if (next.error) setError(next.error);
   }
@@ -998,8 +1011,14 @@ export function App() {
     lastBoard.current = next;
     setPipeBoard(next);
     const listed = next.epics ?? [];
-    setColumns(boardKind === "epics" ? toValue(epicsToColumns(listed)) : toValue(next.columns));
     setEpics(listed);
+    if (boardKind === "epics") {
+      setColumns(toValue(epicsToColumns(listed)));
+    } else if (boardKind === "combined") {
+      setColumns(toValue(next.columns));
+    } else {
+      setColumns(toValue(next.columns));
+    }
     setEpicChildren(next.children ? Object.values(next.children).flat() : null);
     setSelectedEpic((current) =>
       current && (next.epics ?? []).some((epic) => epic.key === current)
@@ -1240,8 +1259,15 @@ export function App() {
     if (lastBoard.current) paintBoard(lastBoard.current, "epics");
   }
 
+  function openCombined() {
+    writeOpener("combined");
+    setBoardKind("combined");
+    setSelectedEpic(null);
+    if (lastBoard.current) paintBoard(lastBoard.current, "combined");
+  }
+
   async function selectEpic(key: string | null) {
-    const fromEpics = boardKind === "epics";
+    const fromEpics = boardKind === "epics" || boardKind === "combined";
     if (fromEpics) openStories();
     setSelectedEpic(key);
     if (!key) return;
@@ -1281,7 +1307,7 @@ export function App() {
   }
 
   function createPreset() {
-    const result = addPreset(presets, presetName, chrome);
+    const result = addPreset(presets, presetName, { ...chrome, boardKind });
     if (!result.ok) {
       setPresetError("Preset names must be unique");
       return;
@@ -1295,7 +1321,14 @@ export function App() {
     const result = applyPreset(presets, name);
     if (!result.ok) return;
     persistChrome(result.chrome);
-    if (boardKind === "epics") openStories();
+    const nextKind = result.chrome.boardKind ?? "stories";
+    if (nextKind === "combined") {
+      openCombined();
+    } else if (nextKind === "epics") {
+      openEpics();
+    } else if (boardKind !== "stories") {
+      openStories();
+    }
   }
 
   function applyCommand(jump: CommandJump) {
@@ -1304,6 +1337,7 @@ export function App() {
     setSearch("");
     if (jump.kind === "all-stories") openStories();
     else if (jump.kind === "all-epics") openEpics();
+    else if (jump.kind === "all-combined") openCombined();
     else if (jump.kind === "refresh") void refresh();
     else if (jump.kind === "agent") setAgentOpen(true);
     else if (jump.kind === "preset") applyNamedPreset(jump.name);
@@ -1321,7 +1355,7 @@ export function App() {
   }
 
   function overwriteNamedPreset(name: string) {
-    const result = overwritePreset(presets, name, chrome);
+    const result = overwritePreset(presets, name, { ...chrome, boardKind });
     if (!result.ok) return;
     persistPresets(result.presets);
   }
@@ -1383,6 +1417,18 @@ export function App() {
                 onClick={openEpics}
               >
                 All epics
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  "h-8 rounded-lg px-3 text-left text-[13px]",
+                  boardKind === "combined"
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    : "hover:bg-foreground/5",
+                )}
+                onClick={openCombined}
+              >
+                Combined
               </button>
               {showFavourites ? (
                 <FavouriteGroup
@@ -1673,7 +1719,11 @@ export function App() {
                           const count = selectedCards.has(card.key) ? selectedCards.size : 1;
                           return (
                             <div className="relative">
-                              <IssueCard card={card} isOverlay />
+                              <IssueCard
+                                card={card}
+                                isOverlay
+                                variant={(card.type ?? "").toLowerCase() === "epic" ? "epic" : "story"}
+                              />
                               {count > 1 ? (
                                 <span className="absolute -top-2 -right-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-medium text-primary-foreground">
                                   {count}

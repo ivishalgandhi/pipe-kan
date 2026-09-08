@@ -10,6 +10,7 @@ test("empty query lists Actions only and omits Apply when there are no Presets",
       rows: [
         { label: "All stories", jump: { kind: "all-stories" } },
         { label: "All epics", jump: { kind: "all-epics" } },
+        { label: "All combined", jump: { kind: "all-combined" } },
         { label: "Refresh", jump: { kind: "refresh" } },
         { label: "Agent", jump: { kind: "agent" } },
       ],
@@ -25,6 +26,7 @@ test("Apply rows follow Preset create order", () => {
       rows: [
         { label: "All stories", jump: { kind: "all-stories" } },
         { label: "All epics", jump: { kind: "all-epics" } },
+        { label: "All combined", jump: { kind: "all-combined" } },
         { label: "Refresh", jump: { kind: "refresh" } },
         { label: "Agent", jump: { kind: "agent" } },
         { label: "Apply Now", jump: { kind: "preset", name: "Now" } },
@@ -62,11 +64,12 @@ test("typing filters Actions by case-insensitive row label", () => {
   expect(commandCatalog({ presets: ["Now"], query: "missing" })).toEqual([]);
 });
 
-test("pick yields all-stories, all-epics, refresh, agent, and preset intents", () => {
+test("pick yields all-stories, all-epics, all-combined, refresh, agent, and preset intents", () => {
   const rows = commandCatalog({ presets: ["Now"], query: "" })[0]?.rows ?? [];
   expect(rows.map((row) => commandPick(row))).toEqual([
     { kind: "all-stories" },
     { kind: "all-epics" },
+    { kind: "all-combined" },
     { kind: "refresh" },
     { kind: "agent" },
     { kind: "preset", name: "Now" },
@@ -101,6 +104,7 @@ test("empty query omits Epics and Cards even when listed", () => {
       rows: [
         { label: "All stories", jump: { kind: "all-stories" } },
         { label: "All epics", jump: { kind: "all-epics" } },
+        { label: "All combined", jump: { kind: "all-combined" } },
         { label: "Refresh", jump: { kind: "refresh" } },
         { label: "Agent", jump: { kind: "agent" } },
       ],
@@ -147,6 +151,7 @@ test("typing lists matching Epics then Cards after filtered Actions", () => {
     rows: [
       { label: "All stories", jump: { kind: "all-stories" } },
       { label: "All epics", jump: { kind: "all-epics" } },
+      { label: "All combined", jump: { kind: "all-combined" } },
     ],
   });
 });
