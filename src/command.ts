@@ -31,8 +31,6 @@ export type CommandCatalogInput = {
   favouriteKeys?: string[];
 };
 
-const ISSUE_CAP = 8;
-
 export function commandCatalog(input: CommandCatalogInput): CommandGroup[] {
   const needle = input.query.trim().toLowerCase();
   const actions: CommandRow[] = [
@@ -53,7 +51,6 @@ export function commandCatalog(input: CommandCatalogInput): CommandGroup[] {
   const favourites = new Set(input.favouriteKeys ?? []);
   const epics = (input.epics ?? [])
     .filter((epic) => epicMatches(epic, input.query))
-    .slice(0, ISSUE_CAP)
     .map((epic) => ({
       label: epic.summary,
       key: epic.key,
@@ -64,7 +61,6 @@ export function commandCatalog(input: CommandCatalogInput): CommandGroup[] {
 
   const cards = (input.cards ?? [])
     .filter((card) => cardMatches(card, input.query))
-    .slice(0, ISSUE_CAP)
     .map((card) => ({
       label: card.summary,
       key: card.key,

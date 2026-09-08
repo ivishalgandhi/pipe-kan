@@ -29,6 +29,7 @@ import {
   filterValue,
   groupEpics,
   listedFavourites,
+  mergeSearchHits,
   mergeValue,
   moveFavourite,
   overwritePreset,
@@ -892,11 +893,27 @@ export function App() {
   const visibleOpts: VisibleOpts = { ...chrome, epics };
   const epicBoard = boardKind === "epics";
   const visible = useMemo(
-    () => filterValue(columns, epicBoard ? null : selectedEpic, search, visibleOpts),
-    [columns, selectedEpic, search, chrome, epics, epicBoard],
+    () =>
+      filterValue(
+        epicBoard ? columns : mergeSearchHits(columns, pipeBoard?.children, search),
+        epicBoard ? null : selectedEpic,
+        search,
+        visibleOpts,
+      ),
+    [columns, selectedEpic, search, chrome, epics, epicBoard, pipeBoard],
   );
   const allCards = useMemo(() => Object.values(columns).flat(), [columns]);
   const childrenList = epicChildren ?? allCards;
+  const commandCards = useMemo(() => {
+    const byKey = new Map<string, Card>();
+    for (const card of pipeBoard?.columns.flatMap((column) => column.cards) ?? []) {
+      byKey.set(card.key, card);
+    }
+    for (const card of childrenList) {
+      if (!byKey.has(card.key)) byKey.set(card.key, card);
+    }
+    return [...byKey.values()];
+  }, [pipeBoard, childrenList]);
   const visibleEpics = useMemo(
     () => filterEpics(epics, childrenList, search, chrome.filter),
     [epics, childrenList, search, chrome.filter],
@@ -1682,7 +1699,7 @@ export function App() {
         <CommandOverlay
           presets={presets.map((preset) => preset.name)}
           epics={pipeBoard?.epics ?? epics}
-          cards={pipeBoard?.columns.flatMap((column) => column.cards) ?? []}
+          cards={commandCards}
           favouriteKeys={favourites.keys}
           onPick={applyCommand}
           onClose={() => {

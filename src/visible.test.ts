@@ -14,6 +14,7 @@ import {
   filterFacets,
   filterValue,
   groupEpics,
+  mergeSearchHits,
   listedFavourites,
   mergeValue,
   moveFavourite,
@@ -108,6 +109,23 @@ test("Search hides Cards that do not match", () => {
       "kanban",
     ),
   ).toEqual({ "In Progress": [labeled] });
+});
+
+test("Search adds a matching story that Scope missed", () => {
+  const cached = { key: "DEMO-20", summary: "Work story", epic: "DEMO-1" };
+  expect(
+    mergeSearchHits(
+      { "To Do": [child] },
+      { "In Progress": [cached, labeled] },
+      "work",
+    ),
+  ).toEqual({
+    "To Do": [child],
+    "In Progress": [cached],
+  });
+  expect(mergeSearchHits({ "To Do": [child] }, { "In Progress": [cached] }, "")).toEqual({
+    "To Do": [child],
+  });
 });
 
 test("Search under an Epic keeps only matching children", () => {

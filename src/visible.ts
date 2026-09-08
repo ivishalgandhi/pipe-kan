@@ -230,6 +230,30 @@ function sortCards(cards: Card[], sort?: BoardSort) {
   });
 }
 
+export function mergeSearchHits(
+  columns: Record<string, Card[]>,
+  extra: Record<string, Card[]> | undefined,
+  query: string,
+): Record<string, Card[]> {
+  if (!needle(query) || !extra) return columns;
+  const seen = new Set(
+    Object.values(columns).flatMap((cards) => cards.map((card) => card.key)),
+  );
+  const next: Record<string, Card[]> = Object.fromEntries(
+    Object.entries(columns).map(([title, cards]) => [title, [...cards]]),
+  );
+  for (const [title, cards] of Object.entries(extra)) {
+    for (const card of cards) {
+      if (seen.has(card.key) || !cardMatches(card, query)) continue;
+      seen.add(card.key);
+      const list = next[title] ?? [];
+      list.push(card);
+      next[title] = list;
+    }
+  }
+  return next;
+}
+
 export function filterValue(
   columns: Record<string, Card[]>,
   epic: string | null,

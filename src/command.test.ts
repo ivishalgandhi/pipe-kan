@@ -182,7 +182,7 @@ test("Card match uses the same needles as Search", () => {
   expect(rows("parser")).toEqual(["DEMO-2"]);
 });
 
-test("Epics and Cards cap at 8 in payload order and Actions never cap", () => {
+test("typing lists every matching Epic and Card in payload order and Actions never cap", () => {
   const epics = Array.from({ length: 9 }, (_, i) => ({
     key: `EPIC-${i}`,
     summary: `Listed epic ${i}`,
@@ -198,10 +198,10 @@ test("Epics and Cards cap at 8 in payload order and Actions never cap", () => {
     cards,
   });
   expect(groups.find((group) => group.id === "epics")?.rows.map((row) => row.key)).toEqual(
-    epics.slice(0, 8).map((epic) => epic.key),
+    epics.map((epic) => epic.key),
   );
   expect(groups.find((group) => group.id === "cards")?.rows.map((row) => row.key)).toEqual(
-    cards.slice(0, 8).map((card) => card.key),
+    cards.map((card) => card.key),
   );
   expect(
     commandCatalog({
