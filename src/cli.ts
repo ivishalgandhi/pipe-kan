@@ -19,6 +19,17 @@ function emptyList(text: string) {
   return /no result found/i.test(text);
 }
 
+const LIST_PAGE = 100;
+
+function issueKey(issue: unknown): string | undefined {
+  if (!issue || typeof issue !== "object" || !("key" in issue)) return undefined;
+  return typeof issue.key === "string" ? issue.key : undefined;
+}
+
+function hasPaginate(args: string[]) {
+  return args.some((arg) => arg === "--paginate" || arg.startsWith("--paginate="));
+}
+
 export function createStoreCli(store: IssueStore): Cli {
   return {
     async list(flags) {
@@ -99,57 +110,68 @@ export function createJiraCli(
     );
   }
 
+  async function listOnce(args: string[]): Promise<unknown[]> {
+    const result = await run(args);
+    if (result.code !== 0) {
+      const text = result.stderr || result.stdout || "jira issue list failed";
+      if (emptyList(text)) return [];
+      throw new Error(text);
+    }
+    const parsed = JSON.parse(result.stdout);
+    return Array.isArray(parsed) ? parsed : [];
+  }
+
+  async function listAll(args: string[]): Promise<string> {
+    if (hasPaginate(args)) {
+      return JSON.stringify(await listOnce([...args, "--raw"]));
+    }
+    const issues: unknown[] = [];
+    const seen = new Set<string>();
+    for (let from = 0; ; from += LIST_PAGE) {
+      const page = await listOnce([
+        ...args,
+        "--paginate",
+        `${from}:${LIST_PAGE}`,
+        "--raw",
+      ]);
+      if (!page.length) break;
+      const first = issueKey(page[0]);
+      if (first && seen.has(first)) break;
+      for (const issue of page) {
+        const key = issueKey(issue);
+        if (key) seen.add(key);
+        issues.push(issue);
+      }
+      if (page.length < LIST_PAGE) break;
+    }
+    return JSON.stringify(issues);
+  }
+
   return {
     async list(flags) {
       const extra = (flags || DEFAULT_FLAGS).split(/\s+/).filter(Boolean);
-      const result = await run(["issue", "list", ...extra, "--raw"]);
-      if (result.code !== 0) {
-        const text = result.stderr || result.stdout || "jira issue list failed";
-        if (emptyList(text)) return "[]";
-        throw new Error(text);
-      }
-      return result.stdout;
+      return listAll(["issue", "list", ...extra]);
     },
     async listEpics() {
-      const result = await run(["issue", "list", "-tEpic", "--raw"]);
-      if (result.code !== 0) {
-        const text = result.stderr || result.stdout || "jira issue list failed";
-        if (emptyList(text)) return "[]";
-        throw new Error(text);
-      }
-      return result.stdout;
+      return listAll(["issue", "list", "-tEpic"]);
     },
     async listEpic(key) {
-      const result = await run([
+      return listAll([
         "issue",
         "list",
         "-q",
         `(parent="${key}" OR "Epic Link"="${key}")`,
-        "--raw",
       ]);
-      if (result.code !== 0) {
-        const text = result.stderr || result.stdout || "jira issue list failed";
-        if (emptyList(text)) return "[]";
-        throw new Error(text);
-      }
-      return result.stdout;
     },
     async listChildren(keys) {
       if (!keys.length) return "[]";
       const list = keys.map((key) => `"${key}"`).join(", ");
-      const result = await run([
+      return listAll([
         "issue",
         "list",
         "-q",
         `(parent in (${list}) OR "Epic Link" in (${list}))`,
-        "--raw",
       ]);
-      if (result.code !== 0) {
-        const text = result.stderr || result.stdout || "jira issue list failed";
-        if (emptyList(text)) return "[]";
-        throw new Error(text);
-      }
-      return result.stdout;
     },
     async move(key, status) {
       const result = await run(["issue", "move", key, status]);

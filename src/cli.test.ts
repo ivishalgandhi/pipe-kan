@@ -82,6 +82,47 @@ process.exit(1);
   };
 }
 
+function pagingJira(total: number) {
+  const dir = mkdtempSync(join(tmpdir(), "pipe-kan-"));
+  const bin = join(dir, "jira");
+  const log = join(dir, "calls.jsonl");
+  writeFileSync(
+    bin,
+    `#!/usr/bin/env bun
+import { appendFileSync } from "node:fs";
+appendFileSync(${JSON.stringify(log)}, JSON.stringify({ args: process.argv.slice(2) }) + "\\n");
+const args = process.argv.slice(2);
+const i = args.indexOf("--paginate");
+const spec = i >= 0 ? args[i + 1] ?? "0:100" : "0:100";
+const [from, limit] = spec.split(":").map(Number);
+const issues = Array.from({ length: ${total} }, (_, n) => ({
+  key: "DEMO-" + n,
+  fields: { summary: "Epic " + n, status: { name: "To Do" }, issuetype: { name: "Epic" } },
+}));
+const page = issues.slice(from, from + limit);
+if (!page.length) {
+  console.error('✗ No result found for given query in project "DEMO"');
+  process.exit(1);
+}
+console.log(JSON.stringify(page));
+`,
+  );
+  chmodSync(bin, 0o755);
+  return {
+    bin,
+    calls() {
+      try {
+        return readFileSync(log, "utf8")
+          .trim()
+          .split("\n")
+          .map((line) => JSON.parse(line) as { args: string[] });
+      } catch {
+        return [];
+      }
+    },
+  };
+}
+
 test("resolveJiraBin finds an explicit path and misses a missing name", () => {
   const { bin } = fakeJira();
   expect(resolveJiraBin(bin)).toBe(bin);
@@ -99,6 +140,8 @@ test("createJiraCli lists with flags and --raw", async () => {
     "-a",
     "user@test.com",
     "-s~Done",
+    "--paginate",
+    "0:100",
     "--raw",
   ]);
 });
@@ -114,7 +157,30 @@ test("createJiraCli lists every Epic with -tEpic", async () => {
   const cli = createJiraCli({ bin });
   const raw = await cli.listEpics();
   expect(JSON.parse(raw)[0].key).toBe("DEMO-1");
-  expect(calls()[0].args).toEqual(["issue", "list", "-tEpic", "--raw"]);
+  expect(calls()[0].args).toEqual(["issue", "list", "-tEpic", "--paginate", "0:100", "--raw"]);
+});
+
+test("createJiraCli lists every Epic past jira-cli's 100-item page", async () => {
+  const { bin, calls } = pagingJira(101);
+  const cli = createJiraCli({ bin });
+  expect(JSON.parse(await cli.listEpics()).map((issue: { key: string }) => issue.key)).toEqual(
+    Array.from({ length: 101 }, (_, n) => `DEMO-${n}`),
+  );
+  expect(calls().map((call) => call.args)).toEqual([
+    ["issue", "list", "-tEpic", "--paginate", "0:100", "--raw"],
+    ["issue", "list", "-tEpic", "--paginate", "100:100", "--raw"],
+  ]);
+});
+
+test("createJiraCli list keeps a Scope --paginate", async () => {
+  const { bin, calls } = pagingJira(101);
+  const cli = createJiraCli({ bin });
+  expect(JSON.parse(await cli.list("--paginate 0:50")).map((issue: { key: string }) => issue.key)).toEqual(
+    Array.from({ length: 50 }, (_, n) => `DEMO-${n}`),
+  );
+  expect(calls().map((call) => call.args)).toEqual([
+    ["issue", "list", "--paginate", "0:50", "--raw"],
+  ]);
 });
 
 test("createJiraCli lists Epic children with parent or Epic Link", async () => {
@@ -127,6 +193,8 @@ test("createJiraCli lists Epic children with parent or Epic Link", async () => {
     "list",
     "-q",
     '(parent="DEMO-1" OR "Epic Link"="DEMO-1")',
+    "--paginate",
+    "0:100",
     "--raw",
   ]);
 });
@@ -140,6 +208,8 @@ test("createJiraCli lists children of every Epic in one call", async () => {
     "list",
     "-q",
     '(parent in ("DEMO-1", "DEMO-8") OR "Epic Link" in ("DEMO-1", "DEMO-8"))',
+    "--paginate",
+    "0:100",
     "--raw",
   ]);
 });
