@@ -150,7 +150,7 @@ export function createJiraCli(
   return {
     async list(flags) {
       const extra = (flags || DEFAULT_FLAGS).split(/\s+/).filter(Boolean);
-      return listAll(["issue", "list", ...extra]);
+      return JSON.stringify(await listOnce(["issue", "list", ...extra, "--raw"]));
     },
     async listEpics() {
       return listAll(["issue", "list", "-tEpic"]);

@@ -140,8 +140,6 @@ test("createJiraCli lists with flags and --raw", async () => {
     "-a",
     "user@test.com",
     "-s~Done",
-    "--paginate",
-    "0:100",
     "--raw",
   ]);
 });
@@ -170,6 +168,15 @@ test("createJiraCli lists every Epic past jira-cli's 100-item page", async () =>
     ["issue", "list", "-tEpic", "--paginate", "0:100", "--raw"],
     ["issue", "list", "-tEpic", "--paginate", "100:100", "--raw"],
   ]);
+});
+
+test("createJiraCli list is one jira-cli page", async () => {
+  const { bin, calls } = pagingJira(101);
+  const cli = createJiraCli({ bin });
+  expect(JSON.parse(await cli.list("")).map((issue: { key: string }) => issue.key)).toEqual(
+    Array.from({ length: 100 }, (_, n) => `DEMO-${n}`),
+  );
+  expect(calls().map((call) => call.args)).toEqual([["issue", "list", "--raw"]]);
 });
 
 test("createJiraCli list keeps a Scope --paginate", async () => {
