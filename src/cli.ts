@@ -95,6 +95,13 @@ export function createJiraCli(
   const bin = opts.bin ?? "jira";
   const retryDelayMs = opts.retryDelayMs ?? 1000;
 
+  function fmt(args: string[]) {
+    return args
+      .filter((arg) => arg !== "--raw")
+      .map((arg, i, all) => (all[i - 1] === "-q" && arg.length > 48 ? `${arg.slice(0, 48)}…` : arg))
+      .join(" ");
+  }
+
   function run(args: string[]) {
     return new Promise<{ code: number; stdout: string; stderr: string }>(
       (resolveRun, reject) => {
@@ -122,8 +129,10 @@ export function createJiraCli(
     let result = await run(args);
     for (let attempt = 0; attempt < RETRY_LIMIT; attempt++) {
       if (result.code === 0 || !rateLimited(result.stderr || result.stdout)) return result;
+      const delay = retryDelayMs * 2 ** attempt;
+      console.log(`jira 429 retry ${delay}ms ${fmt(args)}`);
       if (retryDelayMs) {
-        await new Promise((resolve) => setTimeout(resolve, retryDelayMs * 2 ** attempt));
+        await new Promise((resolve) => setTimeout(resolve, delay));
       }
       result = await run(args);
     }
@@ -131,14 +140,21 @@ export function createJiraCli(
   }
 
   async function listOnce(args: string[]): Promise<unknown[]> {
+    const started = Date.now();
     const result = await runRetry(args);
     if (result.code !== 0) {
       const text = result.stderr || result.stdout || "jira issue list failed";
-      if (emptyList(text)) return [];
+      if (emptyList(text)) {
+        console.log(`jira ${fmt(args)} -> 0 (${Date.now() - started}ms)`);
+        return [];
+      }
+      console.log(`jira ${fmt(args)} fail (${Date.now() - started}ms)`);
       throw new Error(text);
     }
     const parsed = JSON.parse(result.stdout);
-    return Array.isArray(parsed) ? parsed : [];
+    const page = Array.isArray(parsed) ? parsed : [];
+    console.log(`jira ${fmt(args)} -> ${page.length} (${Date.now() - started}ms)`);
+    return page;
   }
 
   async function listAll(args: string[]): Promise<string> {
@@ -164,6 +180,7 @@ export function createJiraCli(
       }
       if (page.length < LIST_PAGE) break;
     }
+    console.log(`jira ${fmt(args)} ${issues.length} total`);
     return JSON.stringify(issues);
   }
 

@@ -32,17 +32,6 @@ function stampMissingEpic(board: Board, epic: string): Board {
   return board;
 }
 
-function stampRawParent(raw: unknown, epic: string): unknown[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.map((issue) => {
-    if (!issue || typeof issue !== "object") return issue;
-    const current = issue as { fields?: Record<string, unknown> };
-    const fields = current.fields;
-    if (!fields || typeof fields !== "object" || fields.parent) return issue;
-    return { ...current, fields: { ...fields, parent: { key: epic } } };
-  });
-}
-
 function cardsOf(raw: unknown): Card[] {
   if (!Array.isArray(raw)) return [];
   return issuesToBoard(raw).columns.flatMap((column) => column.cards);
@@ -92,38 +81,46 @@ export function createApp(opts: { store: IssueStore; cli?: Cli }): App {
     },
     async refresh(next) {
       if (next !== undefined) flags = next;
-      const [issues, epics] = await Promise.all([
-        cli.list(flags),
-        cli.listEpics(),
-      ]);
-      const nextPayload = JSON.parse(issues);
-      const nextEpics = JSON.parse(epics);
-      const keys = issuesToBoard(nextEpics).epics.map((epic) => epic.key);
-      let nextChildren: unknown[] = [];
-      let nextHasCache = false;
-      let nextError: string | undefined;
+      console.log("Refresh");
       try {
-        nextChildren = JSON.parse(await cli.listChildren(keys));
-        const cards = cardsOf(nextChildren);
-        if (cards.length > 0 && !cards.some((card) => card.epic)) {
-          const stamped: unknown[] = [];
-          for (const key of keys) {
-            stamped.push(...stampRawParent(JSON.parse(await cli.listEpic(key)), key));
+        const issues = await cli.list(flags);
+        const epics = await cli.listEpics();
+        const nextPayload = JSON.parse(issues);
+        const nextEpics = JSON.parse(epics);
+        const keys = issuesToBoard(nextEpics).epics.map((epic) => epic.key);
+        const issueCount = Array.isArray(nextPayload) ? nextPayload.length : 0;
+        console.log(`Refresh listed ${issueCount} issues, ${keys.length} epics`);
+        let nextChildren: unknown[] = [];
+        let nextHasCache = false;
+        let nextError: string | undefined;
+        try {
+          nextChildren = JSON.parse(await cli.listChildren(keys));
+          const cards = cardsOf(nextChildren);
+          if (cards.length > 0 && !cards.some((card) => card.epic)) {
+            console.log(`Refresh children missing Epic keys; skip ${keys.length} per-Epic lists`);
+            nextChildren = [];
+            nextHasCache = false;
+          } else {
+            nextHasCache = true;
+            console.log(`Refresh children ${cards.length}`);
           }
-          nextChildren = stamped;
+        } catch (err) {
+          nextHasCache = false;
+          nextChildren = [];
+          nextError = err instanceof Error ? err.message : "Epic children list failed";
+          console.log("Refresh children failed", nextError);
         }
-        nextHasCache = true;
+        payload = nextPayload;
+        epicsPayload = nextEpics;
+        childrenRaw = nextChildren;
+        hasChildrenCache = nextHasCache;
+        childrenError = nextError;
+        return app.board();
       } catch (err) {
-        nextHasCache = false;
-        nextChildren = [];
-        nextError = err instanceof Error ? err.message : "Epic children list failed";
+        const message = err instanceof Error ? err.message : "Refresh failed";
+        console.error("Refresh failed", message);
+        return { ...app.board(), error: message };
       }
-      payload = nextPayload;
-      epicsPayload = nextEpics;
-      childrenRaw = nextChildren;
-      hasChildrenCache = nextHasCache;
-      childrenError = nextError;
-      return app.board();
     },
     async children(epic) {
       if (hasChildrenCache) {

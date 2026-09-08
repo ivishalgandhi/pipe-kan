@@ -489,6 +489,112 @@ test("Refresh keeps the last Board until children land", async () => {
   expect(childKeys(done)).toEqual(["WORK-2"]);
 });
 
+test("Refresh of 220 Epics does not list each Epic when Epic Link is missing", async () => {
+  const calls: string[] = [];
+  const epics = Array.from({ length: 220 }, (_, n) => ({
+    key: `DEMO-${n + 1}`,
+    fields: {
+      summary: `Epic ${n + 1}`,
+      status: { name: "To Do" },
+      issuetype: { name: "Epic" },
+    },
+  }));
+  const unmapped = epics.map((_, n) => ({
+    key: `STORY-${n + 1}`,
+    fields: {
+      summary: `Story ${n + 1}`,
+      status: { name: "To Do" },
+      issuetype: { name: "Story" },
+    },
+  }));
+  const cli: Cli = {
+    async list() {
+      return "[]";
+    },
+    async listEpics() {
+      return JSON.stringify(epics);
+    },
+    async listEpic(key) {
+      calls.push(`listEpic:${key}`);
+      return "[]";
+    },
+    async listChildren() {
+      calls.push("listChildren");
+      return JSON.stringify(unmapped);
+    },
+    async move() {
+      return { ok: true };
+    },
+    async open() {
+      return "/browse/X";
+    },
+    async view() {
+      return JSON.stringify({ key: "X", fields: {} });
+    },
+  };
+  const app = createApp({ store: IssueStore.fromRaw(fixture), cli });
+  const started = Date.now();
+  const board = await app.refresh();
+  expect(board.epics).toHaveLength(220);
+  expect(calls.filter((call) => call === "listChildren")).toEqual(["listChildren"]);
+  expect(calls.filter((call) => call.startsWith("listEpic"))).toEqual([]);
+  expect(Date.now() - started).toBeLessThan(1000);
+});
+
+test("a failed Issues list keeps the last Board", async () => {
+  let lists = 0;
+  const cli: Cli = {
+    async list() {
+      lists += 1;
+      if (lists > 1) throw new Error("Unexpected response '429' from jira");
+      return JSON.stringify([
+        {
+          key: "DEMO-2",
+          fields: {
+            summary: "In scope",
+            status: { name: "To Do" },
+            issuetype: { name: "Story" },
+            parent: { key: "DEMO-1" },
+          },
+        },
+      ]);
+    },
+    async listEpics() {
+      return JSON.stringify([
+        {
+          key: "DEMO-1",
+          fields: {
+            summary: "Epic",
+            status: { name: "To Do" },
+            issuetype: { name: "Epic" },
+          },
+        },
+      ]);
+    },
+    async listEpic() {
+      return "[]";
+    },
+    async listChildren() {
+      return "[]";
+    },
+    async move() {
+      return { ok: true };
+    },
+    async open() {
+      return "/browse/X";
+    },
+    async view() {
+      return JSON.stringify({ key: "X", fields: {} });
+    },
+  };
+  const app = createApp({ store: IssueStore.fromRaw(fixture), cli });
+  await app.refresh();
+  const board = await app.refresh();
+  expect(board.error).toMatch(/429/);
+  expect(board.columns.flatMap((column) => column.cards.map((card) => card.key))).toEqual(["DEMO-2"]);
+  expect(board.epics.map((epic) => epic.key)).toEqual(["DEMO-1"]);
+});
+
 test("select falls back to listEpic when cached children lost their Epic key", async () => {
   const calls: string[] = [];
   const unmapped = [
@@ -537,12 +643,7 @@ test("select falls back to listEpic when cached children lost their Epic key", a
   };
   const { base } = await listen(IssueStore.fromRaw(fixture), cli);
   const board = await (await fetch(`${base}/api/board`)).json();
-  expect(childKeys(board)).toEqual(["DEMO-9"]);
-  expect(
-    Object.values(board.children ?? {})
-      .flat()
-      .map((card) => (card as { epic?: string }).epic),
-  ).toEqual(["DEMO-1"]);
+  expect(childKeys(board)).toEqual([]);
   const res = await fetch(`${base}/api/epic`, {
     method: "POST",
     headers: { "content-type": "application/json" },

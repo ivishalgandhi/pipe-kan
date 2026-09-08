@@ -21,6 +21,20 @@ function pathOf(req: IncomingMessage): URL {
   return new URL(req.url ?? "/", "http://127.0.0.1");
 }
 
+function reply(
+  req: IncomingMessage,
+  res: ServerResponse,
+  work: (text: string) => Promise<void>,
+) {
+  void readBody(req)
+    .then(work)
+    .catch((err) => {
+      const message = err instanceof Error ? err.message : "request failed";
+      console.error(message);
+      if (!res.headersSent) json(res, 500, { error: message });
+    });
+}
+
 export function handleAppApi(
   req: IncomingMessage,
   res: ServerResponse,
@@ -35,16 +49,15 @@ export function handleAppApi(
   }
 
   if (url.pathname === "/api/refresh" && method === "POST") {
-    void readBody(req).then(async (text) => {
+    reply(req, res, async (text) => {
       const body = text ? JSON.parse(text) : {};
-      const board = await app.refresh(body.flags);
-      json(res, 200, board);
+      json(res, 200, await app.refresh(body.flags));
     });
     return true;
   }
 
   if (url.pathname === "/api/move" && method === "POST") {
-    void readBody(req).then(async (text) => {
+    reply(req, res, async (text) => {
       const body = text ? JSON.parse(text) : {};
       const result = await app.move(String(body.key ?? ""), String(body.status ?? ""));
       json(res, result.ok ? 200 : 409, result);
@@ -53,7 +66,7 @@ export function handleAppApi(
   }
 
   if (url.pathname === "/api/epic" && method === "POST") {
-    void readBody(req).then(async (text) => {
+    reply(req, res, async (text) => {
       const body = text ? JSON.parse(text) : {};
       json(res, 200, await app.children(String(body.key ?? "")));
     });
@@ -61,7 +74,7 @@ export function handleAppApi(
   }
 
   if (url.pathname === "/api/open" && method === "POST") {
-    void readBody(req).then(async (text) => {
+    reply(req, res, async (text) => {
       const body = text ? JSON.parse(text) : {};
       json(res, 200, await app.open(String(body.key ?? "")));
     });

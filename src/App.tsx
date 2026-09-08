@@ -1036,6 +1036,7 @@ export function App() {
   async function refresh() {
     setBusy(true);
     setError("");
+    console.info("[pipe-kan] Refresh", flags);
     const toastId = toast.loading("Refreshing…", { description: "Listing Issues and Epics" });
     try {
       const data = await api<BoardPayload>("/api/refresh", {
@@ -1043,12 +1044,19 @@ export function App() {
         body: JSON.stringify({ flags }),
       });
       applyBoard(data);
-      toast.success("Refreshed", {
-        id: toastId,
-        description: `${data.epics.length} epics`,
-      });
+      if (data.error) {
+        console.info("[pipe-kan] Refresh error", data.error);
+        toast.error("Refresh failed", { id: toastId, description: data.error });
+      } else {
+        console.info("[pipe-kan] Refreshed", data.epics.length, "epics");
+        toast.success("Refreshed", {
+          id: toastId,
+          description: `${data.epics.length} epics`,
+        });
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Refresh failed";
+      console.info("[pipe-kan] Refresh failed", message);
       setError(message);
       toast.error("Refresh failed", { id: toastId, description: message });
     } finally {
