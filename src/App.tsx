@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { cardAge, epicsToColumns, type Board, type Card, type Column, type Epic } from "./board.ts";
+import { type CommandJump } from "./command.ts";
 import { frameSrc, type OpenField } from "./open.ts";
 import {
   addFolder,
@@ -46,6 +47,7 @@ import {
   type VisibleOpts,
 } from "./visible.ts";
 import { AgentPanel } from "~/components/agent/agent-panel.tsx";
+import { CommandOverlay } from "~/components/command-overlay.tsx";
 import { Avatar, AvatarFallback } from "~/components/ui/avatar";
 import { Button } from "~/components/ui/button";
 import {
@@ -883,6 +885,9 @@ export function App() {
   const [boardKind, setBoardKind] = useState<"stories" | "epics">(readOpener);
   const lastBoard = useRef<Board | null>(null);
   const [pipeBoard, setPipeBoard] = useState<Board | null>(null);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const commandOpenRef = useRef(false);
+  const commandReturnFocus = useRef<HTMLElement | null>(null);
 
   const visibleOpts: VisibleOpts = { ...chrome, epics };
   const epicBoard = boardKind === "epics";
@@ -974,6 +979,38 @@ export function App() {
 
   useEffect(() => {
     void load();
+  }, []);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        !event.altKey &&
+        !event.shiftKey &&
+        event.key.toLowerCase() === "k"
+      ) {
+        event.preventDefault();
+        if (commandOpenRef.current) {
+          commandOpenRef.current = false;
+          setCommandOpen(false);
+          commandReturnFocus.current?.focus();
+          return;
+        }
+        commandReturnFocus.current =
+          document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        commandOpenRef.current = true;
+        setCommandOpen(true);
+        return;
+      }
+      if (event.key === "Escape" && commandOpenRef.current) {
+        event.preventDefault();
+        commandOpenRef.current = false;
+        setCommandOpen(false);
+        commandReturnFocus.current?.focus();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, []);
 
   async function refresh() {
@@ -1132,6 +1169,17 @@ export function App() {
     if (!result.ok) return;
     persistChrome(result.chrome);
     if (boardKind === "epics") openStories();
+  }
+
+  function applyCommand(jump: CommandJump) {
+    commandOpenRef.current = false;
+    setCommandOpen(false);
+    setSearch("");
+    if (jump.kind === "all-stories") openStories();
+    else if (jump.kind === "all-epics") openEpics();
+    else if (jump.kind === "refresh") void refresh();
+    else if (jump.kind === "agent") setAgentOpen(true);
+    else applyNamedPreset(jump.name);
   }
 
   function overwriteNamedPreset(name: string) {
@@ -1617,6 +1665,12 @@ export function App() {
           </>
         ) : null}
       </ResizablePanelGroup>
+      {commandOpen ? (
+        <CommandOverlay
+          presets={presets.map((preset) => preset.name)}
+          onPick={applyCommand}
+        />
+      ) : null}
     </div>
   );
 }
