@@ -51,6 +51,10 @@ _Avoid_: filter, view, query (when meaning this)
 Typing in the header that hides Epics and Cards that do not match. An Epic matches on key, summary, and labels, or when a child matches. It does not change Scope or Refresh Jira.
 _Avoid_: filter, query (when meaning this)
 
+**Command**:
+A keyboard overlay that jumps to an Epic, Card, opener, Favourite, Preset, Refresh, or Agent from Issues already listed by Refresh. It is not Search, Scope, or a live jira-cli lookup.
+_Avoid_: palette, cmd+k, launcher, search (when meaning this)
+
 **Filter**:
 Persisted Board controls that hide Cards without changing Scope or Refresh. An Epic row stays when the Epic's own field matches or a remaining child matches; it hides when neither does.
 _Avoid_: Search, Scope, Sort, Preset, query
