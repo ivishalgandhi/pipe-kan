@@ -26,6 +26,7 @@ const mockApp = {
     epics: [{ key: "PIPE-100", summary: "Piped epic", status: "To Do" }],
   }),
   move: async () => ({ ok: true, board: { columns: [], epics: [] } }),
+  moveRaw: async () => ({ ok: true }),
   open: async () => ({ url: "", fields: [] }),
 } satisfies App;
 

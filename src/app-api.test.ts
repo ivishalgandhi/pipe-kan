@@ -104,6 +104,51 @@ test("same-Column drop is a no-op", async () => {
   expect(body.noop).toBe(true);
 });
 
+test("raw Move succeeds without Refreshing", async () => {
+  const { base, app } = await listen();
+  const before = app.board();
+  const res = await fetch(`${base}/api/move`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ key: "DEMO-3", status: "Done", raw: true }),
+  });
+  const body = await res.json();
+  expect(res.status).toBe(200);
+  expect(body.ok).toBe(true);
+  expect(body).not.toHaveProperty("board");
+  expect(app.board()).toEqual(before);
+});
+
+test("raw Move returns failure without Refreshing", async () => {
+  const { base, app } = await listen();
+  const before = app.board();
+  const res = await fetch(`${base}/api/move`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ key: "DEMO-4", status: "Done", raw: true }),
+  });
+  const body = await res.json();
+  expect(res.status).toBe(409);
+  expect(body.ok).toBe(false);
+  expect(body.error).toContain("invalid transition state");
+  expect(app.board()).toEqual(before);
+});
+
+test("raw Move noop for same status", async () => {
+  const { base, app } = await listen();
+  const before = app.board();
+  const res = await fetch(`${base}/api/move`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ key: "DEMO-2", status: "To Do", raw: true }),
+  });
+  const body = await res.json();
+  expect(res.status).toBe(200);
+  expect(body.ok).toBe(true);
+  expect(body.noop).toBe(true);
+  expect(app.board()).toEqual(before);
+});
+
 test("Refresh with Epic flag lists Epic children", async () => {
   const { base } = await listen();
   const res = await fetch(`${base}/api/refresh`, {
