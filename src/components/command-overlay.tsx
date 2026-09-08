@@ -1,18 +1,32 @@
 import { useState, type KeyboardEvent } from "react";
+import { SearchIcon, StarIcon } from "lucide-react";
 
-import { commandCatalog, commandPick, type CommandJump } from "~/command.ts";
+import type { Card, Epic } from "~/board.ts";
+import { commandCatalog, commandPick, type CommandJump, type CommandRow } from "~/command.ts";
 import { cn } from "~/lib/utils";
+
+function rowId(row: CommandRow) {
+  return row.key ? `${row.jump.kind}:${row.key}` : row.label;
+}
 
 export function CommandOverlay({
   presets,
+  epics,
+  cards,
+  favouriteKeys,
   onPick,
+  onClose,
 }: {
   presets: string[];
+  epics: Epic[];
+  cards: Card[];
+  favouriteKeys: string[];
   onPick: (jump: CommandJump) => void;
+  onClose: () => void;
 }) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
-  const groups = commandCatalog({ presets, query });
+  const groups = commandCatalog({ presets, query, epics, cards, favouriteKeys });
   const rows = groups.flatMap((group) => group.rows);
   const highlight = rows.length ? Math.min(active, rows.length - 1) : 0;
 
@@ -44,24 +58,35 @@ export function CommandOverlay({
 
   let offset = 0;
   return (
-    <div className="fixed inset-0 z-50 flex justify-center bg-black/20 pt-[18vh]">
+    <div
+      className="fixed inset-0 z-50 flex justify-center bg-black/40 pt-[18vh]"
+      onMouseDown={onClose}
+    >
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Command"
-        className="bg-popover text-popover-foreground w-full max-w-lg overflow-hidden rounded-xl border shadow-sm"
+        className="bg-popover text-popover-foreground w-full max-w-lg overflow-hidden rounded-xl border shadow-md"
+        onMouseDown={(event) => event.stopPropagation()}
       >
-        <input
-          autoFocus
-          value={query}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            setActive(0);
-          }}
-          onKeyDown={onKeyDown}
-          aria-label="Command"
-          className="h-10 w-full border-b bg-transparent px-3 text-[13px] outline-none"
-        />
+        <div className="flex h-11 items-center gap-2 border-b px-3">
+          <SearchIcon className="text-muted-foreground size-3.5 shrink-0" />
+          <input
+            autoFocus
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setActive(0);
+            }}
+            onKeyDown={onKeyDown}
+            aria-label="Command"
+            placeholder="Jump to Epic, Card, or Action"
+            className="placeholder:text-muted-foreground h-11 min-w-0 flex-1 bg-transparent text-[13px] outline-none"
+          />
+          {query ? null : (
+            <kbd className="text-muted-foreground rounded border px-1.5 py-0.5 text-[11px]">⌘K</kbd>
+          )}
+        </div>
         <div className="max-h-80 overflow-auto p-1">
           {groups.map((group) => {
             const start = offset;
@@ -75,10 +100,11 @@ export function CommandOverlay({
                   const index = start + i;
                   return (
                     <button
-                      key={row.label}
+                      key={rowId(row)}
                       type="button"
+                      aria-label={row.key ? `${row.key} ${row.label}` : row.label}
                       className={cn(
-                        "flex w-full rounded-sm px-2 py-1.5 text-left text-[13px]",
+                        "flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px]",
                         index === highlight
                           ? "bg-accent text-accent-foreground"
                           : "hover:bg-foreground/5",
@@ -87,7 +113,15 @@ export function CommandOverlay({
                       onMouseEnter={() => setActive(index)}
                       onClick={() => onPick(commandPick(row))}
                     >
-                      {row.label}
+                      {row.key ? (
+                        <span className="text-muted-foreground shrink-0 text-[12px] font-medium tabular-nums">
+                          {row.key}
+                        </span>
+                      ) : null}
+                      <span className="min-w-0 flex-1 truncate">{row.label}</span>
+                      {row.starred ? (
+                        <StarIcon className="size-3.5 shrink-0 fill-current" />
+                      ) : null}
                     </button>
                   );
                 })}

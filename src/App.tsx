@@ -1049,7 +1049,9 @@ export function App() {
   }
 
   async function open(key: string) {
-    const card = allCards.find((item) => item.key === key);
+    const scopeCards = lastBoard.current?.columns.flatMap((column) => column.cards) ?? [];
+    const card =
+      allCards.find((item) => item.key === key) ?? scopeCards.find((item) => item.key === key);
     const epic = epics.find((item) => item.key === key);
     const face = card ?? (epic
       ? {
@@ -1179,7 +1181,14 @@ export function App() {
     else if (jump.kind === "all-epics") openEpics();
     else if (jump.kind === "refresh") void refresh();
     else if (jump.kind === "agent") setAgentOpen(true);
-    else applyNamedPreset(jump.name);
+    else if (jump.kind === "preset") applyNamedPreset(jump.name);
+    else if (jump.kind === "epic") {
+      openEpics();
+      void open(jump.key);
+    } else {
+      openStories();
+      void open(jump.key);
+    }
   }
 
   function overwriteNamedPreset(name: string) {
@@ -1668,7 +1677,15 @@ export function App() {
       {commandOpen ? (
         <CommandOverlay
           presets={presets.map((preset) => preset.name)}
+          epics={pipeBoard?.epics ?? epics}
+          cards={pipeBoard?.columns.flatMap((column) => column.cards) ?? []}
+          favouriteKeys={favourites.keys}
           onPick={applyCommand}
+          onClose={() => {
+            commandOpenRef.current = false;
+            setCommandOpen(false);
+            commandReturnFocus.current?.focus();
+          }}
         />
       ) : null}
     </div>
