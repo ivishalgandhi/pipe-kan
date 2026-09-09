@@ -19,7 +19,7 @@ export type Cli = {
 function projectClause(flags: string): string {
   const { projects } = parseFlags(flags || DEFAULT_FLAGS);
   if (!projects.length) return "";
-  return `project in (${projects.map((p) => `"${p}"`).join(", ")})`;
+  return `project in (${projects.map((p) => `'${p}'`).join(", ")})`;
 }
 
 function emptyList(text: string) {

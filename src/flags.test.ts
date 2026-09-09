@@ -21,7 +21,7 @@ test("--projects parses multiple projects into JQL", async () => {
   const parsed = parseFlags("--projects PROJ1,PROJ2 -a user@test.com");
   expect(parsed.projects).toEqual(["PROJ1", "PROJ2"]);
   expect(parsed.jql).toBe(
-    'project in ("PROJ1", "PROJ2") AND assignee="user@test.com"',
+    "project in ('PROJ1', 'PROJ2') AND assignee=\"user@test.com\"",
   );
 });
 
