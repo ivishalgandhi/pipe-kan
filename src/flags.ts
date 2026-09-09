@@ -90,3 +90,11 @@ export function parseFlags(flags: string): ParsedFlags {
 export function flagsToJql(flags: string): string {
   return parseFlags(flags).jql;
 }
+
+export function argvToFlags(argv: string[]): string {
+  const args = argv.slice(2);
+  if (args.length === 0) return "";
+  // If the user passes a single raw JQL string (legacy usage), keep it.
+  if (args.length === 1 && !args[0].startsWith("-")) return args[0];
+  return args.join(" ");
+}

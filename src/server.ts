@@ -5,6 +5,7 @@ import { join } from "node:path";
 
 import { createBoardApp, refreshFromJira } from "./boot.ts";
 import { resolveJiraBin } from "./cli.ts";
+import { argvToFlags } from "./flags.ts";
 import { handleRequest } from "./http.ts";
 import { writeJiraConfig } from "./jira-config.ts";
 import { bindListen, resolveListen } from "./listen.ts";
@@ -26,9 +27,11 @@ export async function runServer(opts: {
   const piped = await readPipe();
   const raw =
     piped ?? JSON.parse(readFileSync(join(opts.root, "fixtures/issues.json"), "utf8"));
+  const flags = argvToFlags(process.argv);
   const { app, store, kind } = await createBoardApp({
     raw,
     piped: Boolean(piped),
+    flags,
   });
 
   const server = createServer((req, res) => {
