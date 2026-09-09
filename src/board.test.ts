@@ -45,6 +45,7 @@ test("Epics leave the Board and children keep the Epic key", () => {
     priority: "High",
     assignee: "Person A",
     dueDate: "Sep 10, 2026",
+    targetEnd: "Sep 22, 2026",
     labels: ["kanban"],
   });
   expect(board.columns[1].cards[0]).toEqual({
@@ -55,6 +56,7 @@ test("Epics leave the Board and children keep the Epic key", () => {
     priority: "High",
     assignee: "Person A",
     dueDate: "Aug 25, 2026",
+    targetEnd: "Sep 13, 2026",
     created: "2026-09-01T11:00:00.000+0000",
     labels: ["kanban", "write-back"],
   });
