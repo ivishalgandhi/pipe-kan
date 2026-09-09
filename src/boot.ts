@@ -31,7 +31,7 @@ export async function createBoardApp(opts: {
         flags,
       })
     : createStoreCli(store, flags);
-  const app = createApp({ store, cli });
+  const app = createApp({ store, cli, flags });
   if (opts.piped) {
     app.hydrate(opts.raw);
   } else {

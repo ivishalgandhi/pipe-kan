@@ -38,9 +38,9 @@ function cardsOf(raw: unknown): Card[] {
   return issuesToBoard(raw).columns.flatMap((column) => column.cards);
 }
 
-export function createApp(opts: { store: IssueStore; cli?: Cli }): App {
+export function createApp(opts: { store: IssueStore; cli?: Cli; flags?: string }): App {
   const cli = opts.cli ?? createStoreCli(opts.store);
-  let flags = DEFAULT_FLAGS;
+  let flags = opts.flags ?? DEFAULT_FLAGS;
   let payload: unknown[] = [];
   let epicsPayload: unknown[] = [];
   let childrenRaw: unknown[] = [];

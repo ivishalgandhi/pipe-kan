@@ -18,7 +18,7 @@ export type Cli = {
 
 function projectClause(flags: string): string {
   const { projects } = parseFlags(flags || DEFAULT_FLAGS);
-  if (!projects.length) return 'project="DEMO"';
+  if (!projects.length) return "";
   return `project in (${projects.map((p) => `"${p}"`).join(", ")})`;
 }
 
@@ -50,11 +50,17 @@ export function createStoreCli(store: IssueStore, defaultFlags = DEFAULT_FLAGS):
       return JSON.stringify(issues, null, 2);
     },
     async listEpics(queryFlags = defaultFlags) {
-      const issues = store.list(`${projectClause(queryFlags || defaultFlags)} AND type="Epic"`);
+      const clause = projectClause(queryFlags || defaultFlags);
+      const jql = clause ? `${clause} AND type="Epic"` : 'type="Epic"';
+      const issues = store.list(jql);
       return JSON.stringify(issues, null, 2);
     },
     async listEpic(key, queryFlags = defaultFlags) {
-      const issues = store.list(`${projectClause(queryFlags || defaultFlags)} AND parent="${key}"`);
+      const clause = projectClause(queryFlags || defaultFlags);
+      const jql = clause
+        ? `${clause} AND parent="${key}"`
+        : `parent="${key}"`;
+      const issues = store.list(jql);
       return JSON.stringify(issues, null, 2);
     },
     async listChildren(keys) {
@@ -200,16 +206,15 @@ export function createJiraCli(
     },
     async listEpics(queryFlags = defaultFlags) {
       const clause = projectClause(queryFlags || defaultFlags);
-      return listAll(["issue", "list", "-q", `${clause} AND type="Epic"`]);
+      const jql = clause ? `${clause} AND type="Epic"` : 'type="Epic"';
+      return listAll(["issue", "list", "-q", jql]);
     },
     async listEpic(key, queryFlags = defaultFlags) {
       const clause = projectClause(queryFlags || defaultFlags);
-      return listAll([
-        "issue",
-        "list",
-        "-q",
-        `${clause} AND (parent="${key}" OR "Epic Link"="${key}")`,
-      ]);
+      const jql = clause
+        ? `${clause} AND (parent="${key}" OR "Epic Link"="${key}")`
+        : `(parent="${key}" OR "Epic Link"="${key}")`;
+      return listAll(["issue", "list", "-q", jql]);
     },
     async listChildren(keys) {
       const validKeys = keys.filter(validIssueKey);

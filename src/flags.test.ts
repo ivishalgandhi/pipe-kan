@@ -2,19 +2,19 @@ import { expect, test } from "vitest";
 
 import { argvToFlags, DEFAULT_FLAGS, flagsToJql, parseFlags } from "./flags.ts";
 
-test("default Scope has no assignee and no Done hide", () => {
+test("default Scope has no project clause", () => {
   expect(DEFAULT_FLAGS).toBe("");
-  expect(flagsToJql("")).toBe('project="DEMO"');
+  expect(flagsToJql("")).toBe("");
 });
 
 test("Scope flags still add assignee and status", () => {
   expect(flagsToJql("-a user@test.com -s~Done")).toBe(
-    'project="DEMO" AND assignee="user@test.com" AND status!="Done"',
+    'assignee="user@test.com" AND status!="Done"',
   );
 });
 
 test("Scope type flag lists Epics", () => {
-  expect(flagsToJql("-tEpic")).toBe('project="DEMO" AND type="Epic"');
+  expect(flagsToJql("-tEpic")).toBe('type="Epic"');
 });
 
 test("--projects parses multiple projects into JQL", async () => {
