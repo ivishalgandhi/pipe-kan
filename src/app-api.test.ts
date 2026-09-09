@@ -757,6 +757,93 @@ test("select falls back to listEpic when cached children lost their Epic key", a
   expect(calls.filter((call) => call.startsWith("listEpic"))).toEqual(["listEpic:DEMO-1"]);
 });
 
+test("select returns empty columns for an epic not in the current list", async () => {
+  const calls: string[] = [];
+  const cli: Cli = {
+    async list() {
+      return JSON.stringify([]);
+    },
+    async listEpics() {
+      return JSON.stringify([
+        {
+          key: "DEMO-1",
+          fields: {
+            summary: "Epic",
+            status: { name: "To Do" },
+            issuetype: { name: "Epic" },
+          },
+        },
+      ]);
+    },
+    async listEpic(key) {
+      calls.push(`listEpic:${key}`);
+      return "[]";
+    },
+    async listChildren() {
+      return "[]";
+    },
+    async move() {
+      return { ok: true };
+    },
+    async open() {
+      return "/browse/X";
+    },
+    async view() {
+      return JSON.stringify({ key: "X", fields: {} });
+    },
+  };
+  const { base } = await listen(IssueStore.fromRaw(fixture), cli);
+  const res = await fetch(`${base}/api/epic`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ key: "DEMO-99" }),
+  });
+  const body = await res.json();
+  expect(body.columns).toEqual([]);
+  expect(body.epics).toEqual([]);
+  expect(calls).toEqual([]);
+});
+
+test("Refresh without epics still shows story columns", async () => {
+  const cli: Cli = {
+    async list() {
+      return JSON.stringify([
+        {
+          key: "SQL-1",
+          fields: {
+            summary: "SQL story",
+            status: { name: "To Do" },
+            issuetype: { name: "Story" },
+          },
+        },
+      ]);
+    },
+    async listEpics() {
+      return "[]";
+    },
+    async listEpic() {
+      return "[]";
+    },
+    async listChildren() {
+      return "[]";
+    },
+    async move() {
+      return { ok: true };
+    },
+    async open() {
+      return "/browse/X";
+    },
+    async view() {
+      return JSON.stringify({ key: "X", fields: {} });
+    },
+  };
+  const { base } = await listen(IssueStore.fromRaw([]), cli);
+  const board = await (await fetch(`${base}/api/board`)).json();
+  expect(board.columns.map((c: { title: string }) => c.title)).toEqual(["To Do"]);
+  expect(board.columns[0].cards.map((card: { key: string }) => card.key)).toEqual(["SQL-1"]);
+  expect(board.epics).toEqual([]);
+});
+
 test("select lists Epic children when the cache has none for that key", async () => {
   const calls: string[] = [];
   const cli: Cli = {

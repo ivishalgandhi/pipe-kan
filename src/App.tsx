@@ -19,6 +19,7 @@ import { toast } from "sonner";
 
 import { cardAge, epicsToColumns, targetEndDistance, type Board, type Card, type Column, type Epic } from "./board.ts";
 import { type CommandJump } from "./command.ts";
+import { parseFlags } from "./flags.ts";
 import { type MoveQueue, type MoveRequest, useMoveQueue } from "./move-queue.ts";
 import { frameSrc, type OpenField } from "./open.ts";
 import {
@@ -1343,6 +1344,7 @@ export function App() {
     if (fromEpics) openStories();
     setSelectedEpic(key);
     if (!key) return;
+    if (!epics.some((epic) => epic.key === key)) return;
     const cards =
       fromEpics && lastBoard.current
         ? lastBoard.current.columns.flatMap((column) => column.cards)
@@ -1585,6 +1587,12 @@ export function App() {
             <div className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border">
               <header className="flex min-h-11 shrink-0 flex-wrap items-center gap-2 px-3">
                 <strong className="text-[13px] font-medium">Board</strong>
+                <span className="bg-primary/10 text-primary inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium">
+                  {(() => {
+                    const { projects } = parseFlags(flags);
+                    return projects.length > 0 ? projects.join(", ") : "DEMO";
+                  })()}
+                </span>
                 <InputGroup className="h-7 max-w-72 min-w-40 flex-1 border-transparent bg-muted shadow-none">
                   <InputGroupAddon>
                     <SearchIcon className="size-3.5" />

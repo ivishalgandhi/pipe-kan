@@ -145,6 +145,10 @@ export function createApp(opts: { store: IssueStore; cli?: Cli }): App {
       }
     },
     async children(epic) {
+      const listed = issuesToBoard(epicsPayload).epics;
+      if (!listed.some((e) => e.key === epic)) {
+        return { columns: [], epics: [] };
+      }
       if (hasChildrenCache) {
         const cards = Object.fromEntries(
           Object.entries(columnsOf(childrenRaw)).map(([title, list]) => [
