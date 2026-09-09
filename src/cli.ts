@@ -3,18 +3,24 @@ import { existsSync } from "node:fs";
 import { delimiter, join, resolve } from "node:path";
 import { availableParallelism } from "node:os";
 
-import { DEFAULT_FLAGS, flagsToJql } from "./flags.ts";
+import { DEFAULT_FLAGS, flagsToJql, parseFlags } from "./flags.ts";
 import { IssueStore, validIssueKey } from "./store.ts";
 
 export type Cli = {
   list(flags: string): Promise<string>;
-  listEpics(): Promise<string>;
-  listEpic(key: string): Promise<string>;
+  listEpics(flags?: string): Promise<string>;
+  listEpic(key: string, flags?: string): Promise<string>;
   listChildren(keys: string[]): Promise<string>;
   move(key: string, status: string): Promise<{ ok: boolean; error?: string }>;
   open(key: string): Promise<string>;
   view(key: string): Promise<string>;
 };
+
+function projectClause(flags: string): string {
+  const { projects } = parseFlags(flags || DEFAULT_FLAGS);
+  if (!projects.length) return 'project="DEMO"';
+  return `project in (${projects.map((p) => `"${p}"`).join(", ")})`;
+}
 
 function emptyList(text: string) {
   return /no result found/i.test(text);
@@ -37,18 +43,18 @@ function hasPaginate(args: string[]) {
   return args.some((arg) => arg === "--paginate" || arg.startsWith("--paginate="));
 }
 
-export function createStoreCli(store: IssueStore): Cli {
+export function createStoreCli(store: IssueStore, defaultFlags = DEFAULT_FLAGS): Cli {
   return {
     async list(flags) {
-      const issues = store.list(flagsToJql(flags || DEFAULT_FLAGS));
+      const issues = store.list(flagsToJql(flags || defaultFlags));
       return JSON.stringify(issues, null, 2);
     },
-    async listEpics() {
-      const issues = store.list(flagsToJql("-tEpic"));
+    async listEpics(queryFlags = defaultFlags) {
+      const issues = store.list(`${projectClause(queryFlags || defaultFlags)} AND type="Epic"`);
       return JSON.stringify(issues, null, 2);
     },
-    async listEpic(key) {
-      const issues = store.list(`project="DEMO" AND parent="${key}"`);
+    async listEpic(key, queryFlags = defaultFlags) {
+      const issues = store.list(`${projectClause(queryFlags || defaultFlags)} AND parent="${key}"`);
       return JSON.stringify(issues, null, 2);
     },
     async listChildren(keys) {
@@ -91,10 +97,12 @@ export function createJiraCli(
     configPath?: string;
     token?: string;
     retryDelayMs?: number;
+    flags?: string;
   } = {},
 ): Cli {
   const bin = opts.bin ?? "jira";
   const retryDelayMs = opts.retryDelayMs ?? 1000;
+  const defaultFlags = opts.flags ?? DEFAULT_FLAGS;
 
   function fmt(args: string[]) {
     return args
@@ -190,15 +198,17 @@ export function createJiraCli(
       const extra = (flags || DEFAULT_FLAGS).split(/\s+/).filter(Boolean);
       return JSON.stringify(await listOnce(["issue", "list", ...extra, "--raw"]));
     },
-    async listEpics() {
-      return listAll(["issue", "list", "-tEpic"]);
+    async listEpics(queryFlags = defaultFlags) {
+      const clause = projectClause(queryFlags || defaultFlags);
+      return listAll(["issue", "list", "-q", `${clause} AND type="Epic"`]);
     },
-    async listEpic(key) {
+    async listEpic(key, queryFlags = defaultFlags) {
+      const clause = projectClause(queryFlags || defaultFlags);
       return listAll([
         "issue",
         "list",
         "-q",
-        `(parent="${key}" OR "Epic Link"="${key}")`,
+        `${clause} AND (parent="${key}" OR "Epic Link"="${key}")`,
       ]);
     },
     async listChildren(keys) {

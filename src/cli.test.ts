@@ -238,12 +238,20 @@ test("createJiraCli still fails a 429 that does not recover", async () => {
 });
 
 
-test("createJiraCli lists every Epic with -tEpic", async () => {
+test("createJiraCli lists every Epic scoped to default project", async () => {
   const { bin, calls } = fakeJira();
   const cli = createJiraCli({ bin });
   const raw = await cli.listEpics();
   expect(JSON.parse(raw)[0].key).toBe("DEMO-1");
-  expect(calls()[0].args).toEqual(["issue", "list", "-tEpic", "--paginate", "0:100", "--raw"]);
+  expect(calls()[0].args).toEqual([
+    "issue",
+    "list",
+    "-q",
+    'project="DEMO" AND type="Epic"',
+    "--paginate",
+    "0:100",
+    "--raw",
+  ]);
 });
 
 test("createJiraCli lists every Epic past jira-cli's 100-item page", async () => {
@@ -253,8 +261,8 @@ test("createJiraCli lists every Epic past jira-cli's 100-item page", async () =>
     Array.from({ length: 101 }, (_, n) => `DEMO-${n}`),
   );
   expect(calls().map((call) => call.args)).toEqual([
-    ["issue", "list", "-tEpic", "--paginate", "0:100", "--raw"],
-    ["issue", "list", "-tEpic", "--paginate", "100:100", "--raw"],
+    ["issue", "list", "-q", 'project="DEMO" AND type="Epic"', "--paginate", "0:100", "--raw"],
+    ["issue", "list", "-q", 'project="DEMO" AND type="Epic"', "--paginate", "100:100", "--raw"],
   ]);
 });
 
@@ -278,7 +286,7 @@ test("createJiraCli list keeps a Scope --paginate", async () => {
   ]);
 });
 
-test("createJiraCli lists Epic children with parent or Epic Link", async () => {
+test("createJiraCli lists Epic children with parent or Epic Link scoped to project", async () => {
   const { bin, calls } = fakeJira();
   const cli = createJiraCli({ bin });
   const raw = await cli.listEpic("DEMO-1");
@@ -287,7 +295,7 @@ test("createJiraCli lists Epic children with parent or Epic Link", async () => {
     "issue",
     "list",
     "-q",
-    '(parent="DEMO-1" OR "Epic Link"="DEMO-1")',
+    'project="DEMO" AND (parent="DEMO-1" OR "Epic Link"="DEMO-1")',
     "--paginate",
     "0:100",
     "--raw",
@@ -373,6 +381,22 @@ process.exit(0);
   expect(orAttempts).toBeLessThanOrEqual(5);
   expect(epicOnlyAttempts).toBeGreaterThanOrEqual(3);
   expect(callsWithQ.length).toBeLessThan(20);
+});
+
+test("createJiraCli scopes epics to multiple projects via --projects", async () => {
+  const { bin, calls } = fakeJira();
+  const cli = createJiraCli({ bin, flags: "--projects PROJ1,PROJ2" });
+  await cli.listEpics();
+  expect(calls()[0].args).toContain('project in ("PROJ1", "PROJ2") AND type="Epic"');
+});
+
+test("createJiraCli scopes epic children to multiple projects via --projects", async () => {
+  const { bin, calls } = fakeJira();
+  const cli = createJiraCli({ bin, flags: "--projects PROJ1,PROJ2" });
+  await cli.listEpic("DEMO-1");
+  expect(calls()[0].args).toContain(
+    'project in ("PROJ1", "PROJ2") AND (parent="DEMO-1" OR "Epic Link"="DEMO-1")',
+  );
 });
 
 test("createJiraCli children concurrency can be overridden via env", async () => {
