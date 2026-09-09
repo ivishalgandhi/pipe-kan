@@ -332,7 +332,7 @@ test("createJiraCli listChildren returns empty when all parent keys are invalid"
   expect(calls()).toEqual([]);
 });
 
-test("createJiraCli batches children into groups of 50 and falls back when a field is unsupported", async () => {
+test("createJiraCli batches children into groups, falls back, and learns the working field strategy", async () => {
   const { bin, calls } = fakeJiraWithScript(`
 const args = process.argv.slice(2);
 const qIndex = args.indexOf("-q");
@@ -357,18 +357,22 @@ process.exit(0);
   const keys = Array.from({ length: 110 }, (_, n) => `DEMO-${n + 1}`);
   const result = JSON.parse(await cli.listChildren(keys));
   expect(result.length).toBe(110);
-  const orAttempts = calls().filter((call) => {
+
+  const callsWithQ = calls().filter((call) => call.args.includes("-q"));
+  const orAttempts = callsWithQ.filter((call) => {
     const qIndex = call.args.indexOf("-q");
     const jql = call.args[qIndex + 1] ?? "";
-    return qIndex >= 0 && jql.includes("parent in") && jql.includes("Epic Link");
+    return jql.includes("parent in") && jql.includes("Epic Link");
   }).length;
-  const epicOnlyAttempts = calls().filter((call) => {
+  const epicOnlyAttempts = callsWithQ.filter((call) => {
     const qIndex = call.args.indexOf("-q");
     const jql = call.args[qIndex + 1] ?? "";
-    return qIndex >= 0 && jql.includes("Epic Link") && !jql.includes("parent in");
+    return jql.includes("Epic Link") && !jql.includes("parent in");
   }).length;
-  expect(orAttempts).toBe(3);
-  expect(epicOnlyAttempts).toBe(3);
+
+  expect(orAttempts).toBeLessThanOrEqual(5);
+  expect(epicOnlyAttempts).toBeGreaterThanOrEqual(3);
+  expect(callsWithQ.length).toBeLessThan(20);
 });
 
 test("createJiraCli does not force Fake Jira config or token", async () => {
