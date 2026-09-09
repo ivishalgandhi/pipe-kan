@@ -387,7 +387,20 @@ test("createJiraCli scopes epics to multiple projects via --projects", async () 
   const { bin, calls } = fakeJira();
   const cli = createJiraCli({ bin, flags: "--projects PROJ1,PROJ2" });
   await cli.listEpics();
-  expect(calls()[0].args).toContain('project in ("PROJ1", "PROJ2") AND type="Epic"');
+  expect(calls()[0].args).toContain("project in ('PROJ1', 'PROJ2') AND type=\"Epic\"");
+});
+
+test("createJiraCli passes JQL after -q as a single argv token", async () => {
+  const { bin, calls } = fakeJira();
+  const cli = createJiraCli({ bin, flags: "--projects SQLDATABAS" });
+  await cli.listEpics();
+  const call = calls()[0];
+  expect(call.args).toContain("-q");
+  const qIndex = call.args.indexOf("-q");
+  expect(call.args[qIndex + 1]).toMatch(/^project in \('SQLDATABAS'\) AND type="Epic"$/);
+  // The JQL must be one argv element; there must not be standalone tokens
+  // like "project", "in", "(" after -q before the next known flag.
+  expect(call.args[qIndex + 2]).toBe("--paginate");
 });
 
 test("createJiraCli scopes epic children to multiple projects via --projects", async () => {
@@ -395,7 +408,7 @@ test("createJiraCli scopes epic children to multiple projects via --projects", a
   const cli = createJiraCli({ bin, flags: "--projects PROJ1,PROJ2" });
   await cli.listEpic("DEMO-1");
   expect(calls()[0].args).toContain(
-    'project in ("PROJ1", "PROJ2") AND (parent="DEMO-1" OR "Epic Link"="DEMO-1")',
+    "project in ('PROJ1', 'PROJ2') AND (parent=\"DEMO-1\" OR \"Epic Link\"=\"DEMO-1\")",
   );
 });
 
