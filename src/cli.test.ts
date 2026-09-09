@@ -238,7 +238,7 @@ test("createJiraCli still fails a 429 that does not recover", async () => {
 });
 
 
-test("createJiraCli lists every Epic scoped to default project", async () => {
+test("createJiraCli lists every Epic without a project clause", async () => {
   const { bin, calls } = fakeJira();
   const cli = createJiraCli({ bin });
   const raw = await cli.listEpics();
@@ -247,7 +247,7 @@ test("createJiraCli lists every Epic scoped to default project", async () => {
     "issue",
     "list",
     "-q",
-    'project="DEMO" AND type="Epic"',
+    'type="Epic"',
     "--paginate",
     "0:100",
     "--raw",
@@ -261,8 +261,8 @@ test("createJiraCli lists every Epic past jira-cli's 100-item page", async () =>
     Array.from({ length: 101 }, (_, n) => `DEMO-${n}`),
   );
   expect(calls().map((call) => call.args)).toEqual([
-    ["issue", "list", "-q", 'project="DEMO" AND type="Epic"', "--paginate", "0:100", "--raw"],
-    ["issue", "list", "-q", 'project="DEMO" AND type="Epic"', "--paginate", "100:100", "--raw"],
+    ["issue", "list", "-q", 'type="Epic"', "--paginate", "0:100", "--raw"],
+    ["issue", "list", "-q", 'type="Epic"', "--paginate", "100:100", "--raw"],
   ]);
 });
 
@@ -295,7 +295,7 @@ test("createJiraCli lists Epic children with parent or Epic Link scoped to proje
     "issue",
     "list",
     "-q",
-    'project="DEMO" AND (parent="DEMO-1" OR "Epic Link"="DEMO-1")',
+    '(parent="DEMO-1" OR "Epic Link"="DEMO-1")',
     "--paginate",
     "0:100",
     "--raw",
