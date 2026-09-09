@@ -206,10 +206,10 @@ export function createJiraCli(
         console.log("Refresh children skipped; no valid parent keys");
         return "[]";
       }
-      const CHUNK = 50;
       const issues: unknown[] = [];
       const seen = new Set<string>();
       let anyFailed = false;
+      let lockedMode: "or" | "epic" | "parent" | undefined;
 
       function buildJql(chunkKeys: string[], mode: "or" | "epic" | "parent") {
         const list = chunkKeys.map((key) => `"${key}"`).join(", ");
@@ -218,15 +218,27 @@ export function createJiraCli(
         return `(parent in (${list}) OR "Epic Link" in (${list}))`;
       }
 
-      for (let i = 0; i < validKeys.length; i += CHUNK) {
-        const chunk = validKeys.slice(i, i + CHUNK);
-        const modes: Array<"or" | "epic" | "parent"> = ["or", "epic", "parent"];
-        let chunkIssues: unknown[] | undefined;
+      function chunkSizeFor(mode: "or" | "epic" | "parent") {
+        return mode === "or" ? 50 : 100;
+      }
+
+      async function fetchChunk(
+        chunk: string[],
+        chunkIndex: number,
+        preferredMode?: "or" | "epic" | "parent",
+      ): Promise<{ issues: unknown[]; used?: "or" | "epic" | "parent"; error?: string }> {
+        const modes: Array<"or" | "epic" | "parent"> = preferredMode
+          ? [preferredMode, "or", "epic", "parent"].filter(
+              (m, i, arr) => arr.indexOf(m) === i,
+            ) as Array<"or" | "epic" | "parent">
+          : ["or", "epic", "parent"];
         let lastError: string | undefined;
 
         for (const mode of modes) {
+          const size = chunkSizeFor(mode);
+          if (chunk.length > size) continue;
           try {
-            chunkIssues = JSON.parse(
+            const chunkIssues = JSON.parse(
               await listAll([
                 "issue",
                 "list",
@@ -234,26 +246,47 @@ export function createJiraCli(
                 buildJql(chunk, mode),
               ]),
             ) as unknown[];
-            break;
+            return { issues: chunkIssues, used: mode };
           } catch (err) {
             lastError = err instanceof Error ? err.message : String(err);
           }
         }
+        console.log(
+          `Refresh children chunk ${chunkIndex + 1} failed; ${lastError ?? "unknown error"}`,
+        );
+        return { issues: [], error: lastError };
+      }
 
-        if (chunkIssues) {
-          for (const issue of chunkIssues) {
-            const key = issueKey(issue);
-            if (key && !seen.has(key)) {
-              seen.add(key);
-              issues.push(issue);
-            }
-          }
-        } else {
-          anyFailed = true;
-          console.log(
-            `Refresh children chunk ${i / CHUNK + 1} failed; ${lastError ?? "unknown error"}`,
-          );
+      const concurrency = 5;
+      const chunks: { chunk: string[]; index: number }[] = [];
+      let cursor = 0;
+      for (let i = 0; i < validKeys.length; i += chunkSizeFor(lockedMode ?? "or")) {
+        const size = chunkSizeFor(lockedMode ?? "or");
+        const chunk = validKeys.slice(i, i + size);
+        chunks.push({ chunk, index: cursor++ });
+      }
+
+      async function processChunk({ chunk, index }: { chunk: string[]; index: number }) {
+        const preferred = lockedMode;
+        const result = await fetchChunk(chunk, index, preferred);
+        if (result.used && !lockedMode) {
+          lockedMode = result.used;
         }
+        if (result.error) {
+          anyFailed = true;
+          return;
+        }
+        for (const issue of result.issues) {
+          const key = issueKey(issue);
+          if (key && !seen.has(key)) {
+            seen.add(key);
+            issues.push(issue);
+          }
+        }
+      }
+
+      for (let i = 0; i < chunks.length; i += concurrency) {
+        await Promise.all(chunks.slice(i, i + concurrency).map(processChunk));
       }
 
       if (anyFailed && issues.length === 0) {
