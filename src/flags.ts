@@ -1,5 +1,10 @@
 export const DEFAULT_FLAGS = "";
 
+export type ParsedFlags = {
+  jql: string;
+  projects: string[];
+};
+
 function tokens(input: string): string[] {
   const out: string[] = [];
   const re = /"([^"]*)"|'([^']*)'|(\S+)/g;
@@ -16,12 +21,13 @@ function takeValue(list: string[], index: number, flag: string): [string, number
   return [list[index + 1] ?? "", index + 1];
 }
 
-export function flagsToJql(flags: string): string {
+export function parseFlags(flags: string): ParsedFlags {
   const list = tokens(flags.trim() || DEFAULT_FLAGS);
   let assignee = "";
   let epic = "";
   let type = "";
   let raw = "";
+  let projectsValue = "";
   const statusEq: string[] = [];
   const statusNeq: string[] = [];
 
@@ -47,6 +53,10 @@ export function flagsToJql(flags: string): string {
       else statusEq.push(status);
       continue;
     }
+    if (token === "--projects") {
+      [projectsValue, i] = takeValue(list, i, "--projects");
+      continue;
+    }
     if (token === "-q" || token === "--jql") {
       raw = list[++i] ?? "";
       continue;
@@ -56,13 +66,27 @@ export function flagsToJql(flags: string): string {
     }
   }
 
-  if (raw) return raw;
+  const projects = projectsValue
+    .split(",")
+    .map((p) => p.trim().toUpperCase())
+    .filter(Boolean);
 
-  const clauses = ['project="DEMO"'];
+  if (raw) {
+    return { jql: raw, projects };
+  }
+
+  const projectClause = projects.length
+    ? `project in (${projects.map((p) => `"${p}"`).join(", ")})`
+    : 'project="DEMO"';
+  const clauses = [projectClause];
   if (assignee) clauses.push(`assignee="${assignee}"`);
   if (type) clauses.push(`type="${type}"`);
   if (epic) clauses.push(`parent="${epic}"`);
   for (const status of statusEq) clauses.push(`status="${status}"`);
   for (const status of statusNeq) clauses.push(`status!="${status}"`);
-  return clauses.join(" AND ");
+  return { jql: clauses.join(" AND "), projects };
+}
+
+export function flagsToJql(flags: string): string {
+  return parseFlags(flags).jql;
 }

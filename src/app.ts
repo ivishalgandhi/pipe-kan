@@ -106,7 +106,7 @@ export function createApp(opts: { store: IssueStore; cli?: Cli }): App {
       console.log("Refresh");
       try {
         const issues = await cli.list(flags);
-        const epics = await cli.listEpics();
+        const epics = await cli.listEpics(flags);
         const nextPayload = JSON.parse(issues);
         const nextEpics = JSON.parse(epics);
         const keys = issuesToBoard(nextEpics).epics.map((epic) => epic.key);
@@ -160,7 +160,7 @@ export function createApp(opts: { store: IssueStore; cli?: Cli }): App {
           .map(([title, list]) => ({ id: title, title, cards: list }));
         if (columns.length) return { columns, epics: [] };
       }
-      return stampMissingEpic(issuesToBoard(JSON.parse(await cli.listEpic(epic))), epic);
+      return stampMissingEpic(issuesToBoard(JSON.parse(await cli.listEpic(epic, flags))), epic);
     },
     async move(key, status) {
       const result = await tryMove(key, status);
