@@ -387,7 +387,7 @@ test("createJiraCli scopes epics to multiple projects via --projects", async () 
   const { bin, calls } = fakeJira();
   const cli = createJiraCli({ bin, flags: "--projects PROJ1,PROJ2" });
   await cli.listEpics();
-  expect(calls()[0].args).toContain("project in ('PROJ1', 'PROJ2') AND type=\"Epic\"");
+  expect(calls()[0].args).toContain('project in ("PROJ1", "PROJ2") AND type="Epic"');
 });
 
 test("createJiraCli passes JQL after -q as a single argv token", async () => {
@@ -397,9 +397,8 @@ test("createJiraCli passes JQL after -q as a single argv token", async () => {
   const call = calls()[0];
   expect(call.args).toContain("-q");
   const qIndex = call.args.indexOf("-q");
-  expect(call.args[qIndex + 1]).toMatch(/^project in \('SQLDATABAS'\) AND type="Epic"$/);
-  // The JQL must be one argv element; there must not be standalone tokens
-  // like "project", "in", "(" after -q before the next known flag.
+  expect(call.args[qIndex + 1]).toBe('project in ("SQLDATABAS") AND type="Epic"');
+  // The JQL must be one argv element; the next arg must be --paginate.
   expect(call.args[qIndex + 2]).toBe("--paginate");
 });
 
@@ -408,7 +407,7 @@ test("createJiraCli scopes epic children to multiple projects via --projects", a
   const cli = createJiraCli({ bin, flags: "--projects PROJ1,PROJ2" });
   await cli.listEpic("DEMO-1");
   expect(calls()[0].args).toContain(
-    "project in ('PROJ1', 'PROJ2') AND (parent=\"DEMO-1\" OR \"Epic Link\"=\"DEMO-1\")",
+    'project in ("PROJ1", "PROJ2") AND (parent="DEMO-1" OR "Epic Link"="DEMO-1")',
   );
 });
 
@@ -446,6 +445,41 @@ process.exit(0);
   process.env.PIPE_KAN_CHILDREN_CONCURRENCY = prev;
   expect(result.length).toBe(110);
   expect(logs.some((line) => line.includes("concurrency 2"))).toBe(true);
+});
+
+test("createJiraCli issues a single -q token that real jira-cli accepts", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "pipe-kan-"));
+  const bin = join(dir, "jira");
+  const log = join(dir, "calls.jsonl");
+  writeFileSync(
+    bin,
+    `#!/usr/bin/env bun
+import { appendFileSync } from "node:fs";
+appendFileSync(${JSON.stringify(log)}, JSON.stringify({ args: process.argv.slice(2) }) + "\\n");
+const args = process.argv.slice(2);
+const qIndex = args.indexOf("-q");
+if (qIndex >= 0) {
+  const jql = args[qIndex + 1];
+  // Mimic real ankitpokhrel/jira-cli: if the value after -q is missing or looks
+  // like multiple argv tokens (bare keywords), print help and fail.
+  if (jql === undefined || jql === "" || /^(in|AND|=)/.test(jql)) {
+    console.error("Usage: jira issue list -q \\"...\\"");
+    console.error("Error: accepts 1 arg(s), received multiple");
+    process.exit(1);
+  }
+}
+console.log(JSON.stringify([{ key: "REAL-1", fields: { summary: "ok", status: { name: "To Do" } } }]));
+`,
+  );
+  chmodSync(bin, 0o755);
+  const cli = createJiraCli({ bin, flags: "--projects SQLDATABAS" });
+  const raw = await cli.listEpics();
+  expect(JSON.parse(raw)[0].key).toBe("REAL-1");
+  const call = JSON.parse(readFileSync(log, "utf8").trim().split("\n")[0]) as { args: string[] };
+  expect(call.args).toContain("-q");
+  const idx = call.args.indexOf("-q");
+  expect(call.args[idx + 1]).toBe('project in ("SQLDATABAS") AND type="Epic"');
+  expect(call.args[idx + 2]).toBe("--paginate");
 });
 
 test("createJiraCli does not force Fake Jira config or token", async () => {

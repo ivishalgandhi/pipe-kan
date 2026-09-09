@@ -19,7 +19,7 @@ export type Cli = {
 function projectClause(flags: string): string {
   const { projects } = parseFlags(flags || DEFAULT_FLAGS);
   if (!projects.length) return "";
-  return `project in (${projects.map((p) => `'${p}'`).join(", ")})`;
+  return `project in (${projects.map((p) => `"${p}"`).join(", ")})`;
 }
 
 function emptyList(text: string) {
@@ -201,20 +201,39 @@ export function createJiraCli(
 
   return {
     async list(flags) {
-      const extra = (flags || DEFAULT_FLAGS).split(/\s+/).filter(Boolean);
-      return JSON.stringify(await listOnce(["issue", "list", ...extra, "--raw"]));
+      const parsed = parseFlags(flags || defaultFlags);
+      const args = ["issue", "list"];
+      if (parsed.projects.length) {
+        args.push("-q", parsed.jql);
+      } else {
+        const extra = (flags || defaultFlags).split(/\s+/).filter(Boolean);
+        args.push(...extra);
+      }
+      args.push("--raw");
+      return JSON.stringify(await listOnce(args));
     },
     async listEpics(queryFlags = defaultFlags) {
-      const clause = projectClause(queryFlags || defaultFlags);
-      const jql = clause ? `${clause} AND type="Epic"` : 'type="Epic"';
-      return listAll(["issue", "list", "-q", jql]);
+      const parsed = parseFlags(queryFlags || defaultFlags);
+      const args = ["issue", "list"];
+      if (parsed.projects.length) {
+        args.push("-q", `project in (${parsed.projects.map((p) => `"${p}"`).join(", ")}) AND type="Epic"`);
+      } else {
+        args.push("-q", 'type="Epic"');
+      }
+      return listAll(args);
     },
     async listEpic(key, queryFlags = defaultFlags) {
-      const clause = projectClause(queryFlags || defaultFlags);
-      const jql = clause
-        ? `${clause} AND (parent="${key}" OR "Epic Link"="${key}")`
-        : `(parent="${key}" OR "Epic Link"="${key}")`;
-      return listAll(["issue", "list", "-q", jql]);
+      const parsed = parseFlags(queryFlags || defaultFlags);
+      const args = ["issue", "list"];
+      if (parsed.projects.length) {
+        args.push(
+          "-q",
+          `project in (${parsed.projects.map((p) => `"${p}"`).join(", ")}) AND (parent="${key}" OR "Epic Link"="${key}")`,
+        );
+      } else {
+        args.push("-q", `(parent="${key}" OR "Epic Link"="${key}")`);
+      }
+      return listAll(args);
     },
     async listChildren(keys) {
       const validKeys = keys.filter(validIssueKey);

@@ -76,7 +76,7 @@ export function parseFlags(flags: string): ParsedFlags {
   }
 
   const projectClause = projects.length
-    ? `project in (${projects.map((p) => `'${p}'`).join(", ")})`
+    ? `project in (${projects.map((p) => `"${p}"`).join(", ")})`
     : "";
   const clauses: string[] = [];
   if (projectClause) clauses.push(projectClause);
