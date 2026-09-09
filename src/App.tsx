@@ -139,7 +139,7 @@ const DEFAULT_CHROME: Chrome = {
   hide: [],
   shown: [...ALL_CARD_DISPLAY_KEYS],
 };
-const DEFAULT_FAVS: FavouriteState = { keys: [], folders: [] };
+const DEFAULT_FAVS: FavouriteState = { keys: [], folders: [], projects: undefined };
 
 function readCollapsed(key = COLLAPSED_KEY, fallback: string[] = []): Set<string> {
   try {
@@ -218,7 +218,7 @@ function readFavourites(): FavouriteState {
       return { keys: raw, folders: [] };
     }
     if (raw && typeof raw === "object") {
-      const value = raw as { keys?: unknown; folders?: unknown };
+      const value = raw as { keys?: unknown; folders?: unknown; projects?: unknown };
       const keys = Array.isArray(value.keys)
         ? value.keys.filter((item): item is string => typeof item === "string")
         : [];
@@ -235,7 +235,10 @@ function readFavourites(): FavouriteState {
             }];
           })
         : [];
-      return { keys, folders };
+      const projects = Array.isArray(value.projects)
+        ? value.projects.filter((item): item is string => typeof item === "string")
+        : undefined;
+      return { keys, folders, projects };
     }
     return DEFAULT_FAVS;
   } catch {
@@ -279,6 +282,27 @@ function readPresets(): Preset[] {
 
 function writePresets(next: Preset[]) {
   localStorage.setItem(PRESET_KEY, JSON.stringify(next));
+}
+
+function projectsMatch(a: string[] | undefined, b: string[] | undefined): boolean {
+  const left = (a ?? []).slice().sort();
+  const right = (b ?? []).slice().sort();
+  if (left.length !== right.length) return false;
+  return left.every((value, index) => value === right[index]);
+}
+
+function filterFavouritesByProject(
+  state: FavouriteState,
+  projects: string[],
+): FavouriteState {
+  if (!projects.length) return state;
+  if (projectsMatch(state.projects, projects)) return state;
+  return { keys: [], folders: [], projects };
+}
+
+function filterPresetsByProject(presets: Preset[], projects: string[]): Preset[] {
+  if (!projects.length) return presets;
+  return presets.filter((preset) => projectsMatch(preset.projects, projects));
 }
 
 function readOpener(): "stories" | "epics" | "combined" {
@@ -971,8 +995,13 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [theme, setTheme] = useState<Theme>(readTheme);
   const [chrome, setChrome] = useState<Chrome>(readChrome);
-  const [favourites, setFavourites] = useState<FavouriteState>(readFavourites);
-  const [presets, setPresets] = useState<Preset[]>(readPresets);
+  const activeProjects = useMemo(() => parseFlags(flags).projects, [flags]);
+  const [favourites, setFavourites] = useState<FavouriteState>(() =>
+    filterFavouritesByProject(readFavourites(), activeProjects),
+  );
+  const [presets, setPresets] = useState<Preset[]>(() =>
+    filterPresetsByProject(readPresets(), activeProjects),
+  );
   const [folderName, setFolderName] = useState("");
   const [folderError, setFolderError] = useState("");
   const [presetName, setPresetName] = useState("");
@@ -1052,8 +1081,9 @@ export function App() {
   }
 
   function persistFavourites(next: FavouriteState) {
-    setFavourites(next);
-    writeFavourites(next);
+    const stamped = activeProjects.length ? { ...next, projects: activeProjects } : next;
+    setFavourites(stamped);
+    writeFavourites(stamped);
   }
 
   function persistPresets(next: Preset[]) {
@@ -1381,7 +1411,7 @@ export function App() {
   }
 
   function createPreset() {
-    const result = addPreset(presets, presetName, { ...chrome, boardKind });
+    const result = addPreset(presets, presetName, { ...chrome, boardKind, projects: activeProjects });
     if (!result.ok) {
       setPresetError("Preset names must be unique");
       return;
@@ -1394,6 +1424,7 @@ export function App() {
   function applyNamedPreset(name: string) {
     const result = applyPreset(presets, name);
     if (!result.ok) return;
+    if (activeProjects.length && !projectsMatch(result.chrome.projects, activeProjects)) return;
     persistChrome({ ...chrome, ...result.chrome });
     const nextKind = result.chrome.boardKind ?? "stories";
     if (nextKind === "combined") {
@@ -1429,7 +1460,7 @@ export function App() {
   }
 
   function overwriteNamedPreset(name: string) {
-    const result = overwritePreset(presets, name, { ...chrome, boardKind });
+    const result = overwritePreset(presets, name, { ...chrome, boardKind, projects: activeProjects });
     if (!result.ok) return;
     persistPresets(result.presets);
   }

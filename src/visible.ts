@@ -26,6 +26,7 @@ export type FavouriteFolder = {
 export type FavouriteState = {
   keys: string[];
   folders: FavouriteFolder[];
+  projects?: string[];
 };
 
 function ofEpic(card: Card, epic: string) {
@@ -610,25 +611,27 @@ export type Preset = {
   sort: BoardSort;
   hide: string[];
   boardKind?: "stories" | "epics" | "combined";
+  projects?: string[];
 };
 
 function presetOf(name: string, presets: Preset[]) {
   return presets.find((preset) => preset.name.toLowerCase() === name.trim().toLowerCase());
 }
 
-function snapshotChrome(chrome: Pick<Preset, "filter" | "sort" | "hide" | "boardKind">) {
+function snapshotChrome(chrome: Pick<Preset, "filter" | "sort" | "hide" | "boardKind" | "projects">) {
   return {
     filter: { ...chrome.filter },
     sort: chrome.sort,
     hide: [...chrome.hide],
     boardKind: chrome.boardKind,
+    projects: chrome.projects ? [...chrome.projects] : undefined,
   };
 }
 
 export function addPreset(
   presets: Preset[],
   name: string,
-  chrome: Pick<Preset, "filter" | "sort" | "hide" | "boardKind">,
+  chrome: Pick<Preset, "filter" | "sort" | "hide" | "boardKind" | "projects">,
 ): { ok: true; presets: Preset[] } | { ok: false } {
   const trimmed = name.trim();
   if (!trimmed || presetOf(trimmed, presets)) return { ok: false };
@@ -644,7 +647,7 @@ export function addPreset(
 export function applyPreset(
   presets: Preset[],
   name: string,
-): { ok: true; chrome: Pick<Preset, "filter" | "sort" | "hide" | "boardKind"> } | { ok: false } {
+): { ok: true; chrome: Pick<Preset, "filter" | "sort" | "hide" | "boardKind" | "projects"> } | { ok: false } {
   const current = presetOf(name, presets);
   if (!current) return { ok: false };
   return { ok: true, chrome: snapshotChrome(current) };
@@ -653,7 +656,7 @@ export function applyPreset(
 export function overwritePreset(
   presets: Preset[],
   name: string,
-  chrome: Pick<Preset, "filter" | "sort" | "hide" | "boardKind">,
+  chrome: Pick<Preset, "filter" | "sort" | "hide" | "boardKind" | "projects">,
 ): { ok: true; presets: Preset[] } | { ok: false } {
   const current = presetOf(name, presets);
   if (!current) return { ok: false };
