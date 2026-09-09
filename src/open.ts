@@ -22,6 +22,10 @@ const LEADING = [
   "priority",
   "assignee",
   "duedate",
+  "targetend",
+  "targetEnd",
+  "targetenddate",
+  "targetEndDate",
   "labels",
   "description",
 ] as const;

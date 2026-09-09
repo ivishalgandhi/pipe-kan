@@ -9,6 +9,7 @@ export type BoardViewCard = {
   priority?: string;
   labels?: string[];
   dueDate?: string;
+  targetEnd?: string;
 };
 
 export type BoardViewSnapshot = {
@@ -112,7 +113,7 @@ function formatBoardView(view: BoardViewSnapshot): string {
 function formatCard(card: BoardViewCard): string {
   const bits = [card.key, card.summary];
   if (card.epic) bits.push(`[epic ${card.epic}]`);
-  const extras = [card.priority, card.assignee, card.dueDate, card.labels?.join(", ")]
+  const extras = [card.priority, card.assignee, card.dueDate, card.targetEnd, card.labels?.join(", ")]
     .filter((value): value is string => Boolean(value));
   if (extras.length) bits.push(`(${extras.join(", ")})`);
   return bits.join(" ");
