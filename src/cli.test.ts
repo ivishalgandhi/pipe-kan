@@ -2,7 +2,7 @@ import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 
 import type { RawIssue } from "./board.ts";
 import { createBoardApp, refreshFromJira } from "./boot.ts";
@@ -373,6 +373,42 @@ process.exit(0);
   expect(orAttempts).toBeLessThanOrEqual(5);
   expect(epicOnlyAttempts).toBeGreaterThanOrEqual(3);
   expect(callsWithQ.length).toBeLessThan(20);
+});
+
+test("createJiraCli children concurrency can be overridden via env", async () => {
+  const prev = process.env.PIPE_KAN_CHILDREN_CONCURRENCY;
+  process.env.PIPE_KAN_CHILDREN_CONCURRENCY = "2";
+  const logs: string[] = [];
+  const spy = vi.spyOn(console, "log").mockImplementation((msg: string) => {
+    logs.push(String(msg));
+  });
+  const { bin } = fakeJiraWithScript(`
+const args = process.argv.slice(2);
+const qIndex = args.indexOf("-q");
+const jql = qIndex >= 0 ? args[qIndex + 1] : "";
+if (jql.includes("parent in")) {
+  console.error("jira: Received unexpected response '400 '.");
+  process.exit(1);
+}
+if (jql.includes("Epic Link")) {
+  const keys = jql.split('"').filter((s) => s.startsWith("DEMO-"));
+  const issues = keys.map((key) => ({
+    key: key + "-1",
+    fields: { summary: "Child", status: { name: "To Do" }, parent: { key } },
+  }));
+  console.log(JSON.stringify(issues));
+  process.exit(0);
+}
+console.log("[]");
+process.exit(0);
+`);
+  const cli = createJiraCli({ bin });
+  const keys = Array.from({ length: 110 }, (_, n) => `DEMO-${n + 1}`);
+  const result = JSON.parse(await cli.listChildren(keys));
+  spy.mockRestore();
+  process.env.PIPE_KAN_CHILDREN_CONCURRENCY = prev;
+  expect(result.length).toBe(110);
+  expect(logs.some((line) => line.includes("concurrency 2"))).toBe(true);
 });
 
 test("createJiraCli does not force Fake Jira config or token", async () => {

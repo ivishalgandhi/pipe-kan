@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { delimiter, join, resolve } from "node:path";
+import { availableParallelism } from "node:os";
 
 import { DEFAULT_FLAGS, flagsToJql } from "./flags.ts";
 import { IssueStore, validIssueKey } from "./store.ts";
@@ -257,7 +258,14 @@ export function createJiraCli(
         return { issues: [], error: lastError };
       }
 
-      const concurrency = 5;
+      function childrenConcurrency(): number {
+        const env = Number(process.env.PIPE_KAN_CHILDREN_CONCURRENCY);
+        if (!Number.isNaN(env) && env > 0) return env;
+        return Math.max(3, Math.min(10, availableParallelism()));
+      }
+
+      const concurrency = childrenConcurrency();
+      console.log(`Refresh children ${validKeys.length} epics; concurrency ${concurrency}`);
       const chunks: { chunk: string[]; index: number }[] = [];
       let cursor = 0;
       for (let i = 0; i < validKeys.length; i += chunkSizeFor(lockedMode ?? "or")) {
