@@ -593,9 +593,14 @@ function IssueCard({
             </time>
           ) : null}
           {isShown("assignee") && card.assignee ? (
-            <Avatar title={card.assignee}>
-              <AvatarFallback>{card.assignee.charAt(0)}</AvatarFallback>
-            </Avatar>
+            <span className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full border px-2">
+              <Avatar title={card.assignee} className="size-4 text-[10px]">
+                <AvatarFallback className="size-4 text-[10px]">
+                  {card.assignee.charAt(0)}
+                </AvatarFallback>
+              </Avatar>
+              <span className="text-muted-foreground text-[12px]">{card.assignee}</span>
+            </span>
           ) : null}
         </div>
       ) : null}
