@@ -534,6 +534,60 @@ test("Refresh keeps the last Board until children land", async () => {
   expect(childKeys(done)).toEqual(["WORK-2"]);
 });
 
+test("a failed children refresh keeps previously cached children", async () => {
+  let childrenCalls = 0;
+  const child = {
+    key: "WORK-2",
+    fields: {
+      summary: "Work story",
+      status: { name: "To Do" },
+      issuetype: { name: "Story" },
+      parent: { key: "WORK-1" },
+    },
+  };
+  const cli: Cli = {
+    async list() {
+      return JSON.stringify([child]);
+    },
+    async listEpics() {
+      return JSON.stringify([
+        {
+          key: "WORK-1",
+          fields: {
+            summary: "Work epic",
+            status: { name: "To Do" },
+            issuetype: { name: "Epic" },
+          },
+        },
+      ]);
+    },
+    async listEpic() {
+      return "[]";
+    },
+    async listChildren() {
+      childrenCalls += 1;
+      if (childrenCalls > 1) throw new Error("children 400");
+      return JSON.stringify([child]);
+    },
+    async move() {
+      return { ok: true };
+    },
+    async open() {
+      return "/browse/X";
+    },
+    async view() {
+      return JSON.stringify({ key: "X", fields: {} });
+    },
+  };
+  const app = createApp({ store: IssueStore.fromRaw(fixture), cli });
+  const first = await app.refresh();
+  expect(childKeys(first)).toEqual(["WORK-2"]);
+  expect(first.error).toBeUndefined();
+  const second = await app.refresh();
+  expect(childKeys(second)).toEqual(["WORK-2"]);
+  expect(second.error).toBe("children 400");
+});
+
 test("Refresh of 220 Epics does not list each Epic when Epic Link is missing", async () => {
   const calls: string[] = [];
   const epics = Array.from({ length: 220 }, (_, n) => ({

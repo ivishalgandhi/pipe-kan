@@ -91,6 +91,28 @@ test("In Progress can Move to Done", async () => {
   expect(store.get("DEMO-3")?.fields.status.name).toBe("Done");
 });
 
+test("search returns 400 for empty children IN clause", async () => {
+  const base = await listen(IssueStore.fromRaw(fixture));
+  const jql = 'project="DEMO" AND (parent in () OR "Epic Link" in ())';
+  const res = await fetch(
+    `${base}/rest/api/3/search/jql?${new URLSearchParams({ jql, maxResults: "100", fields: "*all" })}`,
+  );
+  expect(res.status).toBe(400);
+  const body = await res.json();
+  expect(body.errorMessages[0]).toMatch(/does not exist for the field/);
+});
+
+test("search returns 400 for invalid parent key in children JQL", async () => {
+  const base = await listen(IssueStore.fromRaw(fixture));
+  const jql = 'project="DEMO" AND (parent in ("DEMO-1", "NOT-A-KEY") OR "Epic Link" in ("DEMO-1", "NOT-A-KEY"))';
+  const res = await fetch(
+    `${base}/rest/api/3/search/jql?${new URLSearchParams({ jql, maxResults: "100", fields: "*all" })}`,
+  );
+  expect(res.status).toBe(400);
+  const body = await res.json();
+  expect(body.errorMessages[0]).toMatch(/No issues have a parent epic/);
+});
+
 test("Fake Jira view returns the stored Issue", async () => {
   const store = IssueStore.fromRaw(fixture);
   const base = await listen(store);

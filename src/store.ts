@@ -27,6 +27,10 @@ export type StoredIssue = {
   };
 };
 
+export function validIssueKey(key: string): boolean {
+  return /^[A-Z][A-Z0-9]*-\d+$/i.test(key.trim());
+}
+
 function fieldValue(issue: StoredIssue, field: string): string {
   switch (field) {
     case "project":
@@ -113,7 +117,7 @@ export class IssueStore {
   }
 
   childrenOf(keys: string[]): StoredIssue[] {
-    const listed = new Set(keys);
+    const listed = new Set(keys.filter(validIssueKey));
     return this.issues.filter((issue) => {
       if (fieldValue(issue, "type").toLowerCase() === "epic") return false;
       return listed.has(fieldValue(issue, "parent"));

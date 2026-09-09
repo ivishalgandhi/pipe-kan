@@ -127,10 +127,10 @@ export function createApp(opts: { store: IssueStore; cli?: Cli }): App {
             console.log(`Refresh children ${cards.length}`);
           }
         } catch (err) {
-          nextHasCache = false;
-          nextChildren = [];
+          nextChildren = childrenRaw;
+          nextHasCache = hasChildrenCache;
           nextError = err instanceof Error ? err.message : "Epic children list failed";
-          console.log("Refresh children failed", nextError);
+          console.log("Refresh children failed; keeping existing children", nextError);
         }
         payload = nextPayload;
         epicsPayload = nextEpics;
