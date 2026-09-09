@@ -277,6 +277,29 @@ test("createJiraCli lists children of every Epic in one call", async () => {
   ]);
 });
 
+test("createJiraCli listChildren drops empty or malformed parent keys", async () => {
+  const { bin, calls } = fakeJira();
+  const cli = createJiraCli({ bin });
+  await cli.listChildren(["DEMO-1", "", "NOT-A-KEY", "DEMO-8"]);
+  expect(calls()[0].args).toEqual([
+    "issue",
+    "list",
+    "-q",
+    '(parent in ("DEMO-1", "DEMO-8") OR "Epic Link" in ("DEMO-1", "DEMO-8"))',
+    "--paginate",
+    "0:100",
+    "--raw",
+  ]);
+});
+
+test("createJiraCli listChildren returns empty when all parent keys are invalid", async () => {
+  const { bin, calls } = fakeJira();
+  const cli = createJiraCli({ bin });
+  const raw = await cli.listChildren(["", "NOT-A-KEY"]);
+  expect(JSON.parse(raw)).toEqual([]);
+  expect(calls()).toEqual([]);
+});
+
 test("createJiraCli does not force Fake Jira config or token", async () => {
   const { bin, calls } = fakeJira();
   const prevConfig = process.env.JIRA_CONFIG_FILE;

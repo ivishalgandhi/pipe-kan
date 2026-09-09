@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { delimiter, join, resolve } from "node:path";
 
 import { DEFAULT_FLAGS, flagsToJql } from "./flags.ts";
-import type { IssueStore } from "./store.ts";
+import { IssueStore, validIssueKey } from "./store.ts";
 
 export type Cli = {
   list(flags: string): Promise<string>;
@@ -51,7 +51,7 @@ export function createStoreCli(store: IssueStore): Cli {
       return JSON.stringify(issues, null, 2);
     },
     async listChildren(keys) {
-      return JSON.stringify(store.childrenOf(keys), null, 2);
+      return JSON.stringify(store.childrenOf(keys.filter(validIssueKey)), null, 2);
     },
     async move(key, status) {
       return store.move(key, status);
@@ -201,8 +201,12 @@ export function createJiraCli(
       ]);
     },
     async listChildren(keys) {
-      if (!keys.length) return "[]";
-      const list = keys.map((key) => `"${key}"`).join(", ");
+      const validKeys = keys.filter(validIssueKey);
+      if (!validKeys.length) {
+        console.log("Refresh children skipped; no valid parent keys");
+        return "[]";
+      }
+      const list = validKeys.map((key) => `"${key}"`).join(", ");
       return listAll([
         "issue",
         "list",

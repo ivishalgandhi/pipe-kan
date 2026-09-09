@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-import { IssueStore, ME } from "./store.ts";
+import { IssueStore, ME, validIssueKey } from "./store.ts";
 
 function json(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status;
@@ -19,6 +19,24 @@ function readBody(req: IncomingMessage): Promise<string> {
 
 function pathOf(req: IncomingMessage): URL {
   return new URL(req.url ?? "/", "http://127.0.0.1");
+}
+
+function childrenJqlError(jql: string): string | undefined {
+  const trimmed = jql.trim();
+  // Empty IN clause is invalid JQL.
+  if (/\bin\s*\(\s*\)/i.test(trimmed)) {
+    return "The value '' does not exist for the field 'parent'.";
+  }
+  // Children queries use parent in (...) or "Epic Link" in (...).
+  const childrenMatch = trimmed.match(/(?:parent|"Epic Link")\s+in\s+\(([^)]+)\)/i);
+  if (childrenMatch) {
+    const values = childrenMatch[1].split(",").map((value) => value.trim().replace(/^["']|["']$/g, ""));
+    const invalid = values.filter((value) => !validIssueKey(value));
+    if (invalid.length) {
+      return `No issues have a parent epic with key or name '${invalid[0]}'.`;
+    }
+  }
+  return undefined;
 }
 
 export function handleFakeJira(
@@ -41,7 +59,13 @@ export function handleFakeJira(
       path === "/rest/api/3/search") &&
     method === "GET"
   ) {
-    const issues = store.list(url.searchParams.get("jql") ?? "");
+    const jql = url.searchParams.get("jql") ?? "";
+    const error = childrenJqlError(jql);
+    if (error) {
+      json(res, 400, { errorMessages: [error] });
+      return true;
+    }
+    const issues = store.list(jql);
     json(res, 200, { expand: "schema,names", isLast: true, issues });
     return true;
   }
