@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, expectTypeOf, test } from "vitest";
 
-import { cardAge, epicsToColumns, issuesToBoard, mergeEpics, type Board, type Card, type Epic, type RawIssue } from "./board.ts";
+import { cardAge, epicsToColumns, formatTargetEnd, issuesToBoard, mergeEpics, targetEndDistance, type Board, type Card, type Epic, type RawIssue } from "./board.ts";
 
 const fixture = JSON.parse(
   readFileSync(
@@ -45,6 +45,7 @@ test("Epics leave the Board and children keep the Epic key", () => {
     priority: "High",
     assignee: "Person A",
     dueDate: "Sep 10, 2026",
+    targetEnd: "Sep 22, 2026",
     labels: ["kanban"],
   });
   expect(board.columns[1].cards[0]).toEqual({
@@ -55,6 +56,7 @@ test("Epics leave the Board and children keep the Epic key", () => {
     priority: "High",
     assignee: "Person A",
     dueDate: "Aug 25, 2026",
+    targetEnd: "Sep 13, 2026",
     created: "2026-09-01T11:00:00.000+0000",
     labels: ["kanban", "write-back"],
   });
@@ -184,6 +186,62 @@ test("Card age is days since created", () => {
   expect(cardAge("2026-07-11T00:00:00.000Z", now)).toBe("55d");
   expect(cardAge(undefined, now)).toBeUndefined();
   expect(cardAge("not-a-date", now)).toBeUndefined();
+});
+
+test("Cards keep target end from explicit fields", () => {
+  const board = issuesToBoard([
+    {
+      key: "DEMO-2",
+      fields: {
+        summary: "Dated",
+        status: { name: "To Do" },
+        targetEnd: "2026-10-15",
+      },
+    },
+    {
+      key: "DEMO-3",
+      fields: {
+        summary: "Named",
+        status: { name: "To Do" },
+        "Target End Date": "2026-10-20",
+      },
+    },
+  ]);
+  expect(board.columns[0].cards[0].targetEnd).toBe("Oct 15, 2026");
+  expect(board.columns[0].cards[1].targetEnd).toBe("Oct 20, 2026");
+});
+
+test("Cards keep target end from a date-shaped custom field", () => {
+  const board = issuesToBoard([
+    {
+      key: "DEMO-2",
+      fields: {
+        summary: "Custom",
+        status: { name: "To Do" },
+        customfield_10099: "2026-11-01",
+      },
+    },
+  ]);
+  expect(board.columns[0].cards[0].targetEnd).toBe("Nov 1, 2026");
+});
+
+test("Target end distance is relative like Linear", () => {
+  const now = Date.parse("2026-09-08T12:00:00.000Z");
+  expect(targetEndDistance("2026-09-09", now)).toBe("1d");
+  expect(targetEndDistance("2026-09-14", now)).toBe("6d");
+  expect(targetEndDistance("2026-09-15", now)).toBe("1w");
+  expect(targetEndDistance("2026-09-29", now)).toBe("3w");
+  expect(targetEndDistance("2026-11-08", now)).toBe("2m");
+  expect(targetEndDistance("2026-08-31", now)).toBe("1w");
+  expect(targetEndDistance(undefined, now)).toBeUndefined();
+  expect(targetEndDistance("not-a-date", now)).toBeUndefined();
+});
+
+test("formatTargetEnd formats ISO dates", () => {
+  expect(formatTargetEnd("2026-10-15")).toBe("Oct 15, 2026");
+  expect(formatTargetEnd("2026-10-15T00:00:00.000Z")).toBe("Oct 15, 2026");
+  expect(formatTargetEnd("not-a-date")).toBeUndefined();
+  expect(formatTargetEnd(undefined)).toBeUndefined();
 });
 
 test("Cards keep created from the payload", () => {

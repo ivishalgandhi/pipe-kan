@@ -4,6 +4,7 @@ import {
   BotIcon,
   ChevronDownIcon,
   Columns3Icon,
+  EyeIcon,
   EyeOffIcon,
   GripVerticalIcon,
   ListFilterIcon,
@@ -16,7 +17,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { cardAge, epicsToColumns, type Board, type Card, type Column, type Epic } from "./board.ts";
+import { cardAge, epicsToColumns, targetEndDistance, type Board, type Card, type Column, type Epic } from "./board.ts";
 import { type CommandJump } from "./command.ts";
 import { type MoveQueue, type MoveRequest, useMoveQueue } from "./move-queue.ts";
 import { frameSrc, type OpenField } from "./open.ts";
@@ -113,16 +114,29 @@ const DEFAULT_COLLAPSED_EPIC_STATUS = [
   "Canceled",
 ];
 
+type CardDisplayKey = "created" | "targetEnd" | "priority" | "labels" | "assignee" | "dueDate";
+
+const ALL_CARD_DISPLAY_KEYS: CardDisplayKey[] = [
+  "created",
+  "targetEnd",
+  "priority",
+  "labels",
+  "assignee",
+  "dueDate",
+];
+
 type Chrome = {
   filter: BoardFilter;
   sort: BoardSort;
   hide: string[];
+  shown: CardDisplayKey[];
 };
 
 const DEFAULT_CHROME: Chrome = {
   filter: {},
   sort: "payload",
   hide: [],
+  shown: [...ALL_CARD_DISPLAY_KEYS],
 };
 const DEFAULT_FAVS: FavouriteState = { keys: [], folders: [] };
 
@@ -173,6 +187,9 @@ function readChrome(): Chrome {
     const raw = JSON.parse(stored) as Partial<Chrome> & {
       filter?: BoardFilter & { priorities?: string[]; assignees?: string[] };
     };
+    const shown = Array.isArray(raw.shown)
+      ? raw.shown.filter((item): item is CardDisplayKey => ALL_CARD_DISPLAY_KEYS.includes(item as CardDisplayKey))
+      : [...ALL_CARD_DISPLAY_KEYS];
     return {
       filter: readFilter(raw.filter),
       sort:
@@ -180,6 +197,7 @@ function readChrome(): Chrome {
           ? raw.sort
           : "payload",
       hide: Array.isArray(raw.hide) ? raw.hide.filter((item) => typeof item === "string") : [],
+      shown: shown.length ? shown : [...ALL_CARD_DISPLAY_KEYS],
     };
   } catch {
     return DEFAULT_CHROME;
@@ -285,6 +303,7 @@ function fieldsFromCard(card: Card, url?: string | null): OpenField[] {
   if (card.priority) rows.push({ label: "Priority", value: card.priority });
   if (card.assignee) rows.push({ label: "Assignee", value: card.assignee });
   if (card.dueDate) rows.push({ label: "Due date", value: card.dueDate });
+  if (card.targetEnd) rows.push({ label: "Target end", value: card.targetEnd });
   if (card.labels?.length) {
     rows.push({ label: "Labels", value: card.labels.join(", "), pills: card.labels });
   }
@@ -349,6 +368,10 @@ function priorityClass(priority?: string) {
 
 function toggleList(values: string[], item: string) {
   return values.includes(item) ? values.filter((value) => value !== item) : [...values, item];
+}
+
+function toggleCardDisplay(shown: CardDisplayKey[], key: CardDisplayKey): CardDisplayKey[] {
+  return shown.includes(key) ? shown.filter((value) => value !== key) : [...shown, key];
 }
 
 function groupedFacets(facets: FilterFacet[]) {
@@ -459,6 +482,7 @@ function IssueCard({
   selected,
   onClick,
   variant = "story",
+  shown,
 }: {
   card: Card;
   asHandle?: boolean;
@@ -467,9 +491,40 @@ function IssueCard({
   selected?: boolean;
   onClick?: (event: React.MouseEvent) => void;
   variant?: "story" | "epic";
+  shown?: Set<CardDisplayKey>;
 }) {
   const isEpic = variant === "epic" || (card.type ?? "").toLowerCase() === "epic";
-  const age = cardAge(card.created);
+  const isShown = (key: CardDisplayKey) => shown?.has(key) ?? true;
+  const age = isShown("created") ? cardAge(card.created) : undefined;
+  const targetDistance = isShown("targetEnd") ? targetEndDistance(card.targetEnd) : undefined;
+  const targetPast = targetDistance
+    ? (() => {
+        const day = /^(\d{4})-(\d{2})-(\d{2})/.exec(card.targetEnd ?? "");
+        const target = day
+          ? Date.UTC(Number(day[1]), Number(day[2]) - 1, Number(day[3]))
+          : Date.parse(card.targetEnd ?? "");
+        return !Number.isNaN(target) && target < Date.now();
+      })()
+    : false;
+  const targetSoon = targetDistance
+    ? (() => {
+        const day = /^(\d{4})-(\d{2})-(\d{2})/.exec(card.targetEnd ?? "");
+        const target = day
+          ? Date.UTC(Number(day[1]), Number(day[2]) - 1, Number(day[3]))
+          : Date.parse(card.targetEnd ?? "");
+        if (Number.isNaN(target) || target < Date.now()) return false;
+        const now = new Date();
+        const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+        const days = Math.round((target - today) / 86_400_000);
+        return days <= 3;
+      })()
+    : false;
+  const hasFooter =
+    (isShown("priority") && card.priority) ||
+    (isShown("labels") && card.labels?.length) ||
+    (isShown("assignee") && card.assignee) ||
+    (isShown("dueDate") && card.dueDate) ||
+    targetDistance;
   const body = (
     <div
       className={cn(
@@ -496,9 +551,9 @@ function IssueCard({
         ) : null}
       </div>
       <p className="mt-0.5 truncate text-[13px] leading-[18px]">{card.summary}</p>
-      {card.priority || card.labels?.length || card.assignee || card.dueDate ? (
+      {hasFooter ? (
         <div className="mt-auto flex flex-wrap items-center gap-2 pt-2">
-          {card.priority ? (
+          {isShown("priority") && card.priority ? (
             <span
               className={cn(
                 "inline-flex h-6 shrink-0 items-center rounded-full border px-2 text-[12px] font-medium capitalize",
@@ -508,24 +563,37 @@ function IssueCard({
               {card.priority}
             </span>
           ) : null}
-          {card.labels?.map((label) => (
-            <span
-              key={label}
-              className="text-muted-foreground inline-flex h-6 shrink-0 items-center rounded-full border px-2 text-[12px]"
-            >
-              {label}
-            </span>
-          ))}
+          {isShown("labels")
+            ? card.labels?.map((label) => (
+                <span
+                  key={label}
+                  className="text-muted-foreground inline-flex h-6 shrink-0 items-center rounded-full border px-2 text-[12px]"
+                >
+                  {label}
+                </span>
+              ))
+            : null}
           <span className="flex-1" />
-          {card.dueDate ? (
+          {targetDistance ? (
+            <span
+              className={cn(
+                "shrink-0 text-[11px] tabular-nums",
+                targetPast && "text-destructive font-medium",
+                targetSoon && !targetPast && "text-amber-500 dark:text-amber-400",
+                !targetPast && !targetSoon && "text-muted-foreground",
+              )}
+              title={card.targetEnd}
+            >
+              {targetDistance}
+            </span>
+          ) : null}
+          {isShown("dueDate") && card.dueDate ? (
             <time className="text-muted-foreground shrink-0 text-[11px] tabular-nums">
               {card.dueDate}
             </time>
           ) : null}
-          {card.assignee ? (
-            <Avatar title={card.assignee}>
-              <AvatarFallback>{card.assignee.charAt(0)}</AvatarFallback>
-            </Avatar>
+          {isShown("assignee") && card.assignee ? (
+            <span className="text-muted-foreground shrink-0 text-[12px]">{card.assignee}</span>
           ) : null}
         </div>
       ) : null}
@@ -551,6 +619,7 @@ function StatusColumn({
   selected,
   onClick,
   onHide,
+  shown,
 }: {
   title: string;
   cards: Card[];
@@ -559,6 +628,7 @@ function StatusColumn({
   selected?: Set<string>;
   onClick?: (key: string, event: React.MouseEvent) => void;
   onHide?: () => void;
+  shown?: Set<CardDisplayKey>;
 }) {
   const [open, setOpen] = useState(
     () => isOverlay || !readCollapsed().has(title),
@@ -632,6 +702,7 @@ function StatusColumn({
                   disabled={disabled}
                   selected={selected?.has(card.key)}
                   variant={(card.type ?? "").toLowerCase() === "epic" ? "epic" : "story"}
+                  shown={shown}
                   onClick={(event) => onClick?.(card.key, event)}
                 />
               ))}
@@ -915,6 +986,7 @@ export function App() {
   const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set());
 
   const visibleOpts: VisibleOpts = { ...chrome, epics };
+  const shownSet = useMemo(() => new Set(chrome.shown), [chrome.shown]);
   const epicBoard = boardKind === "epics";
   const visible = useMemo(() => {
     if (boardKind === "combined") {
@@ -1320,7 +1392,7 @@ export function App() {
   function applyNamedPreset(name: string) {
     const result = applyPreset(presets, name);
     if (!result.ok) return;
-    persistChrome(result.chrome);
+    persistChrome({ ...chrome, ...result.chrome });
     const nextKind = result.chrome.boardKind ?? "stories";
     if (nextKind === "combined") {
       openCombined();
@@ -1614,6 +1686,36 @@ export function App() {
                     ))}
                   </DropdownMenuContent>
                 </DropdownMenu>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm">
+                      <EyeIcon />
+                      Display
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-44">
+                    <DropdownMenuLabel>Card properties</DropdownMenuLabel>
+                    {ALL_CARD_DISPLAY_KEYS.map((key) => (
+                      <DropdownMenuCheckboxItem
+                        key={key}
+                        checked={chrome.shown.includes(key)}
+                        onCheckedChange={() =>
+                          persistChrome({
+                            ...chrome,
+                            shown: toggleCardDisplay(chrome.shown, key),
+                          })
+                        }
+                      >
+                        {key === "created" && "Age"}
+                        {key === "targetEnd" && "Target end"}
+                        {key === "priority" && "Priority"}
+                        {key === "labels" && "Labels"}
+                        {key === "assignee" && "Assignee"}
+                        {key === "dueDate" && "Due date"}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <Button variant="ghost" size="sm" onClick={() => void refresh()} disabled={busy} aria-busy={busy}>
                   {busy ? <Spinner className="size-3.5" /> : null}
                   Refresh
@@ -1690,6 +1792,7 @@ export function App() {
                                   cards={cards}
                                   disabled={busy}
                                   selected={selectedCards}
+                                  shown={shownSet}
                                   onClick={handleCardClick}
                                   onHide={() =>
                                     persistChrome({ ...chrome, hide: [...chrome.hide, title] })
@@ -1709,6 +1812,7 @@ export function App() {
                                 title={String(value)}
                                 cards={visible[String(value)] ?? []}
                                 isOverlay
+                                shown={shownSet}
                               />
                             );
                           }
@@ -1723,6 +1827,7 @@ export function App() {
                                 card={card}
                                 isOverlay
                                 variant={(card.type ?? "").toLowerCase() === "epic" ? "epic" : "story"}
+                                shown={shownSet}
                               />
                               {count > 1 ? (
                                 <span className="absolute -top-2 -right-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-medium text-primary-foreground">
@@ -1821,6 +1926,7 @@ export function App() {
                     priority: card.priority,
                     labels: card.labels,
                     dueDate: card.dueDate,
+                    targetEnd: card.targetEnd,
                   })),
                 })),
                 epics: visibleEpics.map((epic) => ({
@@ -1849,6 +1955,7 @@ export function App() {
                           priority: card.priority,
                           labels: card.labels,
                           dueDate: card.dueDate,
+                          targetEnd: card.targetEnd,
                         })),
                       })),
                       epics: pipeBoard.epics.map((epic) => ({
