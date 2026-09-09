@@ -822,6 +822,7 @@ function KanbanItem({
         style={style}
         {...attributes}
         className={cn(
+          "outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
           isSortableDragging && "z-50 opacity-50",
           disabled && "opacity-50",
           className
