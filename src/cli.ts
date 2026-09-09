@@ -206,13 +206,60 @@ export function createJiraCli(
         console.log("Refresh children skipped; no valid parent keys");
         return "[]";
       }
-      const list = validKeys.map((key) => `"${key}"`).join(", ");
-      return listAll([
-        "issue",
-        "list",
-        "-q",
-        `(parent in (${list}) OR "Epic Link" in (${list}))`,
-      ]);
+      const CHUNK = 50;
+      const issues: unknown[] = [];
+      const seen = new Set<string>();
+      let anyFailed = false;
+
+      function buildJql(chunkKeys: string[], mode: "or" | "epic" | "parent") {
+        const list = chunkKeys.map((key) => `"${key}"`).join(", ");
+        if (mode === "epic") return `"Epic Link" in (${list})`;
+        if (mode === "parent") return `parent in (${list})`;
+        return `(parent in (${list}) OR "Epic Link" in (${list}))`;
+      }
+
+      for (let i = 0; i < validKeys.length; i += CHUNK) {
+        const chunk = validKeys.slice(i, i + CHUNK);
+        const modes: Array<"or" | "epic" | "parent"> = ["or", "epic", "parent"];
+        let chunkIssues: unknown[] | undefined;
+        let lastError: string | undefined;
+
+        for (const mode of modes) {
+          try {
+            chunkIssues = JSON.parse(
+              await listAll([
+                "issue",
+                "list",
+                "-q",
+                buildJql(chunk, mode),
+              ]),
+            ) as unknown[];
+            break;
+          } catch (err) {
+            lastError = err instanceof Error ? err.message : String(err);
+          }
+        }
+
+        if (chunkIssues) {
+          for (const issue of chunkIssues) {
+            const key = issueKey(issue);
+            if (key && !seen.has(key)) {
+              seen.add(key);
+              issues.push(issue);
+            }
+          }
+        } else {
+          anyFailed = true;
+          console.log(
+            `Refresh children chunk ${i / CHUNK + 1} failed; ${lastError ?? "unknown error"}`,
+          );
+        }
+      }
+
+      if (anyFailed && issues.length === 0) {
+        throw new Error("Epic children fetch failed for all batches");
+      }
+      return JSON.stringify(issues);
     },
     async move(key, status) {
       const result = await runRetry(["issue", "move", key, status]);

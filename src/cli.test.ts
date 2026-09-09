@@ -123,6 +123,38 @@ console.log(JSON.stringify([{
   };
 }
 
+function fakeJiraWithScript(script: string) {
+  const dir = mkdtempSync(join(tmpdir(), "pipe-kan-"));
+  const bin = join(dir, "jira");
+  const log = join(dir, "calls.jsonl");
+  writeFileSync(
+    bin,
+    `#!/usr/bin/env bun
+import { appendFileSync } from "node:fs";
+appendFileSync(${JSON.stringify(log)}, JSON.stringify({
+  args: process.argv.slice(2),
+  config: process.env.JIRA_CONFIG_FILE ?? null,
+  token: process.env.JIRA_API_TOKEN ?? null,
+}) + "\\n");
+${script}
+`,
+  );
+  chmodSync(bin, 0o755);
+  return {
+    bin,
+    calls() {
+      try {
+        return readFileSync(log, "utf8")
+          .trim()
+          .split("\n")
+          .map((line) => JSON.parse(line) as { args: string[] });
+      } catch {
+        return [];
+      }
+    },
+  };
+}
+
 function pagingJira(total: number) {
   const dir = mkdtempSync(join(tmpdir(), "pipe-kan-"));
   const bin = join(dir, "jira");
@@ -298,6 +330,45 @@ test("createJiraCli listChildren returns empty when all parent keys are invalid"
   const raw = await cli.listChildren(["", "NOT-A-KEY"]);
   expect(JSON.parse(raw)).toEqual([]);
   expect(calls()).toEqual([]);
+});
+
+test("createJiraCli batches children into groups of 50 and falls back when a field is unsupported", async () => {
+  const { bin, calls } = fakeJiraWithScript(`
+const args = process.argv.slice(2);
+const qIndex = args.indexOf("-q");
+const jql = qIndex >= 0 ? args[qIndex + 1] : "";
+if (jql.includes("parent in")) {
+  console.error("jira: Received unexpected response '400 '.");
+  process.exit(1);
+}
+if (jql.includes("Epic Link")) {
+  const keys = jql.split('"').filter((s) => s.startsWith("DEMO-"));
+  const issues = keys.map((key) => ({
+    key: key + "-1",
+    fields: { summary: "Child of " + key, status: { name: "To Do" }, parent: { key } },
+  }));
+  console.log(JSON.stringify(issues));
+  process.exit(0);
+}
+console.log("[]");
+process.exit(0);
+`);
+  const cli = createJiraCli({ bin });
+  const keys = Array.from({ length: 110 }, (_, n) => `DEMO-${n + 1}`);
+  const result = JSON.parse(await cli.listChildren(keys));
+  expect(result.length).toBe(110);
+  const orAttempts = calls().filter((call) => {
+    const qIndex = call.args.indexOf("-q");
+    const jql = call.args[qIndex + 1] ?? "";
+    return qIndex >= 0 && jql.includes("parent in") && jql.includes("Epic Link");
+  }).length;
+  const epicOnlyAttempts = calls().filter((call) => {
+    const qIndex = call.args.indexOf("-q");
+    const jql = call.args[qIndex + 1] ?? "";
+    return qIndex >= 0 && jql.includes("Epic Link") && !jql.includes("parent in");
+  }).length;
+  expect(orAttempts).toBe(3);
+  expect(epicOnlyAttempts).toBe(3);
 });
 
 test("createJiraCli does not force Fake Jira config or token", async () => {
