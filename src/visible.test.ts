@@ -8,6 +8,7 @@ import {
   overwritePreset,
   removePreset,
   renamePreset,
+  applyColumnOrder,
   combinedBoard,
   epicChildCount,
   favouriteGroup,
@@ -800,4 +801,53 @@ test("combinedBoard applies sort across mixed Cards", () => {
   ];
   const result = combinedBoard(columns, epics, "", { sort: "priority" });
   expect(result["To Do"].map((c) => c.key)).toEqual(["DEMO-1", "DEMO-2", "DEMO-3"]);
+});
+
+test("merge prefers the next Column when the same Card is in two Columns", () => {
+  expect(
+    mergeValue(
+      { "To Do": [child], "In Progress": [child] },
+      { "To Do": [child, other], "In Progress": [] },
+      "DEMO-1",
+    ),
+  ).toEqual({
+    "To Do": [other],
+    "In Progress": [child],
+  });
+});
+
+test("merge does not keep a moved Card in its previous Column", () => {
+  expect(
+    mergeValue(
+      { "To Do": [], "In Progress": [child] },
+      { "To Do": [child, other], "In Progress": [child] },
+      "DEMO-1",
+    ),
+  ).toEqual({
+    "To Do": [other],
+    "In Progress": [child],
+  });
+});
+
+test("applyColumnOrder restores saved statuses and appends new ones", () => {
+  expect(
+    Object.keys(
+      applyColumnOrder(
+        { Draft: [child], "To Do": [other], "In Progress": [] },
+        ["In Progress", "Draft"],
+      ),
+    ),
+  ).toEqual(["In Progress", "Draft", "To Do"]);
+});
+
+test("combinedBoard keeps Column order from the Board", () => {
+  const columns = {
+    "In Progress": [{ key: "DEMO-3", summary: "story progress" }],
+    "To Do": [{ key: "DEMO-2", summary: "story todo" }],
+  };
+  const epics: Epic[] = [
+    { key: "DEMO-1", summary: "epic todo", status: "To Do" },
+    { key: "DEMO-4", summary: "epic progress", status: "In Progress" },
+  ];
+  expect(Object.keys(combinedBoard(columns, epics))).toEqual(["In Progress", "To Do"]);
 });

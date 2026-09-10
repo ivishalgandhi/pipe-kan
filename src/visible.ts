@@ -300,6 +300,7 @@ export function combinedBoard(
     );
   const allCards = [...epicCards, ...storyCards];
   const byStatus = new Map<string, Card[]>();
+  for (const title of Object.keys(columns)) byStatus.set(title, []);
   for (const card of allCards) {
     const status = card.type === "Epic"
       ? epics.find((epic) => epic.key === card.key)?.status ?? "To Do"
@@ -308,7 +309,12 @@ export function combinedBoard(
     list.push(card);
     byStatus.set(status, list);
   }
-  const sorted = sortCards([...byStatus.entries()].map(([title, cards]) => ({ title, cards })), opts?.sort);
+  const sorted = sortCards(
+    [...byStatus.entries()]
+      .filter(([, cards]) => cards.length > 0)
+      .map(([title, cards]) => ({ title, cards })),
+    opts?.sort,
+  );
   return Object.fromEntries(
     sorted
       .filter(({ title }) => !hide.has(title))
@@ -432,6 +438,39 @@ export function groupEpics(epics: Epic[]): { status: string; epics: Epic[] }[] {
   ];
 }
 
+function lastColumnWins(columns: Record<string, Card[]>): Record<string, Card[]> {
+  const last = new Map<string, string>();
+  for (const [title, cards] of Object.entries(columns)) {
+    for (const card of cards) last.set(card.key, title);
+  }
+  return Object.fromEntries(
+    Object.entries(columns).map(([title, cards]) => {
+      const seen = new Set<string>();
+      return [
+        title,
+        cards.filter((card) => {
+          if (last.get(card.key) !== title || seen.has(card.key)) return false;
+          seen.add(card.key);
+          return true;
+        }),
+      ];
+    }),
+  );
+}
+
+export function applyColumnOrder(
+  columns: Record<string, Card[]>,
+  order: string[] | undefined,
+): Record<string, Card[]> {
+  if (!order || order.length === 0) return columns;
+  const existing = new Set(Object.keys(columns));
+  const orderedKeys = [
+    ...order.filter((key) => existing.has(key)),
+    ...Object.keys(columns).filter((key) => !order.includes(key)),
+  ];
+  return Object.fromEntries(orderedKeys.map((key) => [key, columns[key] ?? []]));
+}
+
 export function mergeValue(
   next: Record<string, Card[]>,
   previous: Record<string, Card[]>,
@@ -440,22 +479,29 @@ export function mergeValue(
   opts?: VisibleOpts,
 ): Record<string, Card[]> {
   const hide = opts?.hide ?? [];
+  const nextUnique = lastColumnWins(next);
   if (!epic && !needle(query) && !hasFilter(opts?.filter) && hide.length === 0) {
-    return next;
+    return nextUnique;
   }
-  const hiddenCards = Object.fromEntries(
-    Object.entries(previous).map(([title, cards]) => [
-      title,
-      hide.includes(title)
-        ? cards
-        : cards.filter((card) => omitted(card, epic, query, opts?.filter, opts?.epics)),
-    ]),
+  const nextKeys = new Set(
+    Object.values(nextUnique).flatMap((cards) => cards.map((card) => card.key)),
   );
-  const titles = new Set([...Object.keys(hiddenCards), ...Object.keys(next)]);
+  const hiddenCards = Object.fromEntries(
+    Object.entries(previous).map(([title, cards]) => {
+      const kept = hide.includes(title)
+        ? cards
+        : cards.filter((card) => omitted(card, epic, query, opts?.filter, opts?.epics));
+      return [title, kept.filter((card) => !nextKeys.has(card.key))];
+    }),
+  );
+  const titles = [
+    ...Object.keys(nextUnique),
+    ...Object.keys(hiddenCards).filter((title) => !(title in nextUnique)),
+  ];
   return Object.fromEntries(
-    [...titles].map((title) => [
+    titles.map((title) => [
       title,
-      [...(hiddenCards[title] ?? []), ...(next[title] ?? [])],
+      [...(hiddenCards[title] ?? []), ...(nextUnique[title] ?? [])],
     ]),
   );
 }

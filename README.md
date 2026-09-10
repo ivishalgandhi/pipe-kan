@@ -18,7 +18,9 @@ The published CLI is on npm. From a clone: `bun run build && bun dist/pipe-kan.j
 
 - Left: All stories and All epics. Center: Cards (one Column per status in the payload). Right: Open URL; remote Jira is a link, not an iframe.
 - Drop a Card on a Column to Move (`jira issue move`).
-- Same-Column drop and column reorder do nothing.
+- Drag a Column to change status order. The order is stored locally and kept after Refresh.
+- Same-Column drop does not write back to Jira.
+- Collapse the left pane to hide Epics; the Board header expands it again.
 - Theme is stored in `localStorage`.
 
 LAN: `HOST=0.0.0.0 bunx pipe-kan`.

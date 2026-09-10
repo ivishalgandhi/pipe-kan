@@ -3,6 +3,8 @@ import {
   ArrowUpDownIcon,
   BotIcon,
   ChevronDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   Columns3Icon,
   EyeIcon,
   EyeOffIcon,
@@ -36,6 +38,7 @@ import {
   listedFavourites,
   mergeSearchHits,
   mergeValue,
+  applyColumnOrder,
   moveFavourite,
   overwritePreset,
   removeFolder,
@@ -99,7 +102,7 @@ import {
   InputGroupInput,
 } from "~/components/ui/input-group";
 import { cn } from "~/lib/utils";
-import { useDefaultLayout } from "react-resizable-panels";
+import { useDefaultLayout, usePanelRef } from "react-resizable-panels";
 
 const COLLAPSED_KEY = "collapsed-columns";
 const COLLAPSED_EPIC_STATUS_KEY = "collapsed-epic-statuses";
@@ -108,6 +111,8 @@ const CHROME_KEY = "board-chrome";
 const OPENER_KEY = "board-opener";
 const FAV_KEY = "favourite-epics";
 const PRESET_KEY = "board-presets";
+const SIDEBAR_OPEN_KEY = "board-sidebar-open";
+const COLUMN_ORDER_KEY = "board-column-order";
 const DEFAULT_COLLAPSED_EPIC_STATUS = [
   "In Progress",
   "Completed",
@@ -319,6 +324,41 @@ function writeOpener(next: "stories" | "epics" | "combined") {
   localStorage.setItem(OPENER_KEY, next);
 }
 
+function readSidebarOpen(): boolean {
+  try {
+    const stored = localStorage.getItem(SIDEBAR_OPEN_KEY);
+    if (stored === null) return true;
+    return stored === "true";
+  } catch {
+    return true;
+  }
+}
+
+function writeSidebarOpen(next: boolean) {
+  localStorage.setItem(SIDEBAR_OPEN_KEY, next ? "true" : "false");
+}
+
+function readColumnOrder(): Record<string, string[]> {
+  try {
+    const stored = localStorage.getItem(COLUMN_ORDER_KEY);
+    if (stored === null) return {};
+    const raw = JSON.parse(stored) as unknown;
+    if (!raw || typeof raw !== "object") return {};
+    return Object.fromEntries(
+      Object.entries(raw as Record<string, unknown>).map(([key, value]) => [
+        key,
+        Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [],
+      ]),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function writeColumnOrder(next: Record<string, string[]>) {
+  localStorage.setItem(COLUMN_ORDER_KEY, JSON.stringify(next));
+}
+
 function fieldsFromCard(card: Card, url?: string | null): OpenField[] {
   const rows: OpenField[] = [
     { label: "Key", value: card.key },
@@ -447,7 +487,7 @@ function FilterMenu({
 }) {
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   return (
-    <DropdownMenuContent align="end" className="w-56">
+    <DropdownMenuContent align="end" className="w-56 max-h-[min(70vh,28rem)]">
       {groupedFacets(facets).map((block, index) => {
         const body = block.facets.map((facet) => (
           <FilterValues
@@ -1007,6 +1047,8 @@ export function App() {
   const [presetName, setPresetName] = useState("");
   const [presetError, setPresetError] = useState("");
   const [boardKind, setBoardKind] = useState<"stories" | "epics" | "combined">(readOpener);
+  const [sidebarOpen, setSidebarOpen] = useState(() => readSidebarOpen());
+  const epicsPanelRef = usePanelRef();
   const lastBoard = useRef<Board | null>(null);
   const [pipeBoard, setPipeBoard] = useState<Board | null>(null);
   const [commandOpen, setCommandOpen] = useState(false);
@@ -1051,6 +1093,7 @@ export function App() {
     [epics, favourites, search, childrenList, chrome.filter],
   );
   const columnIds = Object.keys(visible);
+  const boardKey = `${boardKind}:${[...activeProjects].sort().join(",")}`;
   const boardOpenIds = openKey ? ["cards", "open"] : ["cards"];
   const shellLayout = useDefaultLayout({
     id: "shell",
@@ -1100,10 +1143,11 @@ export function App() {
     setPipeBoard(next);
     const listed = next.epics ?? [];
     setEpics(listed);
+    const order = readColumnOrder()[`${kind}:${[...activeProjects].sort().join(",")}`];
     if (kind === "epics") {
-      setColumns(toValue(epicsToColumns(listed)));
+      setColumns(applyColumnOrder(toValue(epicsToColumns(listed)), order));
     } else {
-      setColumns(toValue(next.columns));
+      setColumns(applyColumnOrder(toValue(next.columns), order));
     }
     setEpicChildren(next.children ? Object.values(next.children).flat() : null);
     if (next.error) setError(next.error);
@@ -1115,12 +1159,13 @@ export function App() {
     setPipeBoard(next);
     const listed = next.epics ?? [];
     setEpics(listed);
+    const order = readColumnOrder()[boardKey];
     if (boardKind === "epics") {
-      setColumns(toValue(epicsToColumns(listed)));
+      setColumns(applyColumnOrder(toValue(epicsToColumns(listed)), order));
     } else if (boardKind === "combined") {
-      setColumns(toValue(next.columns));
+      setColumns(applyColumnOrder(toValue(next.columns), order));
     } else {
-      setColumns(toValue(next.columns));
+      setColumns(applyColumnOrder(toValue(next.columns), order));
     }
     setEpicChildren(next.children ? Object.values(next.children).flat() : null);
     setSelectedEpic((current) =>
@@ -1140,6 +1185,16 @@ export function App() {
   useEffect(() => {
     void load();
   }, []);
+
+  useEffect(() => {
+    if (!sidebarOpen) epicsPanelRef.current?.collapse();
+  }, []);
+
+  useEffect(() => {
+    const order = readColumnOrder()[boardKey];
+    if (!order?.length) return;
+    setColumns((current) => applyColumnOrder(current, order));
+  }, [boardKey]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -1222,7 +1277,7 @@ export function App() {
         const next = [...current];
         next[index] = { ...next[index], status: target };
         if (boardKind === "epics") {
-          setColumns(toValue(epicsToColumns(next)));
+          setColumns(applyColumnOrder(toValue(epicsToColumns(next)), readColumnOrder()[boardKey]));
         }
         return next;
       });
@@ -1298,14 +1353,21 @@ export function App() {
   }
 
   function commit(_next: Record<string, Card[]>, meta: KanbanCommitMeta<Card>) {
-    if (
-      meta.kind === "column" ||
-      meta.activeContainer === meta.overContainer ||
-      chrome.hide.includes(meta.overContainer)
-    ) {
+    if (chrome.hide.includes(meta.overContainer)) {
       setColumns((current) =>
         rollbackColumns(meta.previousValue, current, selectedEpic, search, visibleOpts),
       );
+      return;
+    }
+    if (meta.kind === "column") {
+      const order = Object.keys(_next);
+      const orders = readColumnOrder();
+      orders[boardKey] = order;
+      writeColumnOrder(orders);
+      setColumns((current) => applyColumnOrder(current, order));
+      return;
+    }
+    if (meta.activeContainer === meta.overContainer) {
       return;
     }
     const key = String(meta.event.active.id);
@@ -1482,21 +1544,45 @@ export function App() {
         orientation="horizontal"
         className="min-h-0 flex-1"
         defaultLayout={shellLayout.defaultLayout}
-        onLayoutChanged={shellLayout.onLayoutChanged}
+        onLayoutChanged={(layout, meta) => {
+          shellLayout.onLayoutChanged(layout, meta);
+          if (!meta.isUserInteraction) return;
+          const collapsed = (layout.epics ?? 0) <= 0;
+          setSidebarOpen(!collapsed);
+          writeSidebarOpen(!collapsed);
+        }}
       >
         <ResizablePanel
           id="epics"
+          panelRef={epicsPanelRef}
           defaultSize="244px"
           minSize="12rem"
           maxSize="40%"
-          className="min-h-0"
+          collapsible
+          collapsedSize={0}
+          className="min-h-0 overflow-hidden"
         >
           <aside className="text-sidebar-foreground flex h-full min-h-0 flex-col">
             <div className="flex h-10 items-center justify-between px-4">
               <span className="text-[13px] font-medium">pipe-kan</span>
-              <span className="text-muted-foreground text-[12px] tabular-nums">
-                {visibleEpics.length}
-              </span>
+              <div className="flex items-center gap-1">
+                <span className="text-muted-foreground text-[12px] tabular-nums">
+                  {visibleEpics.length}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="Collapse sidebar"
+                  title="Collapse sidebar"
+                  onClick={() => {
+                    setSidebarOpen(false);
+                    writeSidebarOpen(false);
+                    epicsPanelRef.current?.collapse();
+                  }}
+                >
+                  <ChevronLeftIcon className="size-4" />
+                </Button>
+              </div>
             </div>
             <nav className="flex flex-1 flex-col gap-0.5 overflow-auto px-2 pb-2">
               <button
@@ -1612,11 +1698,26 @@ export function App() {
             </nav>
           </aside>
         </ResizablePanel>
-        <ResizableHandle />
+        <ResizableHandle className={cn(!sidebarOpen && "hidden")} />
         <ResizablePanel id="board" defaultSize="80%" minSize="24rem" className="min-h-0">
           <div className="flex h-full min-h-0 flex-col p-2 pl-0">
             <div className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border">
               <header className="flex min-h-11 shrink-0 flex-wrap items-center gap-2 px-3">
+                {!sidebarOpen ? (
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label="Expand sidebar"
+                    title="Expand sidebar"
+                    onClick={() => {
+                      setSidebarOpen(true);
+                      writeSidebarOpen(true);
+                      epicsPanelRef.current?.expand();
+                    }}
+                  >
+                    <ChevronRightIcon className="size-4" />
+                  </Button>
+                ) : null}
                 <strong className="text-[13px] font-medium">Board</strong>
                 <span className="bg-primary/10 text-primary inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium">
                   {(() => {

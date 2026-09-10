@@ -266,6 +266,24 @@ test("createJiraCli lists every Epic past jira-cli's 100-item page", async () =>
   ]);
 });
 
+for (const total of [200, 250, 300]) {
+  const pages = Array.from(
+    { length: Math.ceil(total / 100) + (total % 100 === 0 ? 1 : 0) },
+    (_, n) => `${n * 100}:100`,
+  );
+  test(`createJiraCli lists ${total} Epics across jira-cli pages`, async () => {
+    const { bin, calls } = pagingJira(total);
+    const cli = createJiraCli({ bin });
+    const keys = JSON.parse(await cli.listEpics()).map((issue: { key: string }) => issue.key);
+    expect(keys).toHaveLength(total);
+    expect(new Set(keys).size).toBe(total);
+    expect(keys).toEqual(Array.from({ length: total }, (_, n) => `DEMO-${n}`));
+    expect(calls().map((call) => call.args)).toEqual(
+      pages.map((spec) => ["issue", "list", "-q", 'type="Epic"', "--paginate", spec, "--raw"]),
+    );
+  });
+}
+
 test("createJiraCli list is one jira-cli page", async () => {
   const { bin, calls } = pagingJira(101);
   const cli = createJiraCli({ bin });
@@ -381,6 +399,32 @@ process.exit(0);
   expect(orAttempts).toBeLessThanOrEqual(5);
   expect(epicOnlyAttempts).toBeGreaterThanOrEqual(3);
   expect(callsWithQ.length).toBeLessThan(20);
+});
+
+test("createJiraCli lists children of 250 Epics without dropping keys", async () => {
+  const { bin, calls } = fakeJiraWithScript(`
+const args = process.argv.slice(2);
+const qIndex = args.indexOf("-q");
+const jql = qIndex >= 0 ? args[qIndex + 1] : "";
+if (jql.includes("parent in") || jql.includes("Epic Link")) {
+  const keys = jql.split('"').filter((s) => s.startsWith("DEMO-"));
+  const issues = keys.map((key) => ({
+    key: key + "-1",
+    fields: { summary: "Child of " + key, status: { name: "To Do" }, parent: { key } },
+  }));
+  console.log(JSON.stringify(issues));
+  process.exit(0);
+}
+console.log("[]");
+process.exit(0);
+`);
+  const cli = createJiraCli({ bin });
+  const keys = Array.from({ length: 250 }, (_, n) => `DEMO-${n + 1}`);
+  const result = JSON.parse(await cli.listChildren(keys)) as { key: string }[];
+  const got = result.map((issue) => issue.key);
+  expect(got).toHaveLength(250);
+  expect(new Set(got)).toEqual(new Set(keys.map((key) => `${key}-1`)));
+  expect(calls().filter((call) => call.args.includes("-q")).length).toBeGreaterThanOrEqual(5);
 });
 
 test("createJiraCli scopes epics to multiple projects via --projects", async () => {
