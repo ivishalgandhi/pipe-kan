@@ -12,9 +12,30 @@ export type Cli = {
   listEpic(key: string, flags?: string): Promise<string>;
   listChildren(keys: string[]): Promise<string>;
   move(key: string, status: string): Promise<{ ok: boolean; error?: string }>;
+  create(input: {
+    summary: string;
+    description?: string;
+    labels?: string[];
+    parent?: string;
+    type?: string;
+    status?: string;
+  }): Promise<{ ok: boolean; key?: string; error?: string }>;
+  edit(
+    key: string,
+    input: { summary?: string; description?: string; labels?: string[] },
+  ): Promise<{ ok: boolean; error?: string }>;
   open(key: string): Promise<string>;
   view(key: string): Promise<string>;
 };
+
+export function createdKeyFromOutput(text: string): string | undefined {
+  const matches = text.match(/[A-Z][A-Z0-9]*-\d+/gi) ?? [];
+  for (let i = matches.length - 1; i >= 0; i--) {
+    const key = matches[i];
+    if (key && validIssueKey(key)) return key;
+  }
+  return undefined;
+}
 
 function projectClause(flags: string): string {
   const { projects } = parseFlags(flags || DEFAULT_FLAGS);
@@ -68,6 +89,12 @@ export function createStoreCli(store: IssueStore, defaultFlags = DEFAULT_FLAGS):
     },
     async move(key, status) {
       return store.move(key, status);
+    },
+    async create(input) {
+      return store.create(input);
+    },
+    async edit(key, input) {
+      return store.edit(key, input);
     },
     async open(key) {
       return `/browse/${key}`;
@@ -197,6 +224,13 @@ export function createJiraCli(
     }
     console.log(`jira ${fmt(args)} ${issues.length} total`);
     return JSON.stringify(issues);
+  }
+  async function moveIssue(key: string, status: string) {
+    const result = await runRetry(["issue", "move", key, status]);
+    if (result.code !== 0) {
+      return { ok: false, error: (result.stderr || result.stdout).trim() };
+    }
+    return { ok: true as const };
   }
 
   return {
@@ -337,12 +371,49 @@ export function createJiraCli(
       return JSON.stringify(issues);
     },
     async move(key, status) {
-      const result = await runRetry(["issue", "move", key, status]);
+      return moveIssue(key, status);
+    },
+    async create(input) {
+      const args = [
+        "issue",
+        "create",
+        "--no-input",
+        "-y",
+        "-t",
+        input.type?.trim() || "Story",
+        "-s",
+        input.summary,
+      ];
+      if (input.description) {
+        args.push("-b", input.description);
+      }
+      for (const label of input.labels ?? []) {
+        args.push("-l", label);
+      }
+      if (input.parent) {
+        args.push("-P", input.parent);
+      }
+      const result = await runRetry(args);
       if (result.code !== 0) {
-        return {
-          ok: false,
-          error: (result.stderr || result.stdout).trim(),
-        };
+        return { ok: false, error: (result.stderr || result.stdout).trim() };
+      }
+      const key = createdKeyFromOutput(`${result.stdout}\n${result.stderr}`);
+      if (input.status?.trim() && key) {
+        const moved = await moveIssue(key, input.status.trim());
+        if (!moved.ok) return { ok: false, key, error: moved.error };
+      }
+      return key ? { ok: true, key } : { ok: true };
+    },
+    async edit(key, input) {
+      const args = ["issue", "edit", key, "--no-input", "-y"];
+      if (input.summary !== undefined) args.push("-s", input.summary);
+      if (input.description !== undefined) args.push("-b", input.description);
+      if (input.labels?.length) {
+        for (const label of input.labels) args.push("-l", label);
+      }
+      const result = await runRetry(args);
+      if (result.code !== 0) {
+        return { ok: false, error: (result.stderr || result.stdout).trim() };
       }
       return { ok: true };
     },

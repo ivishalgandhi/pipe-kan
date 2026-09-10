@@ -94,6 +94,9 @@ type AgentPanelProps = {
   pipeView?: BoardViewSnapshot;
   onApplyPreset?: (name: string) => void;
   onSetFilter?: (filter: BoardFilter) => void;
+  onBoardMutated?: () => void;
+  seedPrompt?: string | null;
+  onSeedConsumed?: () => void;
 };
 
 function toolStatus(message: Extract<AgentMessage, { role: "tool" }>) {
@@ -108,6 +111,9 @@ export function AgentPanel({
   pipeView,
   onApplyPreset,
   onSetFilter,
+  onBoardMutated,
+  seedPrompt,
+  onSeedConsumed,
 }: AgentPanelProps) {
   const [config, setConfig] = useState<AgentConfig | null>(null);
   const [skills, setSkills] = useState<SkillSummary[]>([]);
@@ -128,6 +134,7 @@ export function AgentPanel({
   const startAbort = useRef<AbortController | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   sessionIdRef.current = sessionId;
+  const seedSent = useRef<string | null>(null);
 
   const startSession = useCallback(async (agentId: string, model: string | null) => {
     startAbort.current?.abort();
@@ -250,6 +257,8 @@ export function AgentPanel({
           onApplyPreset?.(result.preset);
         } else if (result?.__ui_action === "set_filter" && result.filter) {
           onSetFilter?.(result.filter);
+        } else if (result?.__ui_action === "refresh_board") {
+          onBoardMutated?.();
         }
       },
       request_permission: (event) => {
@@ -284,7 +293,7 @@ export function AgentPanel({
       handlers[event.type]?.(event);
     });
     return () => es.close();
-  }, [sessionId, onApplyPreset, onSetFilter]);
+  }, [sessionId, onApplyPreset, onSetFilter, onBoardMutated]);
 
   const postApproval = (requestId: string, decision: "once" | "always" | "reject") => {
     if (!sessionId) return;
@@ -341,6 +350,23 @@ export function AgentPanel({
       setMessages((prev) => [...prev, { role: "agent", text: `Failed to send: ${String(err)}` }]);
     }
   };
+
+  useEffect(() => {
+    if (!open) {
+      seedSent.current = null;
+      return;
+    }
+    if (!seedPrompt) {
+      seedSent.current = null;
+      return;
+    }
+    if (!sessionId || starting || busy) return;
+    if (seedSent.current === seedPrompt) return;
+    seedSent.current = seedPrompt;
+    const text = seedPrompt;
+    onSeedConsumed?.();
+    void send(text);
+  }, [open, seedPrompt, sessionId, starting, busy, onSeedConsumed]);
 
   const stop = () => {
     if (!sessionId) return;

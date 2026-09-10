@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { commandCatalog, commandPick } from "./command.ts";
+import { commandCatalog, commandComposerAction, commandPick } from "./command.ts";
 
 test("empty query lists Actions only and omits Apply when there are no Presets", () => {
   expect(commandCatalog({ presets: [], query: "" })).toEqual([
@@ -13,6 +13,8 @@ test("empty query lists Actions only and omits Apply when there are no Presets",
         { label: "All combined", jump: { kind: "all-combined" } },
         { label: "Refresh", jump: { kind: "refresh" } },
         { label: "Agent", jump: { kind: "agent" } },
+        { label: "Create issue", jump: { kind: "create" } },
+        { label: "Create with AI", jump: { kind: "create-ai" } },
       ],
     },
   ]);
@@ -29,6 +31,8 @@ test("Apply rows follow Preset create order", () => {
         { label: "All combined", jump: { kind: "all-combined" } },
         { label: "Refresh", jump: { kind: "refresh" } },
         { label: "Agent", jump: { kind: "agent" } },
+        { label: "Create issue", jump: { kind: "create" } },
+        { label: "Create with AI", jump: { kind: "create-ai" } },
         { label: "Apply Now", jump: { kind: "preset", name: "Now" } },
         { label: "Apply Later", jump: { kind: "preset", name: "Later" } },
       ],
@@ -64,7 +68,7 @@ test("typing filters Actions by case-insensitive row label", () => {
   expect(commandCatalog({ presets: ["Now"], query: "missing" })).toEqual([]);
 });
 
-test("pick yields all-stories, all-epics, all-combined, refresh, agent, and preset intents", () => {
+test("pick yields all-stories, all-epics, all-combined, refresh, agent, create, and preset intents", () => {
   const rows = commandCatalog({ presets: ["Now"], query: "" })[0]?.rows ?? [];
   expect(rows.map((row) => commandPick(row))).toEqual([
     { kind: "all-stories" },
@@ -72,7 +76,29 @@ test("pick yields all-stories, all-epics, all-combined, refresh, agent, and pres
     { kind: "all-combined" },
     { kind: "refresh" },
     { kind: "agent" },
+    { kind: "create" },
+    { kind: "create-ai" },
     { kind: "preset", name: "Now" },
+  ]);
+});
+
+test("typing create lists Create issue and Create with AI", () => {
+  expect(commandCatalog({ presets: [], query: "create" })).toEqual([
+    {
+      id: "actions",
+      title: "Actions",
+      rows: [
+        { label: "Create issue", jump: { kind: "create" } },
+        { label: "Create with AI", jump: { kind: "create-ai" } },
+      ],
+    },
+  ]);
+  expect(commandCatalog({ presets: [], query: "ai" })).toEqual([
+    {
+      id: "actions",
+      title: "Actions",
+      rows: [{ label: "Create with AI", jump: { kind: "create-ai" } }],
+    },
   ]);
 });
 
@@ -107,6 +133,8 @@ test("empty query omits Epics and Cards even when listed", () => {
         { label: "All combined", jump: { kind: "all-combined" } },
         { label: "Refresh", jump: { kind: "refresh" } },
         { label: "Agent", jump: { kind: "agent" } },
+        { label: "Create issue", jump: { kind: "create" } },
+        { label: "Create with AI", jump: { kind: "create-ai" } },
       ],
     },
   ]);
@@ -291,4 +319,10 @@ test("a miss is an empty list with no Issue rows", () => {
       favouriteKeys: ["DEMO-1"],
     }),
   ).toEqual([]);
+});
+
+test("commandComposerAction maps Create issue and Create with AI", () => {
+  expect(commandComposerAction({ kind: "create" })).toBe("create");
+  expect(commandComposerAction({ kind: "create-ai" })).toBe("create-ai");
+  expect(commandComposerAction({ kind: "agent" })).toBeNull();
 });

@@ -7,6 +7,8 @@ export type CommandJump =
   | { kind: "all-combined" }
   | { kind: "refresh" }
   | { kind: "agent" }
+  | { kind: "create" }
+  | { kind: "create-ai" }
   | { kind: "preset"; name: string }
   | { kind: "epic"; key: string }
   | { kind: "card"; key: string; epic?: string };
@@ -40,6 +42,8 @@ export function commandCatalog(input: CommandCatalogInput): CommandGroup[] {
     { label: "All combined", jump: { kind: "all-combined" } },
     { label: "Refresh", jump: { kind: "refresh" } },
     { label: "Agent", jump: { kind: "agent" } },
+    { label: "Create issue", jump: { kind: "create" } },
+    { label: "Create with AI", jump: { kind: "create-ai" } },
     ...input.presets.map((name) => ({
       label: `Apply ${name}`,
       jump: { kind: "preset" as const, name },
@@ -78,4 +82,9 @@ export function commandCatalog(input: CommandCatalogInput): CommandGroup[] {
 
 export function commandPick(row: CommandRow): CommandJump {
   return row.jump;
+}
+
+export function commandComposerAction(jump: CommandJump): "create" | "create-ai" | null {
+  if (jump.kind === "create" || jump.kind === "create-ai") return jump.kind;
+  return null;
 }

@@ -162,4 +162,53 @@ export class IssueStore {
     }
     return { ok: true };
   }
+
+  create(input: {
+    summary: string;
+    description?: string;
+    labels?: string[];
+    status?: string;
+    parent?: string;
+    type?: string;
+    project?: string;
+  }): { ok: true; key: string } | { ok: false; error: string } {
+    if (!input.summary.trim()) return { ok: false, error: "summary is required" };
+    const prefix = (input.project ?? this.issues[0]?.key.split("-")[0] ?? "DEMO").toUpperCase();
+    let max = 0;
+    for (const issue of this.issues) {
+      const [project, n] = issue.key.split("-");
+      if (project.toUpperCase() === prefix) max = Math.max(max, Number(n) || 0);
+    }
+    const key = `${prefix}-${max + 1}`;
+    const typeName = input.type?.trim() || "Story";
+    const issue: StoredIssue = {
+      key,
+      fields: {
+        summary: input.summary.trim(),
+        description: input.description ?? "",
+        labels: input.labels ?? [],
+        status: { name: input.status?.trim() || "To Do" },
+        issuetype: { name: typeName },
+        issueType: { name: typeName },
+        created: new Date().toISOString(),
+      },
+    };
+    if (input.parent && validIssueKey(input.parent)) {
+      issue.fields.parent = { key: input.parent };
+    }
+    this.issues.push(issue);
+    return { ok: true, key };
+  }
+
+  edit(
+    key: string,
+    input: { summary?: string; description?: string; labels?: string[] },
+  ): { ok: true } | { ok: false; error: string } {
+    const issue = this.get(key);
+    if (!issue) return { ok: false, error: `Issue ${key} not found` };
+    if (input.summary !== undefined) issue.fields.summary = input.summary;
+    if (input.description !== undefined) issue.fields.description = input.description;
+    if (input.labels !== undefined) issue.fields.labels = input.labels;
+    return { ok: true };
+  }
 }

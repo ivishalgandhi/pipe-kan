@@ -7,7 +7,7 @@ import { afterEach, expect, test } from "vitest";
 import { createApp } from "./app.ts";
 import { handleAppApi } from "./app-api.ts";
 import type { RawIssue } from "./board.ts";
-import type { Cli } from "./cli.ts";
+import { createStoreCli, type Cli } from "./cli.ts";
 import { IssueStore } from "./store.ts";
 
 const fixture = JSON.parse(
@@ -192,6 +192,8 @@ test("Open keeps the URL and an error when view fails", async () => {
     listEpic: async () => "[]",
     listChildren: async () => "[]",
     move: async () => ({ ok: true }),
+    create: async () => ({ ok: false, error: "not implemented" }),
+    edit: async () => ({ ok: false, error: "not implemented" }),
     open: async (key) => `/browse/${key}`,
     view: async () => {
       throw new Error("jira issue view failed");
@@ -270,6 +272,12 @@ test("Board.epics come from the Epic list, not only Scope", async () => {
     },
     async move() {
       return { ok: true };
+    },
+    async create() {
+      return { ok: false, error: "not implemented" };
+    },
+    async edit() {
+      return { ok: false, error: "not implemented" };
     },
     async open() {
       return "/browse/X";
@@ -394,6 +402,12 @@ test("Refresh fills the children cache from one batched list", async () => {
     async move() {
       return { ok: true };
     },
+    async create() {
+      return { ok: false, error: "not implemented" };
+    },
+    async edit() {
+      return { ok: false, error: "not implemented" };
+    },
     async open() {
       return "/browse/X";
     },
@@ -446,6 +460,12 @@ test("a failed children call keeps the Board and falls counts back", async () =>
     },
     async move() {
       return { ok: true };
+    },
+    async create() {
+      return { ok: false, error: "not implemented" };
+    },
+    async edit() {
+      return { ok: false, error: "not implemented" };
     },
     async open() {
       return "/browse/X";
@@ -514,6 +534,12 @@ test("Refresh keeps the last Board until children land", async () => {
     async move() {
       return { ok: true };
     },
+    async create() {
+      return { ok: false, error: "not implemented" };
+    },
+    async edit() {
+      return { ok: false, error: "not implemented" };
+    },
     async open() {
       return "/browse/X";
     },
@@ -572,6 +598,12 @@ test("a failed children refresh keeps previously cached children", async () => {
     async move() {
       return { ok: true };
     },
+    async create() {
+      return { ok: false, error: "not implemented" };
+    },
+    async edit() {
+      return { ok: false, error: "not implemented" };
+    },
     async open() {
       return "/browse/X";
     },
@@ -623,6 +655,12 @@ test("Refresh of 220 Epics does not list each Epic when Epic Link is missing", a
     },
     async move() {
       return { ok: true };
+    },
+    async create() {
+      return { ok: false, error: "not implemented" };
+    },
+    async edit() {
+      return { ok: false, error: "not implemented" };
     },
     async open() {
       return "/browse/X";
@@ -679,6 +717,12 @@ test("a failed Issues list keeps the last Board", async () => {
     async move() {
       return { ok: true };
     },
+    async create() {
+      return { ok: false, error: "not implemented" };
+    },
+    async edit() {
+      return { ok: false, error: "not implemented" };
+    },
     async open() {
       return "/browse/X";
     },
@@ -733,6 +777,12 @@ test("select falls back to listEpic when cached children lost their Epic key", a
     async move() {
       return { ok: true };
     },
+    async create() {
+      return { ok: false, error: "not implemented" };
+    },
+    async edit() {
+      return { ok: false, error: "not implemented" };
+    },
     async open() {
       return "/browse/X";
     },
@@ -785,6 +835,12 @@ test("select returns empty columns for an epic not in the current list", async (
     async move() {
       return { ok: true };
     },
+    async create() {
+      return { ok: false, error: "not implemented" };
+    },
+    async edit() {
+      return { ok: false, error: "not implemented" };
+    },
     async open() {
       return "/browse/X";
     },
@@ -829,6 +885,12 @@ test("Refresh without epics still shows story columns", async () => {
     },
     async move() {
       return { ok: true };
+    },
+    async create() {
+      return { ok: false, error: "not implemented" };
+    },
+    async edit() {
+      return { ok: false, error: "not implemented" };
     },
     async open() {
       return "/browse/X";
@@ -881,6 +943,12 @@ test("select lists Epic children when the cache has none for that key", async ()
     },
     async move() {
       return { ok: true };
+    },
+    async create() {
+      return { ok: false, error: "not implemented" };
+    },
+    async edit() {
+      return { ok: false, error: "not implemented" };
     },
     async open() {
       return "/browse/X";
@@ -941,6 +1009,12 @@ test("select stamps cached children without a second list", async () => {
     },
     async move() {
       return { ok: true };
+    },
+    async create() {
+      return { ok: false, error: "not implemented" };
+    },
+    async edit() {
+      return { ok: false, error: "not implemented" };
     },
     async open() {
       return "/browse/X";
@@ -1056,6 +1130,12 @@ test("same-status Epic Move noops when the Epic is only listed", async () => {
       moved += 1;
       return { ok: true };
     },
+    async create() {
+      return { ok: false, error: "not implemented" };
+    },
+    async edit() {
+      return { ok: false, error: "not implemented" };
+    },
     async open() {
       return "/browse/X";
     },
@@ -1073,4 +1153,165 @@ test("same-status Epic Move noops when the Epic is only listed", async () => {
   expect(body.ok).toBe(true);
   expect(body.noop).toBe(true);
   expect(moved).toBe(0);
+});
+
+test("successful create Refresh-es and returns the new key", async () => {
+  const { base } = await listen();
+  const res = await fetch(`${base}/api/issue/create`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      summary: "New card",
+      labels: ["kanban"],
+      status: "To Do",
+    }),
+  });
+  const body = await res.json();
+  expect(res.status).toBe(200);
+  expect(body.ok).toBe(true);
+  expect(body.key).toBe("DEMO-9");
+  expect(
+    body.board.columns
+      .find((c: { title: string }) => c.title === "To Do")
+      .cards.map((card: { key: string }) => card.key),
+  ).toContain("DEMO-9");
+});
+
+test("empty summary create is a 409", async () => {
+  const { base } = await listen();
+  const res = await fetch(`${base}/api/issue/create`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ summary: "" }),
+  });
+  const body = await res.json();
+  expect(res.status).toBe(409);
+  expect(body.ok).toBe(false);
+  expect(body.error).toContain("summary is required");
+});
+
+test("edit updates summary description and labels", async () => {
+  const { base } = await listen();
+  const res = await fetch(`${base}/api/issue/edit`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      key: "DEMO-2",
+      summary: "Edited",
+      description: "New body",
+      labels: ["parser"],
+    }),
+  });
+  const body = await res.json();
+  expect(res.status).toBe(200);
+  expect(body.ok).toBe(true);
+  const open = await (
+    await fetch(`${base}/api/open`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key: "DEMO-2" }),
+    })
+  ).json();
+  expect(open.fields.find((field: { label: string }) => field.label === "Summary")?.value).toBe(
+    "Edited",
+  );
+  expect(open.fields.find((field: { label: string }) => field.label === "Description")?.value).toBe(
+    "New body",
+  );
+  expect(open.fields.find((field: { label: string }) => field.label === "Labels")?.pills).toEqual([
+    "parser",
+  ]);
+});
+
+test("edit missing key is a 409", async () => {
+  const { base } = await listen();
+  const res = await fetch(`${base}/api/issue/edit`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ key: "DEMO-404", summary: "Nope" }),
+  });
+  const body = await res.json();
+  expect(res.status).toBe(409);
+  expect(body.ok).toBe(false);
+  expect(body.error).toContain("not found");
+});
+
+function keysOf(board: { columns: { cards: { key: string }[] }[] }) {
+  return board.columns.flatMap((column) => column.cards.map((card) => card.key));
+}
+
+test("create with parent and status lands on the Board under that Epic", async () => {
+  const { base } = await listen();
+  const res = await fetch(`${base}/api/issue/create`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      summary: "Child of epic",
+      description: "Body",
+      labels: ["kanban"],
+      status: "To Do",
+      parent: "DEMO-1",
+    }),
+  });
+  const body = await res.json();
+  expect(res.status).toBe(200);
+  expect(body.ok).toBe(true);
+  expect(body.key).toBe("DEMO-9");
+  const created = body.board.columns
+    .find((c: { title: string }) => c.title === "To Do")
+    .cards.find((card: { key: string }) => card.key === "DEMO-9");
+  expect(created.epic).toBe("DEMO-1");
+});
+
+test("failed create is a 409 and leaves the Board unchanged", async () => {
+  const store = IssueStore.fromRaw(fixture);
+  const cli: Cli = {
+    ...createStoreCli(store),
+    async create() {
+      return { ok: false, error: "jira refused" };
+    },
+  };
+  const { base } = await listen(store, cli);
+  const before = keysOf(await (await fetch(`${base}/api/board`)).json());
+  const res = await fetch(`${base}/api/issue/create`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ summary: "Nope", labels: ["kanban"] }),
+  });
+  const body = await res.json();
+  expect(res.status).toBe(409);
+  expect(body.ok).toBe(false);
+  expect(body.error).toContain("jira refused");
+  expect(keysOf(body.board)).toEqual(before);
+  expect(keysOf(await (await fetch(`${base}/api/board`)).json())).toEqual(before);
+});
+
+test("failed edit is a 409 and leaves the Issue unchanged", async () => {
+  const store = IssueStore.fromRaw(fixture);
+  const cli: Cli = {
+    ...createStoreCli(store),
+    async edit() {
+      return { ok: false, error: "jira edit refused" };
+    },
+  };
+  const { base } = await listen(store, cli);
+  const res = await fetch(`${base}/api/issue/edit`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ key: "DEMO-2", summary: "Edited" }),
+  });
+  const body = await res.json();
+  expect(res.status).toBe(409);
+  expect(body.ok).toBe(false);
+  expect(body.error).toContain("jira edit refused");
+  const open = await (
+    await fetch(`${base}/api/open`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key: "DEMO-2" }),
+    })
+  ).json();
+  expect(open.fields.find((field: { label: string }) => field.label === "Summary")?.value).toBe(
+    "Parse jira-cli --raw JSON",
+  );
 });

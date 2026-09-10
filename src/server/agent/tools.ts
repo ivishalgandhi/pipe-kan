@@ -77,6 +77,30 @@ const TOOLS: ToolSchema[] = [
     parameters: { filter: { type: "object", description: "BoardFilter object" } },
     mutates: true,
   },
+  {
+    name: "create_issue",
+    description: "Create a Jira issue via jira-cli. Requires user approval because it changes Jira.",
+    parameters: {
+      summary: { type: "string", description: "Issue summary / title" },
+      description: { type: "string", description: "Issue description" },
+      labels: { type: "string", description: "Comma-separated labels" },
+      status: { type: "string", description: "Column status name" },
+      parent: { type: "string", description: "Parent Epic key" },
+      type: { type: "string", description: "Issue type, default Story" },
+    },
+    mutates: true,
+  },
+  {
+    name: "edit_issue",
+    description: "Edit an issue summary, description, and labels via jira-cli. Requires user approval.",
+    parameters: {
+      key: { type: "string", description: "Issue key" },
+      summary: { type: "string", description: "New summary" },
+      description: { type: "string", description: "New description" },
+      labels: { type: "string", description: "Comma-separated replacement labels" },
+    },
+    mutates: true,
+  },
 ];
 
 const skills = createSkillRegistry();
@@ -140,6 +164,40 @@ const EXECUTORS: Record<string, ToolExecutor> = {
     const filter = args.filter;
     if (!filter || typeof filter !== "object") return { ok: false, error: "Missing filter object" };
     return { ok: true, value: { __ui_action: "set_filter", filter } };
+  },
+  async create_issue(args, app) {
+    const summary = String(args.summary ?? "").trim();
+    if (!summary) return { ok: false, error: "Missing summary" };
+    const labels = String(args.labels ?? "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const result = await app.create({
+      summary,
+      ...(args.description !== undefined ? { description: String(args.description) } : {}),
+      labels,
+      ...(args.status ? { status: String(args.status) } : {}),
+      ...(args.parent ? { parent: String(args.parent) } : {}),
+      ...(args.type ? { type: String(args.type) } : {}),
+    });
+    if (result.error) return { ok: false, error: result.error };
+    return { ok: true, value: { key: result.key, __ui_action: "refresh_board" } };
+  },
+  async edit_issue(args, app) {
+    const key = String(args.key ?? "");
+    if (!key) return { ok: false, error: "Missing key" };
+    const input: { summary?: string; description?: string; labels?: string[] } = {};
+    if (args.summary !== undefined) input.summary = String(args.summary);
+    if (args.description !== undefined) input.description = String(args.description);
+    if (args.labels !== undefined) {
+      input.labels = String(args.labels)
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+    const result = await app.edit(key, input);
+    if (result.error) return { ok: false, error: result.error };
+    return { ok: true, value: { key, __ui_action: "refresh_board" } };
   },
 };
 

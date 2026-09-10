@@ -123,3 +123,65 @@ test("Fake Jira view returns the stored Issue", async () => {
   expect(body.fields.summary).toBe("Parse jira-cli --raw JSON");
   expect(body.fields.description).toBe("Turn the payload into Columns.");
 });
+
+test("Fake Jira creates an Issue", async () => {
+  const store = IssueStore.fromRaw(fixture);
+  const base = await listen(store);
+  const res = await fetch(`${base}/rest/api/2/issue`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      fields: {
+        project: { key: "DEMO" },
+        summary: "New card",
+        description: "Body",
+        labels: ["kanban"],
+        issuetype: { name: "Story" },
+      },
+    }),
+  });
+  expect(res.status).toBe(201);
+  const body = await res.json();
+  expect(body.key).toBe("DEMO-9");
+  expect(store.get("DEMO-9")?.fields.summary).toBe("New card");
+});
+
+test("Fake Jira edits an Issue", async () => {
+  const store = IssueStore.fromRaw(fixture);
+  const base = await listen(store);
+  const res = await fetch(`${base}/rest/api/2/issue/DEMO-2`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      fields: { summary: "Edited", description: "New body", labels: ["parser"] },
+    }),
+  });
+  expect(res.status).toBe(204);
+  expect(store.get("DEMO-2")?.fields.summary).toBe("Edited");
+  expect(store.get("DEMO-2")?.fields.description).toBe("New body");
+  expect(store.get("DEMO-2")?.fields.labels).toEqual(["parser"]);
+});
+
+test("Fake Jira create rejects an empty summary", async () => {
+  const store = IssueStore.fromRaw(fixture);
+  const base = await listen(store);
+  const res = await fetch(`${base}/rest/api/2/issue`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ fields: { summary: "  " } }),
+  });
+  expect(res.status).toBe(400);
+  expect(store.get("DEMO-9")).toBeUndefined();
+});
+
+test("Fake Jira edit missing key is 404", async () => {
+  const store = IssueStore.fromRaw(fixture);
+  const base = await listen(store);
+  const res = await fetch(`${base}/rest/api/2/issue/DEMO-404`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ fields: { summary: "Nope" } }),
+  });
+  expect(res.status).toBe(404);
+  expect(store.get("DEMO-2")?.fields.summary).toBe("Parse jira-cli --raw JSON");
+});

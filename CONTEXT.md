@@ -80,7 +80,7 @@ Re-running jira-cli from the UI to replace the Issues on the current Board.
 _Avoid_: sync, reload (when meaning that action)
 
 **Move**:
-Changing an Issue's status by running `jira issue move`. A Card is Moved by dropping it on a Column, including an Epic Card on All epics. On All stories an Epic is Moved from its row menu. The only Write-back in the first release. Dropping a Card on the same Column, or picking the Epic's current status, does nothing.
+Changing an Issue's status by running `jira issue move`. A Card is Moved by dropping it on a Column, including an Epic Card on All epics. On All stories an Epic is Moved from its row menu. Dropping a Card on the same Column, or picking the Epic's current status, does nothing.
 _Avoid_: transition, drag (the gesture), update, file (putting a Favourite in a Folder)
 
 **Open**:
@@ -88,7 +88,7 @@ Showing an Issue's details and Jira URL in the side pane. A Card Opens on click,
 _Avoid_: view, browse (when meaning this)
 
 **Write-back**:
-Changing Jira from the Board, only by running jira-cli. Never a direct Jira API call from this app.
+Changing Jira from the Board, only by running jira-cli (`jira issue move`, `jira issue create`, `jira issue edit`). Never a direct Jira API call from this app.
 _Avoid_: sync, persist, save (when meaning a Jira mutation)
 
 **Agent**:
@@ -112,7 +112,7 @@ The set of Issue keys, board state, and selected Skill the user adds to the curr
 _Avoid_: prompt, input, attachments
 
 **Agent Action**:
-A mutation the Agent proposes that requires user approval before pipe-kan executes it: Move a Card, Refresh the Board, edit a repo file, or run a terminal command.
+A mutation the Agent proposes that requires user approval before pipe-kan executes it: Move a Card, create or edit an Issue, Refresh the Board, edit a repo file, or run a terminal command.
 _Avoid_: tool call, command, automation
 
 **Fixture**:

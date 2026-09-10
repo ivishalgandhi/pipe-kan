@@ -6,7 +6,7 @@ import { expect, test, vi } from "vitest";
 
 import type { RawIssue } from "./board.ts";
 import { createBoardApp, refreshFromJira } from "./boot.ts";
-import { createJiraCli, resolveJiraBin } from "./cli.ts";
+import { createJiraCli, createdKeyFromOutput, resolveJiraBin } from "./cli.ts";
 
 const fixture = JSON.parse(
   readFileSync(
@@ -43,6 +43,22 @@ if (cmd === "issue" && sub === "list") {
 if (cmd === "issue" && sub === "move") {
   if (key === "DEMO-4" && status === "Done") {
     console.error("✗ invalid transition state \\"Done\\"");
+    process.exit(1);
+  }
+  process.exit(0);
+}
+if (cmd === "issue" && sub === "create") {
+  const summary = process.argv[process.argv.indexOf("-s") + 1];
+  if (summary === "FAIL-CREATE") {
+    console.error("create refused");
+    process.exit(1);
+  }
+  console.log("https://example.test/browse/DEMO-9");
+  process.exit(0);
+}
+if (cmd === "issue" && sub === "edit") {
+  if (key === "MISSING-1") {
+    console.error("Issue MISSING-1 not found");
     process.exit(1);
   }
   process.exit(0);
@@ -572,6 +588,72 @@ test("createJiraCli move and open shell jira-cli", async () => {
     ["issue", "move", "DEMO-4", "Done"],
     ["open", "DEMO-1", "--no-browser"],
     ["issue", "view", "DEMO-1", "--raw"],
+  ]);
+});
+
+test("createdKeyFromOutput takes the last valid key", () => {
+  expect(createdKeyFromOutput("https://example.test/browse/DEMO-9")).toBe("DEMO-9");
+  expect(createdKeyFromOutput("no key here")).toBeUndefined();
+});
+
+test("createJiraCli create shells jira-cli with --no-input and moves when status is set", async () => {
+  const { bin, calls } = fakeJira();
+  const cli = createJiraCli({ bin });
+  expect(
+    await cli.create({
+      summary: "X",
+      description: "Body",
+      labels: ["kanban"],
+      parent: "DEMO-1",
+      status: "Done",
+    }),
+  ).toEqual({ ok: true, key: "DEMO-9" });
+  expect(calls().map((call) => call.args)).toEqual([
+    [
+      "issue",
+      "create",
+      "--no-input",
+      "-y",
+      "-t",
+      "Story",
+      "-s",
+      "X",
+      "-b",
+      "Body",
+      "-l",
+      "kanban",
+      "-P",
+      "DEMO-1",
+    ],
+    ["issue", "move", "DEMO-9", "Done"],
+  ]);
+});
+
+test("createJiraCli create returns error without moving", async () => {
+  const { bin, calls } = fakeJira();
+  const cli = createJiraCli({ bin });
+  expect(await cli.create({ summary: "FAIL-CREATE", status: "Done" })).toEqual({
+    ok: false,
+    error: "create refused",
+  });
+  expect(calls().map((call) => call.args)).toEqual([
+    ["issue", "create", "--no-input", "-y", "-t", "Story", "-s", "FAIL-CREATE"],
+  ]);
+});
+
+test("createJiraCli edit shells jira-cli", async () => {
+  const { bin, calls } = fakeJira();
+  const cli = createJiraCli({ bin });
+  expect(await cli.edit("DEMO-2", { summary: "Edited", description: "New body", labels: ["parser"] })).toEqual({
+    ok: true,
+  });
+  expect(await cli.edit("MISSING-1", { summary: "Nope" })).toEqual({
+    ok: false,
+    error: "Issue MISSING-1 not found",
+  });
+  expect(calls().map((call) => call.args)).toEqual([
+    ["issue", "edit", "DEMO-2", "--no-input", "-y", "-s", "Edited", "-b", "New body", "-l", "parser"],
+    ["issue", "edit", "MISSING-1", "--no-input", "-y", "-s", "Nope"],
   ]);
 });
 

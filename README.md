@@ -12,12 +12,14 @@ npx pipe-kan
 
 Opens `http://127.0.0.1:5173`. No clone, no `bun install`. `bunx` / `npx` installs the published package into a cache and runs it.
 
-First paint is the Fixture. If `jira` is on PATH, the process then Refresh-es from your existing `jira init`. If not, Refresh and Move use the in-process store.
+First paint is the Fixture. If `jira` is on PATH, the process then Refresh-es from your existing `jira init`. If not, Refresh, Move, Create, and Edit use the in-process store.
 
 The published CLI is on npm. From a clone: `bun run build && bun dist/pipe-kan.js`.
 
 - Left: All stories and All epics. Center: Cards (one Column per status in the payload). Right: Open URL; remote Jira is a link, not an iframe.
 - Drop a Card on a Column to Move (`jira issue move`).
+- Column `+` or Cmd+K **Create issue** opens a composer. **Create with AI** seeds the Agent to draft and call `create_issue` after approval.
+- Double-click a Card or Open-pane **Edit** to change summary, description, and labels (`jira issue edit`).
 - Drag a Column to change status order. The order is stored locally and kept after Refresh.
 - Same-Column drop does not write back to Jira.
 - Collapse the left pane to hide Epics; the Board header expands it again.
@@ -64,7 +66,7 @@ Pipe is the first Board. Refresh and Move still go through `jira` when it is on 
 
 ## Limits
 
-- Write-back is `jira issue move` only. Intra-column rank is not persisted.
+- Write-back is `jira issue move`, `jira issue create`, and `jira issue edit`. Intra-column rank is not persisted.
 - Never a direct Jira REST Write-back.
 - Work Jira needs `jira` on PATH and a token. This repo does not ship one.
 
