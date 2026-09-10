@@ -154,3 +154,19 @@ test("edit_issue executes app.edit", async () => {
   if (!result.ok) return;
   expect(result.value).toEqual({ key: "DEMO-1", __ui_action: "refresh_board" });
 });
+
+test("create_issue parses from agent JSON and stays mutating", () => {
+  const registry = createToolRegistry();
+  const call = registry.parse(
+    '```json\n{"tool":"create_issue","args":{"summary":"New card","parent":"DEMO-1"}}\n```',
+  );
+  expect(call?.name).toBe("create_issue");
+  expect(call?.args).toEqual({ summary: "New card", parent: "DEMO-1" });
+  expect(registry.isMutating("create_issue")).toBe(true);
+});
+
+test("edit_issue requires a key", async () => {
+  const registry = createToolRegistry();
+  const result = await registry.execute("edit_issue", { summary: "Edited" }, mockApp);
+  expect(result.ok).toBe(false);
+});

@@ -24,10 +24,14 @@ import { cardAge, epicsToColumns, targetEndDistance, type Board, type Card, type
 import { type CommandJump } from "./command.ts";
 import { parseFlags } from "./flags.ts";
 import {
+  buildCreatePayload,
+  buildEditPayload,
+  canSubmitComposer,
   createAiSeed,
-  draftFromOpen,
-  emptyCreateDraft,
   mergeOpenIntoDraft,
+  openCreateAiFromCommand,
+  openCreateDraft,
+  openEditFromCard,
   type IssueComposerDraft,
 } from "./issue-composer.ts";
 import { uniqueLabels } from "./label-suggest.ts";
@@ -1361,16 +1365,18 @@ export function App() {
     void openEdit(key);
   }
 
+  function composerContext(status?: string) {
+    return {
+      ...(status ? { status } : {}),
+      selectedEpic,
+      boardKind,
+    };
+  }
+
   function openCreate(status?: string) {
     setComposerError("");
     setComposerBusy(false);
-    setComposer(
-      emptyCreateDraft({
-        ...(status ? { status } : {}),
-        ...(selectedEpic && !epicBoard ? { epic: selectedEpic } : {}),
-        ...(epicBoard ? { type: "Epic" } : {}),
-      }),
-    );
+    setComposer(openCreateDraft(composerContext(status)));
   }
 
   function seedCreateAi(draft?: IssueComposerDraft | null) {
@@ -1379,15 +1385,12 @@ export function App() {
   }
 
   function openCreateAi(status?: string) {
-    const next = emptyCreateDraft({
-      ...(status ? { status } : {}),
-      ...(selectedEpic && !epicBoard ? { epic: selectedEpic } : {}),
-      ...(epicBoard ? { type: "Epic" } : {}),
-    });
+    const { draft, seed } = openCreateAiFromCommand(composerContext(status));
     setComposerError("");
     setComposerBusy(false);
-    setComposer(next);
-    seedCreateAi(next);
+    setComposer(draft);
+    setAgentSeed(seed);
+    setAgentOpen(true);
   }
 
   async function openEdit(key: string) {
@@ -1396,26 +1399,19 @@ export function App() {
       commandCards.find((item) => item.key === key);
     const epic = epics.find((item) => item.key === key);
     const status = findCardSource(key) || epic?.status;
-    const extras = {
-      ...(status ? { status } : {}),
-      ...(card?.epic ? { epic: card.epic } : {}),
-      ...(card?.type || epic ? { type: card?.type ?? "Epic" } : {}),
-    };
     setComposerError("");
     setComposerBusy(false);
-    if (openKey === key && openFields.length) {
-      setComposer(draftFromOpen(key, openFields, extras));
-    } else {
-      setComposer({
-        mode: "edit",
+    setComposer(
+      openEditFromCard({
         key,
-        title: card?.summary ?? epic?.summary ?? "",
-        description: "",
+        summary: card?.summary ?? epic?.summary ?? "",
         labels: card?.labels ?? epic?.labels ?? [],
-        dismissed: [],
-        ...extras,
-      });
-    }
+        ...(status ? { status } : {}),
+        ...(card?.epic ? { epic: card.epic } : {}),
+        ...(card?.type || epic ? { type: card?.type ?? "Epic" } : {}),
+        ...(openKey === key && openFields.length ? { fields: openFields } : {}),
+      }),
+    );
     try {
       const data = await api<{ url: string; fields: OpenField[]; error?: string }>("/api/open", {
         method: "POST",
@@ -1433,11 +1429,13 @@ export function App() {
   }
 
   async function submitComposer() {
-    if (!composer || composerBusy || !composer.title.trim()) return;
+    if (!composer || !canSubmitComposer(composer, composerBusy)) return;
     setComposerBusy(true);
     setComposerError("");
     try {
       if (composer.mode === "create") {
+        const payload = buildCreatePayload(composer);
+        if (!payload) return;
         const data = await api<{
           ok: boolean;
           key?: string;
@@ -1445,14 +1443,7 @@ export function App() {
           board?: Board;
         }>("/api/issue/create", {
           method: "POST",
-          body: JSON.stringify({
-            summary: composer.title.trim(),
-            description: composer.description,
-            labels: composer.labels,
-            ...(composer.status ? { status: composer.status } : {}),
-            ...(composer.epic ? { parent: composer.epic } : {}),
-            ...(composer.type ? { type: composer.type } : {}),
-          }),
+          body: JSON.stringify(payload),
         });
         if (!data.ok) {
           const message = data.error ?? "Create failed";
@@ -1465,15 +1456,11 @@ export function App() {
         setComposer(null);
         return;
       }
-      if (!composer.key) return;
+      const payload = buildEditPayload(composer);
+      if (!payload) return;
       const data = await api<{ ok: boolean; error?: string; board?: Board }>("/api/issue/edit", {
         method: "POST",
-        body: JSON.stringify({
-          key: composer.key,
-          summary: composer.title.trim(),
-          description: composer.description,
-          labels: composer.labels,
-        }),
+        body: JSON.stringify(payload),
       });
       if (!data.ok) {
         const message = data.error ?? "Edit failed";
@@ -1707,7 +1694,7 @@ export function App() {
       setOpenFields([]);
       setOpenError("");
       void selectEpic(jump.key);
-    } else {
+    } else if (jump.kind === "card") {
       if (jump.epic) void selectEpic(jump.epic);
       else openStories();
       void open(jump.key);

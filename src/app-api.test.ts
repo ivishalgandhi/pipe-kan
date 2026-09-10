@@ -7,7 +7,7 @@ import { afterEach, expect, test } from "vitest";
 import { createApp } from "./app.ts";
 import { handleAppApi } from "./app-api.ts";
 import type { RawIssue } from "./board.ts";
-import type { Cli } from "./cli.ts";
+import { createStoreCli, type Cli } from "./cli.ts";
 import { IssueStore } from "./store.ts";
 
 const fixture = JSON.parse(
@@ -1234,4 +1234,84 @@ test("edit missing key is a 409", async () => {
   expect(res.status).toBe(409);
   expect(body.ok).toBe(false);
   expect(body.error).toContain("not found");
+});
+
+function keysOf(board: { columns: { cards: { key: string }[] }[] }) {
+  return board.columns.flatMap((column) => column.cards.map((card) => card.key));
+}
+
+test("create with parent and status lands on the Board under that Epic", async () => {
+  const { base } = await listen();
+  const res = await fetch(`${base}/api/issue/create`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      summary: "Child of epic",
+      description: "Body",
+      labels: ["kanban"],
+      status: "To Do",
+      parent: "DEMO-1",
+    }),
+  });
+  const body = await res.json();
+  expect(res.status).toBe(200);
+  expect(body.ok).toBe(true);
+  expect(body.key).toBe("DEMO-9");
+  const created = body.board.columns
+    .find((c: { title: string }) => c.title === "To Do")
+    .cards.find((card: { key: string }) => card.key === "DEMO-9");
+  expect(created.epic).toBe("DEMO-1");
+});
+
+test("failed create is a 409 and leaves the Board unchanged", async () => {
+  const store = IssueStore.fromRaw(fixture);
+  const cli: Cli = {
+    ...createStoreCli(store),
+    async create() {
+      return { ok: false, error: "jira refused" };
+    },
+  };
+  const { base } = await listen(store, cli);
+  const before = keysOf(await (await fetch(`${base}/api/board`)).json());
+  const res = await fetch(`${base}/api/issue/create`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ summary: "Nope", labels: ["kanban"] }),
+  });
+  const body = await res.json();
+  expect(res.status).toBe(409);
+  expect(body.ok).toBe(false);
+  expect(body.error).toContain("jira refused");
+  expect(keysOf(body.board)).toEqual(before);
+  expect(keysOf(await (await fetch(`${base}/api/board`)).json())).toEqual(before);
+});
+
+test("failed edit is a 409 and leaves the Issue unchanged", async () => {
+  const store = IssueStore.fromRaw(fixture);
+  const cli: Cli = {
+    ...createStoreCli(store),
+    async edit() {
+      return { ok: false, error: "jira edit refused" };
+    },
+  };
+  const { base } = await listen(store, cli);
+  const res = await fetch(`${base}/api/issue/edit`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ key: "DEMO-2", summary: "Edited" }),
+  });
+  const body = await res.json();
+  expect(res.status).toBe(409);
+  expect(body.ok).toBe(false);
+  expect(body.error).toContain("jira edit refused");
+  const open = await (
+    await fetch(`${base}/api/open`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key: "DEMO-2" }),
+    })
+  ).json();
+  expect(open.fields.find((field: { label: string }) => field.label === "Summary")?.value).toBe(
+    "Parse jira-cli --raw JSON",
+  );
 });

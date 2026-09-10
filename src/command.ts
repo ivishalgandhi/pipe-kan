@@ -83,3 +83,8 @@ export function commandCatalog(input: CommandCatalogInput): CommandGroup[] {
 export function commandPick(row: CommandRow): CommandJump {
   return row.jump;
 }
+
+export function commandComposerAction(jump: CommandJump): "create" | "create-ai" | null {
+  if (jump.kind === "create" || jump.kind === "create-ai") return jump.kind;
+  return null;
+}

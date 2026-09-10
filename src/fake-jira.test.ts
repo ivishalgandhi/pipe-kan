@@ -161,3 +161,27 @@ test("Fake Jira edits an Issue", async () => {
   expect(store.get("DEMO-2")?.fields.description).toBe("New body");
   expect(store.get("DEMO-2")?.fields.labels).toEqual(["parser"]);
 });
+
+test("Fake Jira create rejects an empty summary", async () => {
+  const store = IssueStore.fromRaw(fixture);
+  const base = await listen(store);
+  const res = await fetch(`${base}/rest/api/2/issue`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ fields: { summary: "  " } }),
+  });
+  expect(res.status).toBe(400);
+  expect(store.get("DEMO-9")).toBeUndefined();
+});
+
+test("Fake Jira edit missing key is 404", async () => {
+  const store = IssueStore.fromRaw(fixture);
+  const base = await listen(store);
+  const res = await fetch(`${base}/rest/api/2/issue/DEMO-404`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ fields: { summary: "Nope" } }),
+  });
+  expect(res.status).toBe(404);
+  expect(store.get("DEMO-2")?.fields.summary).toBe("Parse jira-cli --raw JSON");
+});

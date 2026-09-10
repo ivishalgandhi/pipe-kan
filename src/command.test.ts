@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { commandCatalog, commandPick } from "./command.ts";
+import { commandCatalog, commandComposerAction, commandPick } from "./command.ts";
 
 test("empty query lists Actions only and omits Apply when there are no Presets", () => {
   expect(commandCatalog({ presets: [], query: "" })).toEqual([
@@ -319,4 +319,10 @@ test("a miss is an empty list with no Issue rows", () => {
       favouriteKeys: ["DEMO-1"],
     }),
   ).toEqual([]);
+});
+
+test("commandComposerAction maps Create issue and Create with AI", () => {
+  expect(commandComposerAction({ kind: "create" })).toBe("create");
+  expect(commandComposerAction({ kind: "create-ai" })).toBe("create-ai");
+  expect(commandComposerAction({ kind: "agent" })).toBeNull();
 });

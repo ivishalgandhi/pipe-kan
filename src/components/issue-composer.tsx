@@ -3,6 +3,8 @@ import { SparklesIcon, XIcon } from "lucide-react";
 
 import {
   acceptSuggestion,
+  canSubmitComposer,
+  composerHotkey,
   composerSuggestions,
   dismissSuggestion,
   removeLabel,
@@ -32,15 +34,16 @@ export function IssueComposer({
   onDraftWithAi?: () => void;
 }) {
   const suggestions = composerSuggestions(draft, catalog);
-  const canSubmit = Boolean(draft.title.trim()) && !busy;
+  const canSubmit = canSubmitComposer(draft, busy);
 
   function onKeyDown(event: KeyboardEvent<HTMLElement>) {
-    if (event.key === "Escape") {
+    const action = composerHotkey(event, draft, busy);
+    if (action === "close") {
       event.preventDefault();
       onClose();
       return;
     }
-    if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && canSubmit) {
+    if (action === "submit") {
       event.preventDefault();
       onSubmit();
     }

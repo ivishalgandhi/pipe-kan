@@ -57,3 +57,13 @@ test("edit fails for a missing key", () => {
     error: "Issue DEMO-404 not found",
   });
 });
+
+test("create stores parent Epic and does not write when summary is empty", () => {
+  const store = IssueStore.fromRaw(fixture);
+  const keys = store.all().map((issue) => issue.key);
+  expect(store.create({ summary: "  " }).ok).toBe(false);
+  expect(store.all().map((issue) => issue.key)).toEqual(keys);
+  const created = store.create({ summary: "Child", parent: "DEMO-1", status: "To Do" });
+  expect(created).toEqual({ ok: true, key: "DEMO-9" });
+  expect(store.get("DEMO-9")?.fields.parent).toEqual({ key: "DEMO-1" });
+});

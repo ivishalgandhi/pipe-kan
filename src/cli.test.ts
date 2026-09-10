@@ -48,6 +48,11 @@ if (cmd === "issue" && sub === "move") {
   process.exit(0);
 }
 if (cmd === "issue" && sub === "create") {
+  const summary = process.argv[process.argv.indexOf("-s") + 1];
+  if (summary === "FAIL-CREATE") {
+    console.error("create refused");
+    process.exit(1);
+  }
   console.log("https://example.test/browse/DEMO-9");
   process.exit(0);
 }
@@ -621,6 +626,18 @@ test("createJiraCli create shells jira-cli with --no-input and moves when status
       "DEMO-1",
     ],
     ["issue", "move", "DEMO-9", "Done"],
+  ]);
+});
+
+test("createJiraCli create returns error without moving", async () => {
+  const { bin, calls } = fakeJira();
+  const cli = createJiraCli({ bin });
+  expect(await cli.create({ summary: "FAIL-CREATE", status: "Done" })).toEqual({
+    ok: false,
+    error: "create refused",
+  });
+  expect(calls().map((call) => call.args)).toEqual([
+    ["issue", "create", "--no-input", "-y", "-t", "Story", "-s", "FAIL-CREATE"],
   ]);
 });
 
