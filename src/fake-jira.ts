@@ -102,7 +102,77 @@ export function handleFakeJira(
     }
   }
 
+  if (/^\/rest\/api\/[23]\/issue$/.test(path) && method === "POST") {
+    void readBody(req).then((text) => {
+      const body = text ? JSON.parse(text) : {};
+      const fields = (body.fields ?? {}) as Record<string, unknown>;
+      const issuetype = fields.issuetype ?? fields.issueType;
+      const typeName =
+        issuetype && typeof issuetype === "object" && "name" in issuetype
+          ? String((issuetype as { name?: unknown }).name ?? "")
+          : undefined;
+      const parent =
+        fields.parent && typeof fields.parent === "object" && "key" in fields.parent
+          ? String((fields.parent as { key?: unknown }).key ?? "")
+          : undefined;
+      const project =
+        fields.project && typeof fields.project === "object" && "key" in fields.project
+          ? String((fields.project as { key?: unknown }).key ?? "")
+          : undefined;
+      const status =
+        fields.status && typeof fields.status === "object" && "name" in fields.status
+          ? String((fields.status as { name?: unknown }).name ?? "")
+          : undefined;
+      const labels = Array.isArray(fields.labels)
+        ? fields.labels.filter((item: unknown) => typeof item === "string")
+        : [];
+      const result = store.create({
+        summary: String(fields.summary ?? ""),
+        description: typeof fields.description === "string" ? fields.description : undefined,
+        labels,
+        ...(status ? { status } : {}),
+        ...(parent ? { parent } : {}),
+        ...(typeName ? { type: typeName } : {}),
+        ...(project ? { project } : {}),
+      });
+      if (!result.ok) {
+        json(res, 400, { errorMessages: [result.error] });
+        return;
+      }
+      json(res, 201, {
+        id: "10000",
+        key: result.key,
+        self: `/rest/api/2/issue/${result.key}`,
+      });
+    });
+    return true;
+  }
+
   const issueGet = path.match(/^\/rest\/api\/[23]\/issue\/([^/]+)$/);
+  if (issueGet && method === "PUT") {
+    const key = decodeURIComponent(issueGet[1]);
+    void readBody(req).then((text) => {
+      const body = text ? JSON.parse(text) : {};
+      const fields = (body.fields ?? {}) as Record<string, unknown>;
+      const input: { summary?: string; description?: string; labels?: string[] } = {};
+      if (typeof fields.summary === "string") input.summary = fields.summary;
+      if (typeof fields.description === "string") input.description = fields.description;
+      if (Array.isArray(fields.labels)) {
+        input.labels = fields.labels.filter((item: unknown) => typeof item === "string");
+      }
+      const result = store.edit(key, input);
+      if (!result.ok) {
+        json(res, result.error.includes("not found") ? 404 : 400, {
+          errorMessages: [result.error],
+        });
+        return;
+      }
+      res.statusCode = 204;
+      res.end();
+    });
+    return true;
+  }
+
   if (issueGet && method === "GET") {
     const key = decodeURIComponent(issueGet[1]);
     const issue = store.get(key);

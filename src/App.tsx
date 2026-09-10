@@ -12,6 +12,7 @@ import {
   ListFilterIcon,
   MoonIcon,
   MoreHorizontalIcon,
+  PlusIcon,
   SearchIcon,
   StarIcon,
   SunIcon,
@@ -22,6 +23,14 @@ import { toast } from "sonner";
 import { cardAge, epicsToColumns, targetEndDistance, type Board, type Card, type Column, type Epic } from "./board.ts";
 import { type CommandJump } from "./command.ts";
 import { parseFlags } from "./flags.ts";
+import {
+  createAiSeed,
+  draftFromOpen,
+  emptyCreateDraft,
+  mergeOpenIntoDraft,
+  type IssueComposerDraft,
+} from "./issue-composer.ts";
+import { uniqueLabels } from "./label-suggest.ts";
 import { type MoveQueue, type MoveRequest, useMoveQueue } from "./move-queue.ts";
 import { frameSrc, type OpenField } from "./open.ts";
 import {
@@ -57,6 +66,7 @@ import {
 } from "./visible.ts";
 import { AgentPanel } from "~/components/agent/agent-panel.tsx";
 import { CommandOverlay } from "~/components/command-overlay.tsx";
+import { IssueComposer } from "~/components/issue-composer.tsx";
 import { Toaster } from "~/components/ui/sonner.tsx";
 import { Spinner } from "~/components/ui/spinner.tsx";
 import { Avatar, AvatarFallback } from "~/components/ui/avatar";
@@ -546,6 +556,7 @@ function IssueCard({
   disabled,
   selected,
   onClick,
+  onDoubleClick,
   variant = "story",
   shown,
 }: {
@@ -555,6 +566,7 @@ function IssueCard({
   disabled?: boolean;
   selected?: boolean;
   onClick?: (event: React.MouseEvent) => void;
+  onDoubleClick?: (event: React.MouseEvent) => void;
   variant?: "story" | "epic";
   shown?: Set<CardDisplayKey>;
 }) {
@@ -668,7 +680,7 @@ function IssueCard({
   return (
     <KanbanItem value={card.key} disabled={disabled}>
       {asHandle && !isOverlay ? (
-        <KanbanItemHandle onClick={onClick}>{body}</KanbanItemHandle>
+        <KanbanItemHandle onClick={onClick} onDoubleClick={onDoubleClick}>{body}</KanbanItemHandle>
       ) : (
         body
       )}
@@ -683,6 +695,8 @@ function StatusColumn({
   disabled,
   selected,
   onClick,
+  onDoubleClick,
+  onCreate,
   onHide,
   shown,
 }: {
@@ -692,6 +706,8 @@ function StatusColumn({
   disabled?: boolean;
   selected?: Set<string>;
   onClick?: (key: string, event: React.MouseEvent) => void;
+  onDoubleClick?: (key: string, event: React.MouseEvent) => void;
+  onCreate?: (status: string) => void;
   onHide?: () => void;
   shown?: Set<CardDisplayKey>;
 }) {
@@ -736,6 +752,19 @@ function StatusColumn({
                 />
               </button>
             </CollapsibleTrigger>
+            {onCreate ? (
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                type="button"
+                aria-label={`Create issue in ${title}`}
+                title="Create issue"
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={() => onCreate(title)}
+              >
+                <PlusIcon />
+              </Button>
+            ) : null}
             {onHide ? (
               <Button
                 size="icon-xs"
@@ -769,8 +798,21 @@ function StatusColumn({
                   variant={(card.type ?? "").toLowerCase() === "epic" ? "epic" : "story"}
                   shown={shown}
                   onClick={(event) => onClick?.(card.key, event)}
+                  onDoubleClick={(event) => onDoubleClick?.(card.key, event)}
                 />
               ))}
+              {onCreate ? (
+                <button
+                  type="button"
+                  className="text-muted-foreground hover:bg-foreground/5 hover:text-foreground flex min-h-8 w-full shrink-0 items-center gap-1.5 rounded-md px-2 text-[12px]"
+                  aria-label={`Create issue in ${title}`}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={() => onCreate(title)}
+                >
+                  <PlusIcon className="size-3.5" />
+                  Create
+                </button>
+              ) : null}
             </KanbanColumnContent>
           </CollapsibleContent>
         </div>
@@ -1024,6 +1066,10 @@ export function App() {
   const [epics, setEpics] = useState<Epic[]>([]);
   const [epicChildren, setEpicChildren] = useState<Card[] | null>(null);
   const [agentOpen, setAgentOpen] = useState(false);
+  const [agentSeed, setAgentSeed] = useState<string | null>(null);
+  const [composer, setComposer] = useState<IssueComposerDraft | null>(null);
+  const [composerBusy, setComposerBusy] = useState(false);
+  const [composerError, setComposerError] = useState("");
   const [selectedEpic, setSelectedEpic] = useState<string | null>(null);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [openUrl, setOpenUrl] = useState<string | null>(null);
@@ -1115,6 +1161,10 @@ export function App() {
     : null;
   const facets = filterFacets(allCards, epics);
   const memoryStatuses = Object.keys(columns);
+  const labelCatalog = useMemo(
+    () => uniqueLabels([...allCards, ...epics, ...commandCards]),
+    [allCards, epics, commandCards],
+  );
   const showFavourites =
     favouritePane.unfiled.length > 0 || favouritePane.folders.length > 0;
 
@@ -1302,6 +1352,147 @@ export function App() {
     }
     clearSelection();
     void open(key);
+  }
+
+  function handleCardDoubleClick(key: string, event: React.MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    clearSelection();
+    void openEdit(key);
+  }
+
+  function openCreate(status?: string) {
+    setComposerError("");
+    setComposerBusy(false);
+    setComposer(
+      emptyCreateDraft({
+        ...(status ? { status } : {}),
+        ...(selectedEpic && !epicBoard ? { epic: selectedEpic } : {}),
+        ...(epicBoard ? { type: "Epic" } : {}),
+      }),
+    );
+  }
+
+  function seedCreateAi(draft?: IssueComposerDraft | null) {
+    setAgentSeed(createAiSeed(draft));
+    setAgentOpen(true);
+  }
+
+  function openCreateAi(status?: string) {
+    const next = emptyCreateDraft({
+      ...(status ? { status } : {}),
+      ...(selectedEpic && !epicBoard ? { epic: selectedEpic } : {}),
+      ...(epicBoard ? { type: "Epic" } : {}),
+    });
+    setComposerError("");
+    setComposerBusy(false);
+    setComposer(next);
+    seedCreateAi(next);
+  }
+
+  async function openEdit(key: string) {
+    const card =
+      allCards.find((item) => item.key === key) ??
+      commandCards.find((item) => item.key === key);
+    const epic = epics.find((item) => item.key === key);
+    const status = findCardSource(key) || epic?.status;
+    const extras = {
+      ...(status ? { status } : {}),
+      ...(card?.epic ? { epic: card.epic } : {}),
+      ...(card?.type || epic ? { type: card?.type ?? "Epic" } : {}),
+    };
+    setComposerError("");
+    setComposerBusy(false);
+    if (openKey === key && openFields.length) {
+      setComposer(draftFromOpen(key, openFields, extras));
+    } else {
+      setComposer({
+        mode: "edit",
+        key,
+        title: card?.summary ?? epic?.summary ?? "",
+        description: "",
+        labels: card?.labels ?? epic?.labels ?? [],
+        dismissed: [],
+        ...extras,
+      });
+    }
+    try {
+      const data = await api<{ url: string; fields: OpenField[]; error?: string }>("/api/open", {
+        method: "POST",
+        body: JSON.stringify({ key }),
+      });
+      if (data.error || !data.fields?.length) return;
+      setComposer((current) =>
+        current?.mode === "edit" && current.key === key
+          ? mergeOpenIntoDraft(current, data.fields)
+          : current,
+      );
+    } catch {
+      /* keep the Card-prefilled draft */
+    }
+  }
+
+  async function submitComposer() {
+    if (!composer || composerBusy || !composer.title.trim()) return;
+    setComposerBusy(true);
+    setComposerError("");
+    try {
+      if (composer.mode === "create") {
+        const data = await api<{
+          ok: boolean;
+          key?: string;
+          error?: string;
+          board?: Board;
+        }>("/api/issue/create", {
+          method: "POST",
+          body: JSON.stringify({
+            summary: composer.title.trim(),
+            description: composer.description,
+            labels: composer.labels,
+            ...(composer.status ? { status: composer.status } : {}),
+            ...(composer.epic ? { parent: composer.epic } : {}),
+            ...(composer.type ? { type: composer.type } : {}),
+          }),
+        });
+        if (!data.ok) {
+          const message = data.error ?? "Create failed";
+          setComposerError(message);
+          toast.error("Create failed", { description: message });
+          return;
+        }
+        if (data.board) applyBoard(data.board);
+        toast.success("Created", { description: data.key ?? composer.title.trim() });
+        setComposer(null);
+        return;
+      }
+      if (!composer.key) return;
+      const data = await api<{ ok: boolean; error?: string; board?: Board }>("/api/issue/edit", {
+        method: "POST",
+        body: JSON.stringify({
+          key: composer.key,
+          summary: composer.title.trim(),
+          description: composer.description,
+          labels: composer.labels,
+        }),
+      });
+      if (!data.ok) {
+        const message = data.error ?? "Edit failed";
+        setComposerError(message);
+        toast.error("Edit failed", { description: message });
+        return;
+      }
+      if (data.board) applyBoard(data.board);
+      toast.success("Saved", { description: composer.key });
+      const edited = composer.key;
+      setComposer(null);
+      if (openKey === edited) void open(edited);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Save failed";
+      setComposerError(message);
+      toast.error("Save failed", { description: message });
+    } finally {
+      setComposerBusy(false);
+    }
   }
 
   async function open(key: string) {
@@ -1507,6 +1698,8 @@ export function App() {
     else if (jump.kind === "all-combined") openCombined();
     else if (jump.kind === "refresh") void refresh();
     else if (jump.kind === "agent") setAgentOpen(true);
+    else if (jump.kind === "create") openCreate();
+    else if (jump.kind === "create-ai") openCreateAi();
     else if (jump.kind === "preset") applyNamedPreset(jump.name);
     else if (jump.kind === "epic") {
       setOpenKey(null);
@@ -1934,6 +2127,8 @@ export function App() {
                                   selected={selectedCards}
                                   shown={shownSet}
                                   onClick={handleCardClick}
+                                  onDoubleClick={handleCardDoubleClick}
+                                  onCreate={openCreate}
                                   onHide={() =>
                                     persistChrome({ ...chrome, hide: [...chrome.hide, title] })
                                   }
@@ -2000,6 +2195,17 @@ export function App() {
                           >
                             {openKey}
                           </a>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-[12px]"
+                            type="button"
+                            onClick={() => {
+                              if (openKey) void openEdit(openKey);
+                            }}
+                          >
+                            Edit
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon-xs"
@@ -2108,11 +2314,36 @@ export function App() {
               }
               onApplyPreset={applyNamedPreset}
               onSetFilter={(filter) => persistChrome({ ...chrome, filter })}
+              onBoardMutated={() => {
+                void load();
+              }}
+              seedPrompt={agentSeed}
+              onSeedConsumed={() => setAgentSeed(null)}
             />
           </>
         ) : null}
       </ResizablePanelGroup>
       <Toaster theme={theme} />
+      {composer ? (
+        <IssueComposer
+          draft={composer}
+          catalog={labelCatalog}
+          busy={composerBusy}
+          error={composerError}
+          onChange={setComposer}
+          onSubmit={() => void submitComposer()}
+          onClose={() => {
+            if (composerBusy) return;
+            setComposer(null);
+            setComposerError("");
+          }}
+          onDraftWithAi={
+            composer.mode === "create"
+              ? () => seedCreateAi(composer)
+              : undefined
+          }
+        />
+      ) : null}
       {commandOpen ? (
         <CommandOverlay
           presets={presets.map((preset) => preset.name)}

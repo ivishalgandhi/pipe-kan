@@ -27,6 +27,8 @@ const mockApp = {
   }),
   move: async () => ({ ok: true, board: { columns: [], epics: [] } }),
   moveRaw: async () => ({ ok: true }),
+  create: async () => ({ ok: true, key: "DEMO-9", board: { columns: [], epics: [] } }),
+  edit: async () => ({ ok: true, board: { columns: [], epics: [] } }),
   open: async () => ({ url: "", fields: [] }),
 } satisfies App;
 

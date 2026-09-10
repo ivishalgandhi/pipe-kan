@@ -88,5 +88,39 @@ export function handleAppApi(
     return true;
   }
 
+  if (url.pathname === "/api/issue/create" && method === "POST") {
+    reply(req, res, async (text) => {
+      const body = text ? JSON.parse(text) : {};
+      const labels = Array.isArray(body.labels)
+        ? body.labels.filter((item: unknown) => typeof item === "string")
+        : [];
+      const result = await app.create({
+        summary: String(body.summary ?? ""),
+        ...(body.description !== undefined ? { description: String(body.description) } : {}),
+        labels,
+        ...(body.status !== undefined ? { status: String(body.status) } : {}),
+        ...(body.parent !== undefined ? { parent: String(body.parent) } : {}),
+        ...(body.type !== undefined ? { type: String(body.type) } : {}),
+      });
+      json(res, result.ok ? 200 : 409, result);
+    });
+    return true;
+  }
+
+  if (url.pathname === "/api/issue/edit" && method === "POST") {
+    reply(req, res, async (text) => {
+      const body = text ? JSON.parse(text) : {};
+      const input: { summary?: string; description?: string; labels?: string[] } = {};
+      if (body.summary !== undefined) input.summary = String(body.summary);
+      if (body.description !== undefined) input.description = String(body.description);
+      if (Array.isArray(body.labels)) {
+        input.labels = body.labels.filter((item: unknown) => typeof item === "string");
+      }
+      const result = await app.edit(String(body.key ?? ""), input);
+      json(res, result.ok ? 200 : 409, result);
+    });
+    return true;
+  }
+
   return false;
 }

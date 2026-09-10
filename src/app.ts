@@ -15,6 +15,16 @@ export type App = {
     status: string,
   ): Promise<{ ok: boolean; noop?: boolean; error?: string; board: Board }>;
   moveRaw(key: string, status: string): Promise<{ ok: boolean; noop?: boolean; error?: string }>;
+  create(input: Parameters<Cli["create"]>[0]): Promise<{
+    ok: boolean;
+    key?: string;
+    error?: string;
+    board: Board;
+  }>;
+  edit(
+    key: string,
+    input: Parameters<Cli["edit"]>[1],
+  ): Promise<{ ok: boolean; error?: string; board: Board }>;
   open(key: string): Promise<{ url: string; fields: OpenField[]; error?: string }>;
 };
 
@@ -183,6 +193,22 @@ export function createApp(opts: { store: IssueStore; cli?: Cli; flags?: string }
       return result.ok
         ? { ok: true, noop: result.noop }
         : { ok: false, error: result.error };
+    },
+    async create(input) {
+      const result = await cli.create(input);
+      if (!result.ok) {
+        return { ok: false, error: result.error, key: result.key, board: app.board() };
+      }
+      await app.refresh();
+      return { ok: true, key: result.key, board: app.board() };
+    },
+    async edit(key, input) {
+      const result = await cli.edit(key, input);
+      if (!result.ok) {
+        return { ok: false, error: result.error, board: app.board() };
+      }
+      await app.refresh();
+      return { ok: true, board: app.board() };
     },
     async open(key) {
       const urlP = cli.open(key);
