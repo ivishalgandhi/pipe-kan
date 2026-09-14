@@ -92,7 +92,7 @@ Showing an Issue's details and Jira URL in the side pane. A Card Opens on click,
 _Avoid_: view, browse (when meaning this)
 
 **Calendar**:
-A read-only month tab on the main canvas of Issue created and Target End days for currently visible Cards. Board | Calendar tabs sit where the Board title was; a left-nav Calendar control selects the Calendar tab. It does not replace All stories, All epics, or Combined.
+A read-only month tab on the main canvas of Issue created and Target End days for currently visible Cards (the same set after Search, Filter, and Hide as the Board). Each event shows the Issue key and summary. Board | Calendar tabs sit where the Board title was; a left-nav Calendar control selects the Calendar tab. It does not replace All stories, All epics, or Combined.
 _Avoid_: Board, scheduler, Jira calendar, sidebar calendar
 
 **Write-back**:

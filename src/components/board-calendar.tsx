@@ -35,18 +35,19 @@ export function BoardCalendar({
         eventContent={(arg) => {
           const key = calendarOpenKey(arg.event.extendedProps);
           if (!key) return true;
+          const hover = arg.event.extendedProps.hover;
           return (
             <button
               type="button"
               className="fc-event-key"
-              title={arg.event.title}
+              title={typeof hover === "string" ? hover : undefined}
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
                 onOpen(key);
               }}
             >
-              {key}
+              {arg.event.title}
             </button>
           );
         }}

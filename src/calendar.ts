@@ -8,7 +8,7 @@ export type CalendarEvent = {
   start: string;
   allDay: true;
   classNames: string[];
-  extendedProps: { key: string; kind: CalendarEventKind };
+  extendedProps: { key: string; kind: CalendarEventKind; hover: string };
 };
 
 export type CanvasTab = "board" | "calendar";
@@ -42,29 +42,35 @@ function dayOf(value?: string): string | undefined {
   return day ? `${day[1]}-${day[2]}-${day[3]}` : undefined;
 }
 
+function eventTitle(card: Card): string {
+  const summary = card.summary.trim();
+  return summary ? `${card.key} ${summary}` : card.key;
+}
+
 export function calendarEvents(cards: Card[]): CalendarEvent[] {
   const events: CalendarEvent[] = [];
   for (const card of cards) {
+    const title = eventTitle(card);
     const created = dayOf(card.created);
     if (created) {
       events.push({
         id: `${card.key}:created`,
-        title: `${card.key} created`,
+        title,
         start: created,
         allDay: true,
         classNames: ["fc-event-created"],
-        extendedProps: { key: card.key, kind: "created" },
+        extendedProps: { key: card.key, kind: "created", hover: `${title} · created` },
       });
     }
     const targetEnd = dayOf(card.targetEnd);
     if (targetEnd) {
       events.push({
         id: `${card.key}:targetEnd`,
-        title: `${card.key} target end`,
+        title,
         start: targetEnd,
         allDay: true,
         classNames: ["fc-event-target-end"],
-        extendedProps: { key: card.key, kind: "targetEnd" },
+        extendedProps: { key: card.key, kind: "targetEnd", hover: `${title} · target end` },
       });
     }
   }

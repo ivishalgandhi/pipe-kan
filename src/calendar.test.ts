@@ -63,19 +63,27 @@ test("calendar events come from created and target end", () => {
   expect(events).toEqual([
     {
       id: "DEMO-2:created",
-      title: "DEMO-2 created",
+      title: "DEMO-2 Parse JSON",
       start: "2026-09-01",
       allDay: true,
       classNames: ["fc-event-created"],
-      extendedProps: { key: "DEMO-2", kind: "created" },
+      extendedProps: {
+        key: "DEMO-2",
+        kind: "created",
+        hover: "DEMO-2 Parse JSON · created",
+      },
     },
     {
       id: "DEMO-2:targetEnd",
-      title: "DEMO-2 target end",
+      title: "DEMO-2 Parse JSON",
       start: "2026-10-20",
       allDay: true,
       classNames: ["fc-event-target-end"],
-      extendedProps: { key: "DEMO-2", kind: "targetEnd" },
+      extendedProps: {
+        key: "DEMO-2",
+        kind: "targetEnd",
+        hover: "DEMO-2 Parse JSON · target end",
+      },
     },
   ]);
 });
@@ -108,6 +116,39 @@ test("calendar events follow stories, epics, and combined visible Cards", () => 
     "DEMO-2",
     "DEMO-2",
   ]);
+  const epicEvents = calendarEvents([epic]);
+  expect(epicEvents.map((event) => event.title)).toEqual([
+    "DEMO-1 Ship calendar",
+    "DEMO-1 Ship calendar",
+  ]);
+  expect(epicEvents.map((event) => event.extendedProps.hover)).toEqual([
+    "DEMO-1 Ship calendar · created",
+    "DEMO-1 Ship calendar · target end",
+  ]);
+});
+
+test("calendar event title is key only when summary is empty or whitespace", () => {
+  expect(
+    calendarEvents([{ key: "DEMO-2", summary: "", created: "2026-09-01" }])[0]?.title,
+  ).toBe("DEMO-2");
+  expect(
+    calendarEvents([{ key: "DEMO-2", summary: "   ", created: "2026-09-01" }])[0]?.title,
+  ).toBe("DEMO-2");
+  expect(
+    calendarEvents([{ key: "DEMO-2", summary: "", created: "2026-09-01" }])[0]?.extendedProps
+      .hover,
+  ).toBe("DEMO-2 · created");
+  expect(
+    calendarEvents([{ key: "DEMO-2", summary: "", targetEnd: "2026-10-20" }])[0]
+      ?.extendedProps.hover,
+  ).toBe("DEMO-2 · target end");
+});
+
+test("calendar event title trims surrounding summary spaces", () => {
+  expect(
+    calendarEvents([{ key: "DEMO-2", summary: "  Parse JSON  ", created: "2026-09-01" }])[0]
+      ?.title,
+  ).toBe("DEMO-2 Parse JSON");
 });
 
 test("calendar events ignore due date and a Target Start decoy", () => {
@@ -122,11 +163,15 @@ test("calendar events ignore due date and a Target Start decoy", () => {
   expect(calendarEvents(cards)).toEqual([
     {
       id: "DEMO-2:created",
-      title: "DEMO-2 created",
+      title: "DEMO-2 Has decoys",
       start: "2026-09-01",
       allDay: true,
       classNames: ["fc-event-created"],
-      extendedProps: { key: "DEMO-2", kind: "created" },
+      extendedProps: {
+        key: "DEMO-2",
+        kind: "created",
+        hover: "DEMO-2 Has decoys · created",
+      },
     },
   ]);
 });
