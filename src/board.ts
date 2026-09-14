@@ -1,3 +1,5 @@
+import { asNames, isoDay, issueTargetEnd } from "./target-end.ts";
+
 export type Epic = {
   key: string;
   summary: string;
@@ -7,6 +9,7 @@ export type Epic = {
   dueDate?: string;
   targetEnd?: string;
   labels?: string[];
+  created?: string;
 };
 
 export type Card = {
@@ -36,6 +39,7 @@ export type Board = {
 
 export type RawIssue = {
   key?: unknown;
+  names?: Record<string, unknown>;
   fields?: {
     summary?: unknown;
     status?: { name?: unknown };
@@ -50,14 +54,12 @@ export type RawIssue = {
     labels?: unknown;
     components?: unknown;
     created?: unknown;
-    // Plausible Jira field names for "Target End Date".
-    // Jira Advanced Roadmaps stores this in a customfield_NNNNN whose key varies by install,
-    // so issueTargetEnd also scans customfield_* entries as a best-effort fallback.
     targetEnd?: unknown;
     targetend?: unknown;
     targetEndDate?: unknown;
     targetenddate?: unknown;
     "Target End"?: unknown;
+    "Target end"?: unknown;
     "Target End Date"?: unknown;
   } & Record<string, unknown>;
 };
@@ -77,12 +79,11 @@ function formatDueDate(value: unknown): string | undefined {
 }
 
 export function formatTargetEnd(value: unknown): string | undefined {
-  if (typeof value !== "string" || !value) return undefined;
-  const day = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
-  const date = day
-    ? new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3]))
-    : new Date(value);
-  if (Number.isNaN(date.getTime())) return undefined;
+  const day = isoDay(value);
+  if (!day) return undefined;
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  if (!parts) return undefined;
+  const date = new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]));
   return date.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -115,13 +116,11 @@ export function cardAge(created: unknown, now = Date.now()): string | undefined 
 }
 
 export function targetEndDistance(targetEnd: unknown, now = Date.now()): string | undefined {
-  const formatted = formatTargetEnd(targetEnd);
-  if (!formatted) return undefined;
-  const day = /^(\d{4})-(\d{2})-(\d{2})/.exec(targetEnd as string);
-  const target = day
-    ? Date.UTC(Number(day[1]), Number(day[2]) - 1, Number(day[3]))
-    : Date.parse(targetEnd as string);
-  if (Number.isNaN(target)) return undefined;
+  const day = isoDay(targetEnd);
+  if (!day) return undefined;
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  if (!parts) return undefined;
+  const target = Date.UTC(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]));
   const end = new Date(now);
   const today = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
   const days = Math.round((target - today) / 86_400_000);
@@ -200,29 +199,9 @@ function issueAssignee(fields: RawIssue["fields"]): string | undefined {
   return undefined;
 }
 
-function issueTargetEnd(fields: RawIssue["fields"]): string | undefined {
-  if (!fields) return undefined;
-  const candidates: unknown[] = [
-    fields.targetEnd,
-    fields.targetend,
-    fields.targetEndDate,
-    fields.targetenddate,
-    fields["Target End"],
-    fields["Target End Date"],
-  ];
-  const direct = candidates.find((value) => typeof value === "string" && value.trim());
-  if (direct) return formatTargetEnd(direct);
-  // Fallback: Advanced Roadmaps stores the target end date in an install-specific
-  // customfield_NNNNN. Accept any custom field that parses as a date string.
-  for (const [key, value] of Object.entries(fields)) {
-    if (!key.startsWith("customfield_")) continue;
-    if (typeof value === "string" && value.trim()) {
-      const formatted = formatTargetEnd(value.trim());
-      if (formatted) return formatted;
-    }
-  }
-  return undefined;
-}
+export type BoardOpts = {
+  targetEndFieldId?: string;
+};
 
 function toEpic(face: {
   key: string;
@@ -233,6 +212,7 @@ function toEpic(face: {
   dueDate?: string;
   targetEnd?: string;
   labels?: string[];
+  created?: string;
 }): Epic {
   return {
     key: face.key,
@@ -243,10 +223,11 @@ function toEpic(face: {
     ...(face.dueDate ? { dueDate: face.dueDate } : {}),
     ...(face.targetEnd ? { targetEnd: face.targetEnd } : {}),
     ...(face.labels ? { labels: face.labels } : {}),
+    ...(face.created ? { created: face.created } : {}),
   };
 }
 
-function toCard(issue: RawIssue, key: string): Card {
+function toCard(issue: RawIssue, key: string, fieldId?: string): Card {
   const summary =
     typeof issue.fields?.summary === "string" ? issue.fields.summary : "";
   const priority =
@@ -255,7 +236,10 @@ function toCard(issue: RawIssue, key: string): Card {
       : undefined;
   const assignee = issueAssignee(issue.fields);
   const dueDate = formatDueDate(issue.fields?.duedate);
-  const targetEnd = issueTargetEnd(issue.fields);
+  const targetEnd = issueTargetEnd(issue.fields, {
+    names: asNames(issue.names),
+    fieldId,
+  });
   const type = issueType(issue.fields);
   const epic = epicKey(issue.fields);
   const labels = issueLabels(issue.fields);
@@ -274,7 +258,7 @@ function toCard(issue: RawIssue, key: string): Card {
   };
 }
 
-export function issuesToBoard(raw: unknown): Board {
+export function issuesToBoard(raw: unknown, opts: BoardOpts = {}): Board {
   if (!Array.isArray(raw)) {
     throw new Error("jira-cli --raw payload must be a JSON array");
   }
@@ -304,7 +288,7 @@ export function issuesToBoard(raw: unknown): Board {
         : "";
     if (!key || !status) continue;
 
-    const card = toCard(issue, key);
+    const card = toCard(issue, key, opts.targetEndFieldId);
     if ((card.type ?? "").toLowerCase() === "epic") {
       rememberEpic(toEpic({ ...card, status: issueStatus(issue.fields) }));
       continue;
@@ -337,6 +321,7 @@ export function mergeEpics(listed: Epic[], fromBoard: Epic[]): Epic[] {
     }
     if (!existing.summary && epic.summary) Object.assign(existing, epic);
     if (!existing.targetEnd && epic.targetEnd) existing.targetEnd = epic.targetEnd;
+    if (!existing.created && epic.created) existing.created = epic.created;
   }
   return [...byKey.values()];
 }
@@ -361,6 +346,7 @@ export function epicsToColumns(epics: Epic[]): Column[] {
       ...(epic.dueDate ? { dueDate: epic.dueDate } : {}),
       ...(epic.targetEnd ? { targetEnd: epic.targetEnd } : {}),
       ...(epic.labels ? { labels: epic.labels } : {}),
+      ...(epic.created ? { created: epic.created } : {}),
     });
   }
   return columns;

@@ -851,3 +851,31 @@ test("combinedBoard keeps Column order from the Board", () => {
   ];
   expect(Object.keys(combinedBoard(columns, epics))).toEqual(["In Progress", "To Do"]);
 });
+
+test("combinedBoard copies Epic created and targetEnd onto Cards", () => {
+  const columns = {
+    "To Do": [
+      {
+        key: "DEMO-2",
+        summary: "story todo",
+        created: "2026-09-01T10:00:00.000Z",
+        targetEnd: "2026-10-20",
+      },
+    ],
+  };
+  const epics: Epic[] = [
+    {
+      key: "DEMO-1",
+      summary: "epic todo",
+      status: "To Do",
+      created: "2026-08-01T00:00:00.000Z",
+      targetEnd: "2026-11-01",
+    },
+  ];
+  const epicCard = combinedBoard(columns, epics)["To Do"].find((card) => card.key === "DEMO-1");
+  expect(epicCard).toMatchObject({
+    type: "Epic",
+    created: "2026-08-01T00:00:00.000Z",
+    targetEnd: "2026-11-01",
+  });
+});

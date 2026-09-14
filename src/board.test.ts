@@ -45,7 +45,8 @@ test("Epics leave the Board and children keep the Epic key", () => {
     priority: "High",
     assignee: "Person A",
     dueDate: "Sep 10, 2026",
-    targetEnd: "Sep 22, 2026",
+    targetEnd: "2026-09-22",
+    created: "2026-09-01T09:00:00.000+0000",
     labels: ["kanban"],
   });
   expect(board.columns[1].cards[0]).toEqual({
@@ -56,7 +57,7 @@ test("Epics leave the Board and children keep the Epic key", () => {
     priority: "High",
     assignee: "Person A",
     dueDate: "Aug 25, 2026",
-    targetEnd: "Sep 13, 2026",
+    targetEnd: "2026-09-13",
     created: "2026-09-01T11:00:00.000+0000",
     labels: ["kanban", "write-back"],
   });
@@ -207,11 +208,31 @@ test("Cards keep target end from explicit fields", () => {
       },
     },
   ]);
-  expect(board.columns[0].cards[0].targetEnd).toBe("Oct 15, 2026");
-  expect(board.columns[0].cards[1].targetEnd).toBe("Oct 20, 2026");
+  expect(board.columns[0].cards[0].targetEnd).toBe("2026-10-15");
+  expect(board.columns[0].cards[1].targetEnd).toBe("2026-10-20");
 });
 
-test("Cards keep target end from a date-shaped custom field", () => {
+test("named Target End Date wins over a decoy Target Start custom field", () => {
+  const board = issuesToBoard([
+    {
+      key: "DEMO-2",
+      names: {
+        customfield_10100: "Target End Date",
+        customfield_10101: "Target Start",
+      },
+      fields: {
+        summary: "Both dates",
+        status: { name: "To Do" },
+        "Target End Date": "2026-10-20",
+        customfield_10100: "2026-10-20",
+        customfield_10101: "2026-01-15",
+      },
+    },
+  ]);
+  expect(board.columns[0].cards[0].targetEnd).toBe("2026-10-20");
+});
+
+test("a date-shaped custom field is not Target End without a name", () => {
   const board = issuesToBoard([
     {
       key: "DEMO-2",
@@ -222,7 +243,7 @@ test("Cards keep target end from a date-shaped custom field", () => {
       },
     },
   ]);
-  expect(board.columns[0].cards[0].targetEnd).toBe("Nov 1, 2026");
+  expect(board.columns[0].cards[0].targetEnd).toBeUndefined();
 });
 
 test("Target end distance is relative like Linear", () => {

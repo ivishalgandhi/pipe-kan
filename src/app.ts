@@ -1,8 +1,19 @@
+import { readFileSync } from "node:fs";
+import { availableParallelism, homedir, tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { issuesToBoard, mergeEpics, type Board, type Card } from "./board.ts";
 import { createStoreCli, type Cli } from "./cli.ts";
 import { DEFAULT_FLAGS, flagsToJql } from "./flags.ts";
 import { flattenIssue, type OpenField } from "./open.ts";
 import { IssueStore } from "./store.ts";
+import {
+  asNames,
+  mergeViewIntoIssue,
+  resolveTargetEndFieldId,
+  targetEndFieldIdFromJiraConfig,
+} from "./target-end.ts";
+import { readTargetEndFieldMap, writeTargetEndFieldMap } from "./field-map.ts";
 
 export type App = {
   flags: string;
@@ -28,9 +39,9 @@ export type App = {
   open(key: string): Promise<{ url: string; fields: OpenField[]; error?: string }>;
 };
 
-function columnsOf(raw: unknown): Record<string, Card[]> {
+function columnsOf(raw: unknown, fieldId?: string): Record<string, Card[]> {
   return Object.fromEntries(
-    issuesToBoard(raw).columns.map((column) => [column.title, column.cards]),
+    issuesToBoard(raw, { targetEndFieldId: fieldId }).columns.map((column) => [column.title, column.cards]),
   );
 }
 
@@ -43,22 +54,88 @@ function stampMissingEpic(board: Board, epic: string): Board {
   return board;
 }
 
-function cardsOf(raw: unknown): Card[] {
+function cardsOf(raw: unknown, fieldId?: string): Card[] {
   if (!Array.isArray(raw)) return [];
-  return issuesToBoard(raw).columns.flatMap((column) => column.cards);
+  return issuesToBoard(raw, { targetEndFieldId: fieldId }).columns.flatMap((column) => column.cards);
 }
 
-export function createApp(opts: { store: IssueStore; cli?: Cli; flags?: string }): App {
+function issueKeyOf(issue: unknown): string | undefined {
+  if (!issue || typeof issue !== "object" || !("key" in issue)) return undefined;
+  return typeof issue.key === "string" ? issue.key : undefined;
+}
+
+function viewConcurrency(): number {
+  const env = Number(process.env.PIPE_KAN_CHILDREN_CONCURRENCY);
+  if (!Number.isNaN(env) && env > 0) return env;
+  return Math.max(3, Math.min(10, availableParallelism()));
+}
+
+function defaultFieldMapPath() {
+  if (process.env.PIPE_KAN_FIELD_MAP) return process.env.PIPE_KAN_FIELD_MAP;
+  if (process.env.VITEST) {
+    return join(tmpdir(), `pipe-kan-field-map-${process.pid}-${Math.random().toString(16).slice(2)}.json`);
+  }
+  return join(homedir(), ".pipe-kan", "field-map.json");
+}
+
+function defaultJiraConfigPath() {
+  if (process.env.JIRA_CONFIG_FILE) return process.env.JIRA_CONFIG_FILE;
+  return join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), ".jira", ".config.yml");
+}
+
+function safeRead(path: string | undefined): string | undefined {
+  if (!path) return undefined;
+  try {
+    return readFileSync(path, "utf8");
+  } catch {
+    return undefined;
+  }
+}
+
+async function poolMap<T, R>(items: T[], concurrency: number, worker: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  async function run() {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await worker(items[index] as T);
+    }
+  }
+  const workers = Math.min(Math.max(1, concurrency), Math.max(1, items.length));
+  await Promise.all(Array.from({ length: workers }, run));
+  return results;
+}
+
+export function createApp(opts: {
+  store: IssueStore;
+  cli?: Cli;
+  flags?: string;
+  fieldMapPath?: string;
+  jiraConfigPath?: string;
+}): App {
   const cli = opts.cli ?? createStoreCli(opts.store);
+  const fieldMapPath = opts.fieldMapPath ?? defaultFieldMapPath();
+  const jiraConfigPath = opts.jiraConfigPath ?? defaultJiraConfigPath();
   let flags = opts.flags ?? DEFAULT_FLAGS;
   let payload: unknown[] = [];
   let epicsPayload: unknown[] = [];
   let childrenRaw: unknown[] = [];
   let hasChildrenCache = false;
   let childrenError: string | undefined;
+  let targetEndFieldId =
+    readTargetEndFieldMap(fieldMapPath).targetEnd ??
+    targetEndFieldIdFromJiraConfig(safeRead(jiraConfigPath) ?? "");
+
+  function boardOpts() {
+    return { targetEndFieldId };
+  }
+
+  function toBoard(raw: unknown) {
+    return issuesToBoard(raw, boardOpts());
+  }
 
   function listedEpicKeys() {
-    return issuesToBoard(epicsPayload).epics.map((epic) => epic.key);
+    return toBoard(epicsPayload).epics.map((epic) => epic.key);
   }
 
   function cacheFromStore() {
@@ -73,9 +150,55 @@ export function createApp(opts: { store: IssueStore; cli?: Cli; flags?: string }
       .find((issue) => issue.key === key)?.fields?.status?.name;
     return (
       fromPayload ??
-      issuesToBoard(epicsPayload).epics.find((epic) => epic.key === key)?.status ??
+      toBoard(epicsPayload).epics.find((epic) => epic.key === key)?.status ??
       app.board().epics.find((epic) => epic.key === key)?.status
     );
+  }
+
+  function rememberTargetEndId(issues: unknown[]) {
+    for (const issue of issues) {
+      if (!issue || typeof issue !== "object") continue;
+      const row = issue as { names?: unknown };
+      const id = resolveTargetEndFieldId(asNames(row.names));
+      if (id) {
+        targetEndFieldId = id;
+        writeTargetEndFieldMap(fieldMapPath, { targetEnd: id });
+        return;
+      }
+    }
+    const fromConfig = targetEndFieldIdFromJiraConfig(safeRead(jiraConfigPath) ?? "");
+    if (!fromConfig) return;
+    targetEndFieldId = fromConfig;
+    writeTargetEndFieldMap(fieldMapPath, { targetEnd: fromConfig });
+  }
+
+  async function hydrateRaw(raw: unknown): Promise<unknown[]> {
+    if (!Array.isArray(raw) || raw.length === 0) return Array.isArray(raw) ? raw : [];
+    const keys = [...new Set(raw.map(issueKeyOf).filter((key): key is string => Boolean(key)))];
+    if (!keys.length) return raw;
+    const concurrency = viewConcurrency();
+    console.log(`Refresh view-raw ${keys.length} issues; concurrency ${concurrency}`);
+    const views = await poolMap(keys, concurrency, async (key) => {
+      try {
+        return JSON.parse(await cli.view(key)) as unknown;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.log(`Refresh view ${key} failed; ${message}`);
+        return null;
+      }
+    });
+    const byKey = new Map<string, unknown>();
+    for (const view of views) {
+      const key = issueKeyOf(view);
+      if (key) byKey.set(key, view);
+    }
+    const merged = raw.map((issue) => {
+      const key = issueKeyOf(issue);
+      const view = key ? byKey.get(key) : undefined;
+      return view ? mergeViewIntoIssue(issue, view) : issue;
+    });
+    rememberTargetEndId(merged);
+    return merged;
   }
 
   async function tryMove(key: string, status: string) {
@@ -94,11 +217,11 @@ export function createApp(opts: { store: IssueStore; cli?: Cli; flags?: string }
       return flags;
     },
     board() {
-      const board = issuesToBoard(payload);
+      const board = toBoard(payload);
       return {
         columns: board.columns,
-        epics: mergeEpics(issuesToBoard(epicsPayload).epics, board.epics),
-        ...(hasChildrenCache ? { children: columnsOf(childrenRaw) } : {}),
+        epics: mergeEpics(toBoard(epicsPayload).epics, board.epics),
+        ...(hasChildrenCache ? { children: columnsOf(childrenRaw, targetEndFieldId) } : {}),
         ...(childrenError ? { error: childrenError } : {}),
       };
     },
@@ -109,6 +232,7 @@ export function createApp(opts: { store: IssueStore; cli?: Cli; flags?: string }
       hasChildrenCache = false;
       childrenError = undefined;
       if (hydrateOpts?.fromStore) cacheFromStore();
+      rememberTargetEndId([...payload, ...epicsPayload, ...childrenRaw]);
       return app.board();
     },
     async refresh(next) {
@@ -117,17 +241,17 @@ export function createApp(opts: { store: IssueStore; cli?: Cli; flags?: string }
       try {
         const issues = await cli.list(flags);
         const epics = await cli.listEpics(flags);
-        const nextPayload = JSON.parse(issues);
-        const nextEpics = JSON.parse(epics);
-        const keys = issuesToBoard(nextEpics).epics.map((epic) => epic.key);
-        const issueCount = Array.isArray(nextPayload) ? nextPayload.length : 0;
+        const listedPayload = JSON.parse(issues);
+        const listedEpics = JSON.parse(epics);
+        const keys = toBoard(listedEpics).epics.map((epic) => epic.key);
+        const issueCount = Array.isArray(listedPayload) ? listedPayload.length : 0;
         console.log(`Refresh listed ${issueCount} issues, ${keys.length} epics`);
         let nextChildren: unknown[] = [];
         let nextHasCache = false;
         let nextError: string | undefined;
         try {
           nextChildren = JSON.parse(await cli.listChildren(keys));
-          const cards = cardsOf(nextChildren);
+          const cards = cardsOf(nextChildren, targetEndFieldId);
           if (cards.length > 0 && !cards.some((card) => card.epic)) {
             console.log(`Refresh children missing Epic keys; skip ${keys.length} per-Epic lists`);
             nextChildren = [];
@@ -142,9 +266,9 @@ export function createApp(opts: { store: IssueStore; cli?: Cli; flags?: string }
           nextError = err instanceof Error ? err.message : "Epic children list failed";
           console.log("Refresh children failed; keeping existing children", nextError);
         }
-        payload = nextPayload;
-        epicsPayload = nextEpics;
-        childrenRaw = nextChildren;
+        payload = await hydrateRaw(listedPayload);
+        epicsPayload = await hydrateRaw(listedEpics);
+        childrenRaw = nextHasCache ? await hydrateRaw(nextChildren) : nextChildren;
         hasChildrenCache = nextHasCache;
         childrenError = nextError;
         return app.board();
@@ -155,13 +279,13 @@ export function createApp(opts: { store: IssueStore; cli?: Cli; flags?: string }
       }
     },
     async children(epic) {
-      const listed = issuesToBoard(epicsPayload).epics;
+      const listed = toBoard(epicsPayload).epics;
       if (!listed.some((e) => e.key === epic)) {
         return { columns: [], epics: [] };
       }
       if (hasChildrenCache) {
         const cards = Object.fromEntries(
-          Object.entries(columnsOf(childrenRaw)).map(([title, list]) => [
+          Object.entries(columnsOf(childrenRaw, targetEndFieldId)).map(([title, list]) => [
             title,
             list.filter((card) => card.epic === epic).map((card) => ({
               ...card,
@@ -174,8 +298,9 @@ export function createApp(opts: { store: IssueStore; cli?: Cli; flags?: string }
           .map(([title, list]) => ({ id: title, title, cards: list }));
         if (columns.length) return { columns, epics: [] };
       }
-      return stampMissingEpic(issuesToBoard(JSON.parse(await cli.listEpic(epic, flags))), epic);
+      return stampMissingEpic(toBoard(JSON.parse(await cli.listEpic(epic, flags))), epic);
     },
+
     async move(key, status) {
       const result = await tryMove(key, status);
       if (!result.ok) {

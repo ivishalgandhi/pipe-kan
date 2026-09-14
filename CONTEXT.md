@@ -9,14 +9,14 @@ A Jira work item identified by its key.
 _Avoid_: ticket, item, task (when meaning the Jira record)
 
 **Card**:
-The Board representation of one Issue. It shows the Issue key and summary, and when the payload has them, priority, assignee, due date, labels, and age since created. On All epics the Card is an Epic and is marked Epic.
+The Board representation of one Issue. It shows the Issue key and summary, and when the payload has them, priority, assignee, due date, Target End Date, labels, and age since created. On All epics the Card is an Epic and is marked Epic.
 
 **Column**:
 A Board lane named by an Issue status present in the payload. Statuses with no Issues are omitted.
 _Avoid_: lane, list
 
 **Board**:
-The Kanban of Cards grouped into Columns. All stories and All epics each open a Board. Selecting an Epic on All stories keeps that Board and shows only that Epic's children.
+The Kanban of Cards grouped into Columns. All stories, All epics, and Combined each open a Board. Selecting an Epic on All stories keeps that Board and shows only that Epic's children.
 _Avoid_: dashboard, Jira board (that is Atlassian's saved board), view (Linear's saved query)
 
 **All stories**:
@@ -26,6 +26,10 @@ _Avoid_: inbox, home, all issues
 **All epics**:
 The left-pane opener for the Board whose Cards are Epics. Sibling of All stories. Last opener persists locally. Not Favourite, Preset, Scope, or selecting an Epic.
 _Avoid_: epic view, epic board (Atlassian's), toggle
+
+**Combined**:
+The left-pane opener for the Board whose Cards are Epics and non-Epic Issues together, in status Columns. Sibling of All stories and All epics. Last opener persists locally. Not a fourth opener, not Calendar, not Scope.
+_Avoid_: all combined, mix, everything
 
 **Project**:
 A Jira project identified by its key. Refresh and the default Scope are one Project. A Pipe may hold Issues from several keys until Refresh.
@@ -84,8 +88,12 @@ Changing an Issue's status by running `jira issue move`. A Card is Moved by drop
 _Avoid_: transition, drag (the gesture), update, file (putting a Favourite in a Folder)
 
 **Open**:
-Showing an Issue's details and Jira URL in the side pane. A Card Opens on click, including an Epic Card on All epics. On All stories an Epic Opens from its row menu. `jira open KEY` still resolves that URL. Same-origin pages embed; remote Jira is a link because it refuses frames.
+Showing an Issue's details and Jira URL in the side pane. A Card Opens on click, including an Epic Card on All epics. On All stories an Epic Opens from its row menu. A Calendar Issue key Opens the same pane. `jira open KEY` still resolves that URL. Same-origin pages embed; remote Jira is a link because it refuses frames.
 _Avoid_: view, browse (when meaning this)
+
+**Calendar**:
+A read-only month tab on the main canvas of Issue created and Target End days for currently visible Cards. Board | Calendar tabs sit where the Board title was; a left-nav Calendar control selects the Calendar tab. It does not replace All stories, All epics, or Combined.
+_Avoid_: Board, scheduler, Jira calendar, sidebar calendar
 
 **Write-back**:
 Changing Jira from the Board, only by running jira-cli (`jira issue move`, `jira issue create`, `jira issue edit`). Never a direct Jira API call from this app.

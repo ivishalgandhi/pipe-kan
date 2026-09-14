@@ -5,6 +5,7 @@ import {
   resolveJiraBin,
   type Cli,
 } from "./cli.ts";
+import { jiraCliConfigPath } from "./field-map.ts";
 import { IssueStore } from "./store.ts";
 
 export type Boot = {
@@ -31,7 +32,12 @@ export async function createBoardApp(opts: {
         flags,
       })
     : createStoreCli(store, flags);
-  const app = createApp({ store, cli, flags });
+  const app = createApp({
+    store,
+    cli,
+    flags,
+    jiraConfigPath: jiraCliConfigPath(env),
+  });
   if (opts.piped) {
     app.hydrate(opts.raw);
   } else {

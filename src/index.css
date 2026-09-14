@@ -241,3 +241,59 @@
     font-weight: 450;
   }
 }
+
+.pk-calendar {
+  --fc-border-color: var(--border);
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: var(--muted);
+  --fc-today-bg-color: color-mix(in oklab, var(--primary) 14%, transparent);
+  --fc-neutral-text-color: var(--foreground);
+  --fc-button-bg-color: transparent;
+  --fc-button-border-color: var(--border);
+  --fc-button-text-color: var(--foreground);
+  --fc-button-hover-bg-color: var(--muted);
+  --fc-button-hover-border-color: var(--border);
+  --fc-button-active-bg-color: var(--muted);
+  --fc-button-active-border-color: var(--border);
+  --fc-event-bg-color: var(--primary);
+  --fc-event-border-color: var(--primary);
+  --fc-event-text-color: var(--primary-foreground);
+  --fc-small-font-size: 11px;
+  font-size: 12px;
+  color: var(--foreground);
+}
+
+.pk-calendar .fc-toolbar-title {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.pk-calendar .fc-button {
+  padding: 0.15rem 0.5rem;
+  font-size: 12px;
+  box-shadow: none;
+}
+
+.pk-calendar .fc-event {
+  cursor: pointer;
+}
+
+.pk-calendar .fc-event-key {
+  all: unset;
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  font: inherit;
+}
+
+.pk-calendar .fc-event-created {
+  background-color: var(--chart-2);
+  border-color: var(--chart-2);
+}
+
+.pk-calendar .fc-event-target-end {
+  background-color: var(--primary);
+  border-color: var(--primary);
+}

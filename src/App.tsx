@@ -68,7 +68,14 @@ import {
   type Preset,
   type VisibleOpts,
 } from "./visible.ts";
+import {
+  readCanvasTab,
+  selectCalendarTab,
+  writeCanvasTab,
+  type CanvasTab,
+} from "~/calendar.ts";
 import { AgentPanel } from "~/components/agent/agent-panel.tsx";
+import { BoardCalendar } from "~/components/board-calendar.tsx";
 import { CommandOverlay } from "~/components/command-overlay.tsx";
 import { IssueComposer } from "~/components/issue-composer.tsx";
 import { Toaster } from "~/components/ui/sonner.tsx";
@@ -1097,6 +1104,7 @@ export function App() {
   const [presetName, setPresetName] = useState("");
   const [presetError, setPresetError] = useState("");
   const [boardKind, setBoardKind] = useState<"stories" | "epics" | "combined">(readOpener);
+  const [canvasTab, setCanvasTab] = useState<CanvasTab>(readCanvasTab);
   const [sidebarOpen, setSidebarOpen] = useState(() => readSidebarOpen());
   const epicsPanelRef = usePanelRef();
   const lastBoard = useRef<Board | null>(null);
@@ -1609,6 +1617,16 @@ export function App() {
     if (lastBoard.current) paintBoard(lastBoard.current, "combined");
   }
 
+  function persistCanvasTab(next: CanvasTab) {
+    writeCanvasTab(next);
+    setCanvasTab(next);
+  }
+
+  function openCalendarTab() {
+    selectCalendarTab();
+    setCanvasTab("calendar");
+  }
+
   async function selectEpic(key: string | null) {
     const fromEpics = boardKind === "epics" || boardKind === "combined";
     if (fromEpics) openStories();
@@ -1801,6 +1819,18 @@ export function App() {
               >
                 Combined
               </button>
+              <button
+                type="button"
+                className={cn(
+                  "h-8 rounded-lg px-3 text-left text-[13px]",
+                  canvasTab === "calendar"
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    : "hover:bg-foreground/5",
+                )}
+                onClick={openCalendarTab}
+              >
+                Calendar
+              </button>
               {showFavourites ? (
                 <FavouriteGroup
                   pane={favouritePane}
@@ -1898,7 +1928,40 @@ export function App() {
                     <ChevronRightIcon className="size-4" />
                   </Button>
                 ) : null}
-                <strong className="text-[13px] font-medium">Board</strong>
+                <div
+                  role="tablist"
+                  aria-label="Board or Calendar"
+                  className="flex items-center gap-0.5"
+                >
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={canvasTab === "board"}
+                    className={cn(
+                      "h-7 rounded-md px-2 text-[13px] font-medium",
+                      canvasTab === "board"
+                        ? "bg-muted text-foreground"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                    onClick={() => persistCanvasTab("board")}
+                  >
+                    Board
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={canvasTab === "calendar"}
+                    className={cn(
+                      "h-7 rounded-md px-2 text-[13px] font-medium",
+                      canvasTab === "calendar"
+                        ? "bg-muted text-foreground"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                    onClick={() => persistCanvasTab("calendar")}
+                  >
+                    Calendar
+                  </button>
+                </div>
                 <span className="bg-primary/10 text-primary inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium">
                   {(() => {
                     const { projects } = parseFlags(flags);
@@ -2076,7 +2139,18 @@ export function App() {
                   minSize="16rem"
                   className="min-h-0"
                 >
-                  <main className="h-full min-h-0 min-w-0 overflow-auto px-2 pb-2">
+                  <main
+                    className={cn(
+                      "h-full min-h-0 min-w-0 px-2 pb-2",
+                      canvasTab === "calendar" ? "overflow-hidden" : "overflow-auto",
+                    )}
+                  >
+                    {canvasTab === "calendar" ? (
+                      <BoardCalendar
+                        cards={Object.values(visible).flat()}
+                        onOpen={(key) => void open(key)}
+                      />
+                    ) : (
                     <Kanban
                       className="h-full min-h-0"
                       value={visible}
@@ -2161,6 +2235,7 @@ export function App() {
                         }}
                       </KanbanOverlay>
                     </Kanban>
+                    )}
                   </main>
                 </ResizablePanel>
                 {openKey ? (

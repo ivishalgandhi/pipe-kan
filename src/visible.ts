@@ -287,8 +287,10 @@ export function combinedBoard(
     priority: epic.priority,
     assignee: epic.assignee,
     dueDate: epic.dueDate,
+    targetEnd: epic.targetEnd,
     labels: epic.labels,
     type: "Epic",
+    created: epic.created,
   }));
   const storyCards = Object.values(columns)
     .flat()

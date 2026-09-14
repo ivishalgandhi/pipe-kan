@@ -1,5 +1,6 @@
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, expect, test } from "vitest";
@@ -8,6 +9,7 @@ import { createApp } from "./app.ts";
 import { handleAppApi } from "./app-api.ts";
 import type { RawIssue } from "./board.ts";
 import { createStoreCli, type Cli } from "./cli.ts";
+import { readTargetEndFieldMap } from "./field-map.ts";
 import { IssueStore } from "./store.ts";
 
 const fixture = JSON.parse(
@@ -208,6 +210,66 @@ test("Open keeps the URL and an error when view fails", async () => {
   expect(body.url).toBe("/browse/DEMO-2");
   expect(body.fields).toEqual([]);
   expect(body.error).toBe("jira issue view failed");
+});
+
+test("Refresh maps Target End from jira-cli config when view-raw has no names", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "pipe-kan-jira-cfg-"));
+  const yamlPath = join(dir, ".config.yml");
+  const mapPath = join(dir, "field-map.json");
+  writeFileSync(
+    yamlPath,
+    `
+issue:
+    fields:
+        custom:
+            -
+                name: Target Start
+                key: customfield_10101
+            -
+                name: Target End Date
+                key: customfield_10100
+`,
+  );
+  const listed = [
+    {
+      key: "DEMO-2",
+      fields: {
+        summary: "Thin list",
+        status: { name: "To Do" },
+        created: "2026-09-01T10:00:00.000+0000",
+      },
+    },
+  ];
+  const viewRaw = {
+    key: "DEMO-2",
+    fields: {
+      summary: "Thin list",
+      status: { name: "To Do" },
+      created: "2026-09-01T10:00:00.000+0000",
+      customfield_10100: "2026-10-20",
+      customfield_10101: "2026-01-15",
+    },
+  };
+  const cli: Cli = {
+    list: async () => JSON.stringify(listed),
+    listEpics: async () => "[]",
+    listEpic: async () => "[]",
+    listChildren: async () => "[]",
+    move: async () => ({ ok: true }),
+    create: async () => ({ ok: false, error: "not implemented" }),
+    edit: async () => ({ ok: false, error: "not implemented" }),
+    open: async (key) => `/browse/${key}`,
+    view: async () => JSON.stringify(viewRaw),
+  };
+  const app = createApp({
+    store: IssueStore.fromRaw(listed),
+    cli,
+    jiraConfigPath: yamlPath,
+    fieldMapPath: mapPath,
+  });
+  await app.refresh();
+  expect(app.board().columns[0]?.cards[0]?.targetEnd).toBe("2026-10-20");
+  expect(readTargetEndFieldMap(mapPath).targetEnd).toBe("customfield_10100");
 });
 
 test("Epic children keep the Epic key", async () => {
