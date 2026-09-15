@@ -36,7 +36,42 @@ export JIRA_API_TOKEN=...   # only if jira-cli does not already have it
 bunx pipe-kan
 ```
 
-Scope flags start empty. Add `-a you@work.com` or `-s~Done` if you want a tighter list, then Refresh.
+Scope flags start empty (jira-cli's one Project). Add `-a you@work.com` or `-s~Done` if you want a tighter list, then Refresh. More than one Project key: `--projects` below.
+
+## Multiple projects
+
+Default Scope is one Project — jira-cli's `jira init` project. To list more than one Project key:
+
+```sh
+bunx pipe-kan --projects KEY1,KEY2
+```
+
+`--projects` is a pipe-kan Scope flag. Comma-separated keys; trimmed and uppercased. The same string in the header **Scope flags** field, then **Refresh**, is the same Scope.
+
+That Scope becomes JQL `project in ("KEY1", "KEY2")`. `-a`, `-s`, `-t`, and `-P` AND onto that clause. `-q` / `--jql` replaces the generated JQL; `--projects` still records the keys for Favourites and Presets.
+
+With that Scope:
+
+- **Refresh** re-runs `jira issue list` for All stories (`project in (...)` plus the other Scope clauses) and lists All epics as `project in (...) AND type="Epic"`. Epic children are listed for those Epics. Header chip shows the keys, or `DEMO` when Scope has none.
+- **Favourites** stay local. When Scope has Project keys, Favourite writes stamp that set.
+- **Presets** stay Filter, Sort, and Hide. Save stamps the current Project set. Apply copies that chrome; it does not change Scope. Apply is a no-op when the Preset's Project set does not match the current Scope.
+
+A Pipe may already mix Project keys. Refresh replaces that Board with the current Scope.
+
+## Preset
+
+A Preset is a named, local snapshot of Filter, Sort, and Hide. It is not Scope.
+
+1. Set Filter and Sort in the header. Hide a Column from **Columns** (uncheck its status).
+2. Left pane **Presets** (after Favourites). Always shown, default open.
+3. Group **…** → **Save Preset**: type a name, **Save** (or Enter). Done when the name is a row. Empty and duplicate names (case-insensitive) fail with "Preset names must be unique".
+4. Click the row to Apply: last-used Filter, Sort, and Hide become that snapshot. Apply also restores the opener at Save (All stories, All epics, or Combined). Later Filter / Sort / Hide writes last-used only. Command (Cmd+K) **Apply {name}** is the same Apply.
+5. Row **…**:
+   - **Save over** — replace that Preset with current last-used chrome
+   - **Rename** — prompt; same uniqueness rule as Save
+   - **Delete** — drop that Preset
+
+No built-in names. No applied highlight. Search and the selected Epic do not change the Preset list.
 
 ## Fake Jira
 
