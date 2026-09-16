@@ -2441,7 +2441,7 @@ export function App() {
               {selectedEpic ? `Refresh selected (${selectedEpic})` : "Refresh selected"}
             </Button>
             <Button type="button" disabled={busy} onClick={() => void confirmRefresh("all")}>
-              Refresh all epics
+              Refresh all Epics
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
