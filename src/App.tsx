@@ -22,6 +22,7 @@ import { toast } from "sonner";
 
 import { cardAge, epicsToColumns, targetEndDistance, type Board, type Card, type Column, type Epic } from "./board.ts";
 import { type CommandJump } from "./command.ts";
+import { REFRESH_NO_FOCUS_WARNING, refreshRequestBody } from "./refresh.ts";
 import { parseFlags } from "./flags.ts";
 import {
   buildCreatePayload,
@@ -81,6 +82,15 @@ import { IssueComposer } from "~/components/issue-composer.tsx";
 import { Toaster } from "~/components/ui/sonner.tsx";
 import { Spinner } from "~/components/ui/spinner.tsx";
 import { Avatar, AvatarFallback } from "~/components/ui/avatar";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
 import {
   Collapsible,
@@ -1110,6 +1120,8 @@ export function App() {
   const lastBoard = useRef<Board | null>(null);
   const [pipeBoard, setPipeBoard] = useState<Board | null>(null);
   const [commandOpen, setCommandOpen] = useState(false);
+  const [refreshOpen, setRefreshOpen] = useState(false);
+  const [pendingRefreshFlags, setPendingRefreshFlags] = useState<string | undefined>(undefined);
   const commandOpenRef = useRef(false);
   const commandReturnFocus = useRef<HTMLElement | null>(null);
   const queue = useMoveQueue(setColumns, setEpics);
@@ -1290,17 +1302,33 @@ export function App() {
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, []);
 
-  async function refresh() {
+  function openRefreshConfirm(nextFlags?: string) {
+    setPendingRefreshFlags(nextFlags);
+    setRefreshOpen(true);
+  }
+
+  async function confirmRefresh(choice: "all" | "selected") {
+    const body = refreshRequestBody(choice, selectedEpic, pendingRefreshFlags ?? flags);
+    if (!body) return;
+    setRefreshOpen(false);
+    setPendingRefreshFlags(undefined);
+    await refresh(body);
+  }
+
+  async function refresh(body: { scope: "all" | "selected"; flags: string; epicKeys?: string[] }) {
     setBusy(true);
     setError("");
-    console.info("[pipe-kan] Refresh", flags);
-    const toastId = toast.loading("Refreshing…", { description: "Listing Issues and Epics" });
+    console.info("[pipe-kan] Refresh", body);
+    const toastId = toast.loading("Refreshing…", {
+      description: body.scope === "selected" ? "Listing the focused Epic's works" : "Listing Issues and Epics",
+    });
     try {
       const data = await api<BoardPayload>("/api/refresh", {
         method: "POST",
-        body: JSON.stringify({ flags }),
+        body: JSON.stringify(body),
       });
       applyBoard(data);
+      if (body.scope === "all") setFlags(body.flags);
       if (data.error) {
         console.info("[pipe-kan] Refresh error", data.error);
         toast.error("Refresh failed", { id: toastId, description: data.error });
@@ -1308,7 +1336,7 @@ export function App() {
         console.info("[pipe-kan] Refreshed", data.epics.length, "epics");
         toast.success("Refreshed", {
           id: toastId,
-          description: `${data.epics.length} epics`,
+          description: body.scope === "selected" ? body.epicKeys?.join(", ") : `${data.epics.length} epics`,
         });
       }
     } catch (err) {
@@ -1701,7 +1729,7 @@ export function App() {
     if (jump.kind === "all-stories") openStories();
     else if (jump.kind === "all-epics") openEpics();
     else if (jump.kind === "all-combined") openCombined();
-    else if (jump.kind === "refresh") void refresh();
+    else if (jump.kind === "refresh") openRefreshConfirm();
     else if (jump.kind === "agent") setAgentOpen(true);
     else if (jump.kind === "create") openCreate();
     else if (jump.kind === "create-ai") openCreateAi();
@@ -2099,7 +2127,7 @@ export function App() {
                     ))}
                   </DropdownMenuContent>
                 </DropdownMenu>
-                <Button variant="ghost" size="sm" onClick={() => void refresh()} disabled={busy} aria-busy={busy}>
+                <Button variant="ghost" size="sm" onClick={() => openRefreshConfirm()} disabled={busy} aria-busy={busy}>
                   {busy ? <Spinner className="size-3.5" /> : null}
                   Refresh
                 </Button>
@@ -2376,6 +2404,7 @@ export function App() {
               }
               onApplyPreset={applyNamedPreset}
               onSetFilter={(filter) => persistChrome({ ...chrome, filter })}
+              onConfirmRefresh={openRefreshConfirm}
               onBoardMutated={() => {
                 void load();
               }}
@@ -2385,6 +2414,38 @@ export function App() {
           </>
         ) : null}
       </ResizablePanelGroup>
+      <AlertDialog
+        open={refreshOpen}
+        onOpenChange={(open) => {
+          setRefreshOpen(open);
+          if (!open) setPendingRefreshFlags(undefined);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Refresh</AlertDialogTitle>
+            <AlertDialogDescription>
+              {selectedEpic
+                ? `Refresh all Epics, or only the focused Epic ${selectedEpic}.`
+                : REFRESH_NO_FOCUS_WARNING}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy || !selectedEpic}
+              onClick={() => void confirmRefresh("selected")}
+            >
+              {selectedEpic ? `Refresh selected (${selectedEpic})` : "Refresh selected"}
+            </Button>
+            <Button type="button" disabled={busy} onClick={() => void confirmRefresh("all")}>
+              Refresh all epics
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <Toaster theme={theme} />
       {composer ? (
         <IssueComposer

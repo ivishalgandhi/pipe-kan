@@ -61,7 +61,7 @@ const TOOLS: ToolSchema[] = [
   },
   {
     name: "refresh_board",
-    description: "Refresh the board from Jira. Requires user approval.",
+    description: "Open the Refresh confirm dialog (all Epics or the focused Epic). Requires user approval.",
     parameters: { flags: { type: "string", description: "Optional jira-cli flags" } },
     mutates: true,
   },
@@ -150,10 +150,15 @@ const EXECUTORS: Record<string, ToolExecutor> = {
     if (result.error) return { ok: false, error: result.error };
     return { ok: true, value: { moved: key, to: status } };
   },
-  async refresh_board(args, app) {
+  refresh_board(args) {
     const flags = typeof args.flags === "string" ? args.flags : undefined;
-    await app.refresh(flags);
-    return { ok: true, value: "Board refreshed" };
+    return {
+      ok: true as const,
+      value: {
+        __ui_action: "confirm_refresh",
+        ...(flags !== undefined ? { flags } : {}),
+      },
+    };
   },
   apply_preset(args) {
     const name = String(args.name ?? "");

@@ -167,6 +167,168 @@ test("Refresh with Epic flag lists Epic children", async () => {
   ]);
 });
 
+function trackCli(store = IssueStore.fromRaw(fixture)) {
+  const inner = createStoreCli(store);
+  const calls: string[][] = [];
+  const cli: Cli = {
+    list: async (flags) => {
+      calls.push(["list", flags]);
+      return inner.list(flags);
+    },
+    listEpics: async (flags) => {
+      calls.push(["listEpics"]);
+      return inner.listEpics(flags);
+    },
+    listEpic: async (key, flags) => {
+      calls.push(["listEpic", key]);
+      return inner.listEpic(key, flags);
+    },
+    listChildren: async (keys) => {
+      calls.push(["listChildren", ...keys]);
+      return inner.listChildren(keys);
+    },
+    move: (key, status) => inner.move(key, status),
+    create: (input) => inner.create(input),
+    edit: (key, input) => inner.edit(key, input),
+    open: (key) => inner.open(key),
+    view: (key) => inner.view(key),
+  };
+  return { cli, calls };
+}
+
+test("omitted Refresh scope is all", async () => {
+  const store = IssueStore.fromRaw(fixture);
+  const { cli, calls } = trackCli(store);
+  const { base } = await listen(store, cli);
+  calls.length = 0;
+  const res = await fetch(`${base}/api/refresh`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  const body = await res.json();
+  expect(res.status).toBe(200);
+  expect(body.epics.map((epic: { key: string }) => epic.key)).toEqual([
+    "DEMO-1",
+    "DEMO-7",
+    "DEMO-8",
+  ]);
+  expect(calls.filter((call) => call[0] === "list")).toHaveLength(1);
+  expect(calls.filter((call) => call[0] === "listEpics")).toHaveLength(1);
+  expect(calls.filter((call) => call[0] === "listChildren")).toEqual([
+    ["listChildren", "DEMO-1", "DEMO-7", "DEMO-8"],
+  ]);
+});
+
+test("scope all Refresh lists every Epic", async () => {
+  const store = IssueStore.fromRaw(fixture);
+  const { cli, calls } = trackCli(store);
+  const { base } = await listen(store, cli);
+  calls.length = 0;
+  const res = await fetch(`${base}/api/refresh`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ scope: "all", flags: "" }),
+  });
+  expect(res.status).toBe(200);
+  expect(calls.filter((call) => call[0] === "list")).toHaveLength(1);
+  expect(calls.filter((call) => call[0] === "listChildren")).toEqual([
+    ["listChildren", "DEMO-1", "DEMO-7", "DEMO-8"],
+  ]);
+});
+
+test("selected Refresh without epicKeys is 400", async () => {
+  const { base } = await listen();
+  const empty = await fetch(`${base}/api/refresh`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ scope: "selected" }),
+  });
+  expect(empty.status).toBe(400);
+  const none = await fetch(`${base}/api/refresh`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ scope: "selected", epicKeys: [] }),
+  });
+  expect(none.status).toBe(400);
+});
+
+test("selected Refresh merges that Epic's works without rewriting Scope", async () => {
+  const store = IssueStore.fromRaw(fixture);
+  const inner = createStoreCli(store);
+  const calls: string[][] = [];
+  let selected = false;
+  const otherChild = {
+    key: "DEMO-70",
+    fields: {
+      summary: "Other epic child",
+      status: { name: "To Do" },
+      issuetype: { name: "Story" },
+      parent: { key: "DEMO-7" },
+    },
+  };
+  const cli: Cli = {
+    list: async (flags) => {
+      calls.push(["list", flags]);
+      return inner.list(flags);
+    },
+    listEpics: async (flags) => {
+      calls.push(["listEpics"]);
+      return inner.listEpics(flags);
+    },
+    listEpic: async (key, flags) => {
+      calls.push(["listEpic", key]);
+      return inner.listEpic(key, flags);
+    },
+    listChildren: async (keys) => {
+      calls.push(["listChildren", ...keys]);
+      if (selected) {
+        return JSON.stringify([
+          {
+            key: "DEMO-2",
+            fields: {
+              summary: "Updated child",
+              status: { name: "To Do" },
+              issuetype: { name: "Story" },
+              parent: { key: "DEMO-1" },
+            },
+          },
+        ]);
+      }
+      const listed = JSON.parse(await inner.listChildren(keys)) as unknown[];
+      return JSON.stringify([...listed, otherChild]);
+    },
+    move: (key, status) => inner.move(key, status),
+    create: (input) => inner.create(input),
+    edit: (key, input) => inner.edit(key, input),
+    open: (key) => inner.open(key),
+    view: (key) => inner.view(key),
+  };
+  const { base, app } = await listen(store, cli);
+  expect(childKeys(app.board())).toEqual(["DEMO-2", "DEMO-3", "DEMO-4", "DEMO-5", "DEMO-70"]);
+  selected = true;
+  calls.length = 0;
+  const res = await fetch(`${base}/api/refresh`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      scope: "selected",
+      epicKeys: ["DEMO-1"],
+      flags: "-pDEMO",
+    }),
+  });
+  const body = await res.json();
+  expect(res.status).toBe(200);
+  expect(calls.filter((call) => call[0] === "list")).toEqual([]);
+  expect(calls.filter((call) => call[0] === "listEpics")).toEqual([]);
+  expect(calls.filter((call) => call[0] === "listChildren")).toEqual([["listChildren", "DEMO-1"]]);
+  expect(childKeys(body)).toEqual(["DEMO-2", "DEMO-70"]);
+  expect(
+    body.columns.flatMap((c: { cards: { key: string }[] }) => c.cards.map((card) => card.key)),
+  ).toEqual(["DEMO-2", "DEMO-4", "DEMO-6", "DEMO-3", "DEMO-5"]);
+  expect(app.flags).toBe("");
+});
+
 test("Open returns the browse URL and flattened fields", async () => {
   const { base } = await listen();
   const res = await fetch(`${base}/api/open`, {

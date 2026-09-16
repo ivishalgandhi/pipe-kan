@@ -94,6 +94,7 @@ type AgentPanelProps = {
   pipeView?: BoardViewSnapshot;
   onApplyPreset?: (name: string) => void;
   onSetFilter?: (filter: BoardFilter) => void;
+  onConfirmRefresh?: (flags?: string) => void;
   onBoardMutated?: () => void;
   seedPrompt?: string | null;
   onSeedConsumed?: () => void;
@@ -111,6 +112,7 @@ export function AgentPanel({
   pipeView,
   onApplyPreset,
   onSetFilter,
+  onConfirmRefresh,
   onBoardMutated,
   seedPrompt,
   onSeedConsumed,
@@ -251,12 +253,14 @@ export function AgentPanel({
           ),
         );
         const result = event.result as
-          | { __ui_action?: string; preset?: string; filter?: BoardFilter }
+          | { __ui_action?: string; preset?: string; filter?: BoardFilter; flags?: string }
           | undefined;
         if (result?.__ui_action === "apply_preset" && result.preset) {
           onApplyPreset?.(result.preset);
         } else if (result?.__ui_action === "set_filter" && result.filter) {
           onSetFilter?.(result.filter);
+        } else if (result?.__ui_action === "confirm_refresh") {
+          onConfirmRefresh?.(typeof result.flags === "string" ? result.flags : undefined);
         } else if (result?.__ui_action === "refresh_board") {
           onBoardMutated?.();
         }
@@ -293,7 +297,7 @@ export function AgentPanel({
       handlers[event.type]?.(event);
     });
     return () => es.close();
-  }, [sessionId, onApplyPreset, onSetFilter, onBoardMutated]);
+  }, [sessionId, onApplyPreset, onSetFilter, onConfirmRefresh, onBoardMutated]);
 
   const postApproval = (requestId: string, decision: "once" | "always" | "reject") => {
     if (!sessionId) return;
