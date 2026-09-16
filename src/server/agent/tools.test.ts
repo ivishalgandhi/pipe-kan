@@ -170,3 +170,27 @@ test("edit_issue requires a key", async () => {
   const result = await registry.execute("edit_issue", { summary: "Edited" }, mockApp);
   expect(result.ok).toBe(false);
 });
+test("refresh_board yields the confirm action and does not Refresh", async () => {
+  const registry = createToolRegistry();
+  let refreshes = 0;
+  const app = {
+    ...mockApp,
+    refresh: async () => {
+      refreshes += 1;
+      return { columns: [], epics: [] };
+    },
+  };
+  const result = await registry.execute("refresh_board", { flags: "-pDEMO" }, app);
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(result.value).toEqual({ __ui_action: "confirm_refresh", flags: "-pDEMO" });
+  expect(refreshes).toBe(0);
+});
+
+test("refresh_board without flags still yields confirm", async () => {
+  const registry = createToolRegistry();
+  const result = await registry.execute("refresh_board", {}, mockApp);
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(result.value).toEqual({ __ui_action: "confirm_refresh" });
+});

@@ -18,7 +18,7 @@ import { readTargetEndFieldMap, writeTargetEndFieldMap } from "./field-map.ts";
 export type App = {
   flags: string;
   hydrate(raw: unknown, opts?: { fromStore?: boolean }): Board;
-  refresh(flags?: string): Promise<Board>;
+  refresh(flags?: string, opts?: { scope?: "all" | "selected"; epicKeys?: string[] }): Promise<Board>;
   children(epic: string): Promise<Board>;
   board(): Board;
   move(
@@ -201,6 +201,46 @@ export function createApp(opts: {
     return merged;
   }
 
+  function issueEpic(issue: unknown): string | undefined {
+    return cardsOf([issue], targetEndFieldId)[0]?.epic;
+  }
+
+  function mergeSelectedChildren(existing: unknown[], incoming: unknown[], epicKeys: string[]) {
+    const replace = new Set(epicKeys);
+    const incomingKeys = new Set(
+      incoming.map(issueKeyOf).filter((key): key is string => Boolean(key)),
+    );
+    const kept = existing.filter((issue) => {
+      const key = issueKeyOf(issue);
+      if (key && incomingKeys.has(key)) return false;
+      const epic = issueEpic(issue);
+      return !epic || !replace.has(epic);
+    });
+    return [...kept, ...incoming];
+  }
+
+  async function refreshSelected(epicKeys: string[]) {
+    const keys = [...new Set(epicKeys.filter((key) => key.trim() !== ""))];
+    console.log("Refresh selected", keys.join(","));
+    try {
+      let nextChildren: unknown[] = JSON.parse(await cli.listChildren(keys));
+      const cards = cardsOf(nextChildren, targetEndFieldId);
+      if (cards.length > 0 && !cards.some((card) => card.epic) && keys.length === 1) {
+        const epic = keys[0]!;
+        nextChildren = JSON.parse(await cli.listEpic(epic, flags));
+      }
+      const hydrated = await hydrateRaw(nextChildren);
+      childrenRaw = mergeSelectedChildren(childrenRaw, hydrated, keys);
+      hasChildrenCache = true;
+      childrenError = undefined;
+      return app.board();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Refresh failed";
+      console.error("Refresh failed", message);
+      return { ...app.board(), error: message };
+    }
+  }
+
   async function tryMove(key: string, status: string) {
     const current = currentStatus(key);
     if (current === status) {
@@ -235,7 +275,10 @@ export function createApp(opts: {
       rememberTargetEndId([...payload, ...epicsPayload, ...childrenRaw]);
       return app.board();
     },
-    async refresh(next) {
+    async refresh(next, opts) {
+      if (opts?.scope === "selected") {
+        return refreshSelected(opts.epicKeys ?? []);
+      }
       if (next !== undefined) flags = next;
       console.log("Refresh");
       try {

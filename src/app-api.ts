@@ -51,6 +51,17 @@ export function handleAppApi(
   if (url.pathname === "/api/refresh" && method === "POST") {
     reply(req, res, async (text) => {
       const body = text ? JSON.parse(text) : {};
+      if (body.scope === "selected") {
+        const epicKeys = Array.isArray(body.epicKeys)
+          ? body.epicKeys.filter((item: unknown) => typeof item === "string" && item.trim() !== "")
+          : [];
+        if (!epicKeys.length) {
+          json(res, 400, { error: "selected Refresh requires epicKeys" });
+          return;
+        }
+        json(res, 200, await app.refresh(undefined, { scope: "selected", epicKeys }));
+        return;
+      }
       json(res, 200, await app.refresh(body.flags));
     });
     return true;

@@ -80,7 +80,7 @@ stdin carrying `jira issue list --raw` JSON into the app. The payload may includ
 _Avoid_: stream, feed, Scope (when meaning this)
 
 **Refresh**:
-Re-running jira-cli from the UI to replace the Issues on the current Board.
+Confirm first, then re-run jira-cli for all Epics or the focused left-pane Epic.
 _Avoid_: sync, reload (when meaning that action)
 
 **Move**:
