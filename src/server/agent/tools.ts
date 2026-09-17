@@ -103,7 +103,10 @@ const TOOLS: ToolSchema[] = [
   },
 ];
 
-const skills = createSkillRegistry();
+let skills: ReturnType<typeof createSkillRegistry> | undefined;
+function skillRegistry() {
+  return (skills ??= createSkillRegistry());
+}
 
 const EXECUTORS: Record<string, ToolExecutor> = {
   board_state(_, app) {
@@ -124,7 +127,7 @@ const EXECUTORS: Record<string, ToolExecutor> = {
   run_skill(args) {
     const skillId = String(args.skillId ?? "");
     if (!skillId) return { ok: false, error: "Missing skillId" };
-    const skill = skills.load(skillId);
+    const skill = skillRegistry().load(skillId);
     if (!skill) return { ok: false, error: `Skill not found: ${skillId}` };
     const block = skillContextBlock(skill);
     if (block.type !== "resource") return { ok: false, error: "Skill produced unexpected block" };

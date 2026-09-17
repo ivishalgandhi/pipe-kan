@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import type { AgentContextBlock } from "./types.ts";
 
@@ -16,11 +17,16 @@ export type SkillRegistry = {
   load(id: string): Skill | undefined;
 };
 
-export function createSkillRegistry(bundledDir = join(import.meta.dirname, "..", "..", "..", ".agents", "skills")): SkillRegistry {
+export function moduleDirname(meta: { dirname?: string; url: string }): string {
+  return meta.dirname ?? dirname(fileURLToPath(meta.url));
+}
+
+export function createSkillRegistry(bundledDir?: string): SkillRegistry {
+  const dir = bundledDir ?? join(moduleDirname(import.meta), "..", "..", "..", ".agents", "skills");
   const userDir = join(homedir(), ".pi", "agent", "skills");
   return {
     list() {
-      const bundled = listSkills(bundledDir);
+      const bundled = listSkills(dir);
       const user = existsSync(userDir) ? listSkills(userDir) : [];
       const map = new Map<string, Skill>();
       for (const skill of bundled) map.set(skill.id, skill);
@@ -30,7 +36,7 @@ export function createSkillRegistry(bundledDir = join(import.meta.dirname, "..",
     load(id) {
       const userPath = skillPath(userDir, id);
       if (existsSync(userPath)) return readSkill(userPath, id);
-      const bundledPath = skillPath(bundledDir, id);
+      const bundledPath = skillPath(dir, id);
       if (existsSync(bundledPath)) return readSkill(bundledPath, id);
       return undefined;
     },
