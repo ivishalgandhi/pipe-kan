@@ -2,9 +2,22 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { expect, test } from "vitest";
 
-import { createSkillRegistry, skillContextBlock } from "./skills.ts";
+import { createSkillRegistry, moduleDirname, skillContextBlock } from "./skills.ts";
 
 const bundledDir = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", ".agents", "skills");
+
+test("moduleDirname falls back when import.meta.dirname is missing", () => {
+  const url = import.meta.url;
+  const expected = dirname(fileURLToPath(url));
+  expect(moduleDirname({ url })).toBe(expected);
+  expect(moduleDirname({ dirname: undefined, url })).toBe(expected);
+  expect(moduleDirname({ dirname: "/tmp/mod", url })).toBe("/tmp/mod");
+});
+
+test("createSkillRegistry default dir lists bundled skills", () => {
+  const ids = createSkillRegistry().list().map((s) => s.id);
+  expect(ids).toEqual(expect.arrayContaining(["ask-matt", "code-review", "triage", "research"]));
+});
 
 test("skill registry lists bundled skills", () => {
   const registry = createSkillRegistry(bundledDir);

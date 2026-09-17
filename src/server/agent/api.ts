@@ -16,7 +16,10 @@ import type { AgentConfig, AgentContextBlock, AgentEvent, AgentSession } from ".
 const sessions = new Map<string, AgentSession>();
 let connecting: AgentSession | null = null;
 let startEpoch = 0;
-const skills = createSkillRegistry();
+let skills: ReturnType<typeof createSkillRegistry> | undefined;
+function skillRegistry() {
+  return (skills ??= createSkillRegistry());
+}
 const tools = createToolRegistry();
 
 function json(res: ServerResponse, status: number, body: unknown) {
@@ -104,7 +107,7 @@ export function handleAgentApi(req: IncomingMessage, res: ServerResponse, app: A
     json(
       res,
       200,
-      skills.list().map((s) => ({ id: s.id, name: s.name, description: s.description })),
+      skillRegistry().list().map((s) => ({ id: s.id, name: s.name, description: s.description })),
     );
     return true;
   }
@@ -193,7 +196,7 @@ export function handleAgentApi(req: IncomingMessage, res: ServerResponse, app: A
         }
         const context: AgentContextBlock[] = [tools.systemBlock(), ...withPipedBoardContext(app.board(), body.context ?? [])];
         if (body.skillId) {
-          const skill = skills.load(body.skillId);
+          const skill = skillRegistry().load(body.skillId);
           if (skill) context.push(skillContextBlock(skill));
         }
         return session.prompt(String(body.prompt ?? ""), context).then(() => {
