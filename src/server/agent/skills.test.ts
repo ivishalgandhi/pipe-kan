@@ -1,22 +1,36 @@
-import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 
-import { createSkillRegistry, moduleDirname, skillContextBlock } from "./skills.ts";
+import { createSkillRegistry, skillContextBlock } from "./skills.ts";
 
 const bundledDir = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", ".agents", "skills");
 
-test("moduleDirname falls back when import.meta.dirname is missing", () => {
-  const url = import.meta.url;
-  const expected = dirname(fileURLToPath(url));
-  expect(moduleDirname({ url })).toBe(expected);
-  expect(moduleDirname({ dirname: undefined, url })).toBe(expected);
-  expect(moduleDirname({ dirname: "/tmp/mod", url })).toBe("/tmp/mod");
+test("url-only resolution lists bundled skills", () => {
+  const fromUrl = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "..", ".agents", "skills");
+  const ids = createSkillRegistry(fromUrl).list().map((s) => s.id);
+  expect(ids).toEqual(expect.arrayContaining(["ask-matt", "code-review", "triage", "research"]));
+  expect(createSkillRegistry().list().map((s) => s.id)).toEqual(ids);
 });
 
-test("createSkillRegistry default dir lists bundled skills", () => {
-  const ids = createSkillRegistry().list().map((s) => s.id);
-  expect(ids).toEqual(expect.arrayContaining(["ask-matt", "code-review", "triage", "research"]));
+test("skills source and node bundle omit import.meta.dirname", () => {
+  const src = readFileSync(new URL("./skills.ts", import.meta.url), "utf8");
+  expect(src).not.toContain("import.meta.dirname");
+  expect(src).not.toContain("meta.dirname");
+
+  const out = join(mkdtempSync(join(tmpdir(), "pipe-kan-skills-")), "skills.js");
+  execFileSync("bun", [
+    "build",
+    fileURLToPath(new URL("./skills.ts", import.meta.url)),
+    "--outfile",
+    out,
+    "--target",
+    "node",
+  ]);
+  expect(readFileSync(out, "utf8")).not.toContain("import.meta.dirname");
 });
 
 test("skill registry lists bundled skills", () => {

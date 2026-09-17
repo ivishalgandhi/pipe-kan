@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { AgentContextBlock } from "./types.ts";
@@ -17,12 +17,10 @@ export type SkillRegistry = {
   load(id: string): Skill | undefined;
 };
 
-export function moduleDirname(meta: { dirname?: string; url: string }): string {
-  return meta.dirname ?? dirname(fileURLToPath(meta.url));
-}
-
 export function createSkillRegistry(bundledDir?: string): SkillRegistry {
-  const dir = bundledDir ?? join(moduleDirname(import.meta), "..", "..", "..", ".agents", "skills");
+  const dir =
+    bundledDir ??
+    join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "..", ".agents", "skills");
   const userDir = join(homedir(), ".pi", "agent", "skills");
   return {
     list() {
