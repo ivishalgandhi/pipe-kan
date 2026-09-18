@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { argvToFlags, DEFAULT_FLAGS, flagsToJql, parseFlags, setWorkspaceFlag, wantsPlane } from "./flags.ts";
+import { argvToFlags, commitWorkspaceSlug, DEFAULT_FLAGS, flagsToJql, parseFlags, setWorkspaceFlag, wantsPlane } from "./flags.ts";
 
 test("default Scope has no project clause", () => {
   expect(DEFAULT_FLAGS).toBe("");
@@ -80,4 +80,19 @@ test("setWorkspaceFlag writes personal and trims the slug", () => {
 test("setWorkspaceFlag leaves flags unchanged for an empty slug", () => {
   expect(setWorkspaceFlag("--plane --projects APH", "")).toBe("--plane --projects APH");
   expect(setWorkspaceFlag("--plane --projects APH", "   ")).toBe("--plane --projects APH");
+});
+
+test("commitWorkspaceSlug rejects an empty typed slug", () => {
+  expect(commitWorkspaceSlug("personal", "")).toEqual({ action: "reject" });
+  expect(commitWorkspaceSlug("personal", "   ")).toEqual({ action: "reject" });
+});
+
+test("commitWorkspaceSlug is a no-op for the live slug", () => {
+  expect(commitWorkspaceSlug("personal", "personal")).toEqual({ action: "noop" });
+  expect(commitWorkspaceSlug("team", " team ")).toEqual({ action: "noop" });
+});
+
+test("commitWorkspaceSlug trims and keeps typed case", () => {
+  expect(commitWorkspaceSlug("personal", " other ")).toEqual({ action: "commit", slug: "other" });
+  expect(commitWorkspaceSlug("personal", "Personal")).toEqual({ action: "commit", slug: "Personal" });
 });

@@ -20,3 +20,7 @@ export function refreshRequestBody(
 
 export const REFRESH_NO_FOCUS_WARNING =
   "No Epic is focused. All Epics will be refreshed.";
+
+export function refreshWorkspaceWarning(slug: string): string {
+  return `Refresh all Epics in Workspace ${slug}.`;
+}
