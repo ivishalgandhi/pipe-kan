@@ -112,6 +112,7 @@ export function createApp(opts: {
   flags?: string;
   fieldMapPath?: string;
   jiraConfigPath?: string;
+  liveBackend?: boolean;
 }): App {
   const cli = opts.cli ?? createStoreCli(opts.store);
   const fieldMapPath = opts.fieldMapPath ?? defaultFieldMapPath();
@@ -263,7 +264,7 @@ export function createApp(opts: {
     },
     board() {
       const error = refreshError ?? childrenError;
-      if (!live && refreshError) {
+      if (!live && (refreshError || opts.liveBackend)) {
         const empty = toBoard([]);
         return {
           columns: empty.columns,

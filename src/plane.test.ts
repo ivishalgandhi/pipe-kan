@@ -378,9 +378,8 @@ test("boot --plane uses Plane even when jira is on PATH", async () => {
     fetch: plane.fetch,
   });
   expect(kind).toBe("plane");
-  expect(
-    app.board().columns.flatMap((column) => column.cards.map((card) => card.key)),
-  ).toEqual(["DEMO-2", "DEMO-4", "DEMO-6", "DEMO-3", "DEMO-5"]);
+  expect(app.board().error).toBeUndefined();
+  expect(app.board().columns.flatMap((column) => column.cards.map((card) => card.key))).toEqual([]);
 
   await refreshFromJira(app, kind);
   expect(app.board().columns.map((column) => column.title)).toEqual([
@@ -450,9 +449,7 @@ test("Plane 429 keeps Plane mode and does not present the Fixture as live", asyn
     retryDelayMs: 0,
   });
   expect(kind).toBe("plane");
-  expect(
-    app.board().columns.flatMap((column) => column.cards.map((card) => card.key)),
-  ).toContain("DEMO-2");
+  expect(app.board().columns.flatMap((column) => column.cards.map((card) => card.key))).toEqual([]);
   await refreshFromJira(app, kind);
   expect(kind).toBe("plane");
   expect(app.board().error).toMatch(/Plane 429: RATE_LIMIT_EXCEEDED/);
@@ -488,4 +485,23 @@ test("Plane mode does not serve Fake Jira", async () => {
   server.close();
   expect(res.status).toBe(404);
   expect(body).toBe("no fake");
+});
+
+test("Plane boot does not expose Fixture cards before live Refresh", async () => {
+  const { kind, app } = await createBoardApp({
+    raw: fixture,
+    flags: "--plane",
+    env: {
+      PATH: "/tmp",
+      JIRA_BIN: "jira",
+      PLANE_API_KEY: "test-key",
+      PLANE_HOST: "https://plane.test",
+    },
+    fetch: async () => new Response("no", { status: 500 }),
+    retryDelayMs: 0,
+  });
+  expect(kind).toBe("plane");
+  expect(app.board().error).toBeUndefined();
+  expect(app.board().columns.flatMap((column) => column.cards.map((card) => card.key))).toEqual([]);
+  expect(app.board().epics).toEqual([]);
 });

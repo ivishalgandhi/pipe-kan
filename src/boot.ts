@@ -51,6 +51,7 @@ export async function createBoardApp(opts: {
     cli,
     flags,
     jiraConfigPath: jiraCliConfigPath(env),
+    liveBackend: plane,
   });
   if (opts.piped) {
     app.hydrate(opts.raw);

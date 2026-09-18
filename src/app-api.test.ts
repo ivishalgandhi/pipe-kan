@@ -1580,3 +1580,28 @@ test("failed edit is a 409 and leaves the Issue unchanged", async () => {
     "Parse jira-cli --raw JSON",
   );
 });
+
+test("POST /api/refresh 429 persists on GET /api/board without Fixture cards", async () => {
+  const cli: Cli = {
+    ...createStoreCli(IssueStore.fromRaw(fixture)),
+    async list() {
+      throw new Error("Plane 429: RATE_LIMIT_EXCEEDED");
+    },
+  };
+  const app = createApp({ store: IssueStore.fromRaw(fixture), cli, liveBackend: true });
+  app.hydrate(fixture, { fromStore: true });
+  expect(app.board().columns.flatMap((column) => column.cards.map((card) => card.key))).toEqual([]);
+  const { base } = await listenWithApp(app);
+  const refresh = await fetch(`${base}/api/refresh`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ flags: "--plane" }),
+  });
+  const refreshed = await refresh.json();
+  expect(refresh.status).toBe(200);
+  expect(refreshed.error).toMatch(/Plane 429: RATE_LIMIT_EXCEEDED/);
+  expect(refreshed.columns.flatMap((column: { cards: { key: string }[] }) => column.cards.map((card) => card.key))).toEqual([]);
+  const board = await (await fetch(`${base}/api/board`)).json();
+  expect(board.error).toMatch(/Plane 429: RATE_LIMIT_EXCEEDED/);
+  expect(board.columns.flatMap((column: { cards: { key: string }[] }) => column.cards.map((card) => card.key))).toEqual([]);
+});

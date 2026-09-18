@@ -124,7 +124,7 @@ A mutation the Agent proposes that requires user approval before pipe-kan execut
 _Avoid_: tool call, command, automation
 
 **Fixture**:
-Checked-in fake `jira issue list --raw` JSON that seeds the first paint and the Fake Jira when no Pipe is given. After a failed live Refresh with no successful live payload, it is not kept as the Board.
+Checked-in fake `jira issue list --raw` JSON that seeds store-mode first paint and Fake Jira when no Pipe is given. Plane mode does not show it as the live Board. After a failed live Refresh with no successful live payload, it is not kept as the Board.
 _Avoid_: mock, stub, sample (when meaning this file)
 
 **Fake Jira**:
