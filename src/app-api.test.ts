@@ -41,6 +41,20 @@ async function listen(store = IssueStore.fromRaw(fixture), cli?: Cli) {
   return { base: `http://127.0.0.1:${addr.port}`, app };
 }
 
+async function listenWithApp(app: ReturnType<typeof createApp>) {
+  const server = createServer((req, res) => {
+    if (!handleAppApi(req, res, app)) {
+      res.statusCode = 404;
+      res.end("no");
+    }
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  servers.push(server);
+  const addr = server.address();
+  if (!addr || typeof addr === "string") throw new Error("no port");
+  return { base: `http://127.0.0.1:${addr.port}`, app };
+}
+
 test("default Board is the Project", async () => {
   const { base } = await listen();
   const board = await (await fetch(`${base}/api/board`)).json();
@@ -958,8 +972,35 @@ test("a failed Issues list keeps the last Board", async () => {
   await app.refresh();
   const board = await app.refresh();
   expect(board.error).toMatch(/429/);
+  expect(app.board().error).toMatch(/429/);
   expect(board.columns.flatMap((column) => column.cards.map((card) => card.key))).toEqual(["DEMO-2"]);
   expect(board.epics.map((epic) => epic.key)).toEqual(["DEMO-1"]);
+  const persisted = await (await fetch((await listenWithApp(app)).base + "/api/board")).json();
+  expect(persisted.error).toMatch(/429/);
+  expect(
+    persisted.columns.flatMap((column: { cards: { key: string }[] }) =>
+      column.cards.map((card) => card.key),
+    ),
+  ).toEqual(["DEMO-2"]);
+});
+
+test("a failed first Refresh does not keep the Fixture as the live Board", async () => {
+  const cli: Cli = {
+    ...createStoreCli(IssueStore.fromRaw(fixture)),
+    async list() {
+      throw new Error("Plane 429: RATE_LIMIT_EXCEEDED");
+    },
+  };
+  const app = createApp({ store: IssueStore.fromRaw(fixture), cli });
+  app.hydrate(fixture, { fromStore: true });
+  expect(
+    app.board().columns.flatMap((column) => column.cards.map((card) => card.key)),
+  ).toContain("DEMO-2");
+  const board = await app.refresh();
+  expect(board.error).toMatch(/Plane 429: RATE_LIMIT_EXCEEDED/);
+  expect(board.columns.flatMap((column) => column.cards.map((card) => card.key))).toEqual([]);
+  expect(app.board().error).toMatch(/429/);
+  expect(app.board().columns.flatMap((column) => column.cards.map((card) => card.key))).toEqual([]);
 });
 
 test("select falls back to listEpic when cached children lost their Epic key", async () => {

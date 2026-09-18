@@ -80,7 +80,7 @@ stdin carrying `jira issue list --raw` JSON into the app. The payload may includ
 _Avoid_: stream, feed, Scope (when meaning this)
 
 **Refresh**:
-Confirm first, then re-run jira-cli for all Epics or the focused left-pane Epic.
+Confirm first, then re-run jira-cli for all Epics or the focused left-pane Epic. Plane Refresh uses Plane REST. A failed live Refresh keeps the current backend (jira-cli or Plane) and surfaces the error; it does not switch to Fake Jira.
 _Avoid_: sync, reload (when meaning that action)
 
 **Move**:
@@ -124,7 +124,7 @@ A mutation the Agent proposes that requires user approval before pipe-kan execut
 _Avoid_: tool call, command, automation
 
 **Fixture**:
-Checked-in fake `jira issue list --raw` JSON that seeds the Board and the Fake Jira when no Pipe is given.
+Checked-in fake `jira issue list --raw` JSON that seeds the first paint and the Fake Jira when no Pipe is given. After a failed live Refresh with no successful live payload, it is not kept as the Board.
 _Avoid_: mock, stub, sample (when meaning this file)
 
 **Fake Jira**:

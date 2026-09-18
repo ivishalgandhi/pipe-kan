@@ -6,7 +6,8 @@ export const DEFAULT_PLANE_HOST = "https://plane.tail48fe8.ts.net";
 export const DEFAULT_PLANE_WORKSPACE = "personal";
 
 const STATE_GROUPS = ["backlog", "unstarted", "started", "completed", "cancelled"];
-const RETRY_LIMIT = 4;
+const RETRY_LIMIT = 1;
+const RETRY_DELAY_CAP_MS = 8_000;
 
 export type PlaneFetch = typeof fetch;
 
@@ -309,6 +310,25 @@ function queryPath(path: string, query: Record<string, string | undefined>): str
   return `${path}${path.includes("?") ? "&" : "?"}${encoded}`;
 }
 
+export function planeRetryDelayMs(
+  response: { headers: { get(name: string): string | null } },
+  fallback: number,
+  cap = RETRY_DELAY_CAP_MS,
+): number {
+  const raw = response.headers.get("retry-after");
+  if (raw) {
+    const seconds = Number(raw);
+    if (Number.isFinite(seconds) && seconds >= 0) {
+      return Math.min(seconds * 1000, cap);
+    }
+    const at = Date.parse(raw);
+    if (!Number.isNaN(at)) {
+      return Math.min(Math.max(0, at - Date.now()), cap);
+    }
+  }
+  return Math.min(Math.max(0, fallback), cap);
+}
+
 function errorMessage(status: number, body: string): string {
   try {
     const parsed = JSON.parse(body) as Record<string, unknown>;
@@ -374,8 +394,10 @@ export function createPlaneCli(opts: PlaneOpts): Cli {
     const response = await fetchFn(joinUrl(apiBase, path), { ...init, headers });
     const body = await response.text();
     if (response.status === 429 && attempt < RETRY_LIMIT) {
-      const delay = retryDelayMs * 2 ** attempt;
-      if (retryDelayMs) await new Promise((resolve) => setTimeout(resolve, delay));
+      const delay = retryDelayMs
+        ? planeRetryDelayMs(response, retryDelayMs * 2 ** attempt)
+        : 0;
+      if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
       return request(path, init, attempt + 1);
     }
     if (!response.ok) {

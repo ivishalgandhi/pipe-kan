@@ -12,7 +12,7 @@ npx pipe-kan
 
 Opens `http://127.0.0.1:5173`. No clone, no `bun install`. `bunx` / `npx` installs the published package into a cache and runs it.
 
-First paint is the Fixture. If `jira` is on PATH, the process then Refresh-es from your existing `jira init`. If not, Refresh, Move, Create, and Edit use the in-process store.
+First paint is the Fixture. If `jira` is on PATH, or `--plane` is set, the process then Refresh-es. A failed live Refresh keeps Plane or Jira mode and the last live Board, with the error on the Board. If live Refresh never succeeded, the Fixture is not kept as the live Board. If `jira` is missing and `--plane` is off, Refresh, Move, Create, and Edit use the in-process store.
 
 The published CLI is on npm. From a clone: `bun run build && bun dist/pipe-kan.js`.
 
@@ -67,6 +67,8 @@ On Refresh:
 - Drop a Card on a Column PATCHes that work item's state. Same-Column drop is still a no-op.
 
 Create and Edit use Plane REST when `--plane` is set. Pulse, Plane Pro, scraping, and SQL workspace moves are out of scope.
+
+A Plane `429 RATE_LIMIT_EXCEEDED` does not fall back to Fake Jira. Wait, then Refresh once.
 
 ## Multiple projects
 

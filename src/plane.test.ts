@@ -7,6 +7,7 @@ import { expect, test } from "vitest";
 import type { RawIssue } from "./board.ts";
 import { issuesToBoard } from "./board.ts";
 import { createBoardApp, refreshFromJira } from "./boot.ts";
+import { handleRequest } from "./http.ts";
 import {
   createPlaneCli,
   moduleToIssue,
@@ -14,6 +15,7 @@ import {
   planeApiBase,
   planeHost,
   planeModuleKey,
+  planeRetryDelayMs,
   planeWorkItemKey,
   planeWorkspace,
   titleCasePriority,
@@ -400,4 +402,90 @@ test("boot without --plane does not select Plane", async () => {
     env: { PATH: "/tmp", JIRA_BIN: "jira" },
   });
   expect(kind).toBe("store");
+});
+
+test("planeRetryDelayMs prefers Retry-After seconds and caps", () => {
+  const headers = (value: string | null) => ({ get: () => value });
+  expect(planeRetryDelayMs({ headers: headers("3") }, 1000, 8000)).toBe(3000);
+  expect(planeRetryDelayMs({ headers: headers("99") }, 1000, 8000)).toBe(8000);
+  expect(planeRetryDelayMs({ headers: headers(null) }, 1500, 8000)).toBe(1500);
+});
+
+test("Plane 429 retries once then surfaces RATE_LIMIT_EXCEEDED", async () => {
+  let calls = 0;
+  const fetchImpl: typeof fetch = async () => {
+    calls += 1;
+    return new Response(JSON.stringify({ error: "RATE_LIMIT_EXCEEDED" }), {
+      status: 429,
+      headers: { "content-type": "application/json", "retry-after": "0" },
+    });
+  };
+  const cli = createPlaneCli({
+    host: "https://plane.test",
+    apiKey: "test-key",
+    flags: "--plane",
+    fetch: fetchImpl,
+    retryDelayMs: 0,
+  });
+  await expect(cli.list("--plane")).rejects.toThrow(/Plane 429: RATE_LIMIT_EXCEEDED/);
+  expect(calls).toBe(2);
+});
+
+test("Plane 429 keeps Plane mode and does not present the Fixture as live", async () => {
+  const fetchImpl: typeof fetch = async () =>
+    new Response(JSON.stringify({ error: "RATE_LIMIT_EXCEEDED" }), {
+      status: 429,
+      headers: { "content-type": "application/json" },
+    });
+  const { kind, app } = await createBoardApp({
+    raw: fixture,
+    flags: "--plane --projects APH,PULSE",
+    env: {
+      PATH: "/tmp",
+      JIRA_BIN: "jira",
+      PLANE_API_KEY: "test-key",
+      PLANE_HOST: "https://plane.test",
+    },
+    fetch: fetchImpl,
+    retryDelayMs: 0,
+  });
+  expect(kind).toBe("plane");
+  expect(
+    app.board().columns.flatMap((column) => column.cards.map((card) => card.key)),
+  ).toContain("DEMO-2");
+  await refreshFromJira(app, kind);
+  expect(kind).toBe("plane");
+  expect(app.board().error).toMatch(/Plane 429: RATE_LIMIT_EXCEEDED/);
+  expect(app.board().columns.flatMap((column) => column.cards.map((card) => card.key))).toEqual([]);
+});
+
+test("Plane mode does not serve Fake Jira", async () => {
+  const { kind, app, store } = await createBoardApp({
+    raw: fixture,
+    flags: "--plane",
+    env: {
+      PATH: "/tmp",
+      JIRA_BIN: "jira",
+      PLANE_API_KEY: "test-key",
+      PLANE_HOST: "https://plane.test",
+    },
+    fetch: async () => new Response("no", { status: 500 }),
+    retryDelayMs: 0,
+  });
+  expect(kind).toBe("plane");
+  const { createServer } = await import("node:http");
+  const server = createServer((req, res) => {
+    if (!handleRequest(req, res, { app, store, kind })) {
+      res.statusCode = 404;
+      res.end("no fake");
+    }
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const addr = server.address();
+  if (!addr || typeof addr === "string") throw new Error("no port");
+  const res = await fetch(`http://127.0.0.1:${addr.port}/rest/api/2/search`);
+  const body = await res.text();
+  server.close();
+  expect(res.status).toBe(404);
+  expect(body).toBe("no fake");
 });

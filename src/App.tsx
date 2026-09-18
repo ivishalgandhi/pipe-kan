@@ -1231,7 +1231,7 @@ export function App() {
       setColumns(applyColumnOrder(toValue(next.columns), order));
     }
     setEpicChildren(next.children ? Object.values(next.children).flat() : null);
-    if (next.error) setError(next.error);
+    setError(next.error ?? "");
   }
 
   function applyBoard(next: Board) {
@@ -1254,7 +1254,7 @@ export function App() {
         ? current
         : null,
     );
-    if (next.error) setError(next.error);
+    setError(next.error ?? "");
   }
 
   async function load() {

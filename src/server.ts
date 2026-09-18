@@ -36,7 +36,7 @@ export async function runServer(opts: {
   });
 
   const server = createServer((req, res) => {
-    if (handleRequest(req, res, { app, store })) return;
+    if (handleRequest(req, res, { app, store, kind })) return;
     if (opts.fallback) {
       opts.fallback(req, res);
       return;
@@ -65,9 +65,10 @@ export async function runServer(opts: {
     try {
       await refreshFromJira(app, kind, { piped: Boolean(piped) });
     } catch (err) {
-      console.error(`${kind} Refresh failed; keeping Fixture Board`);
-      console.error(err);
+      console.error(`${kind} Refresh failed`, err);
     }
+    const error = app.board().error;
+    if (error) console.error(`${kind} Refresh failed; keeping last live Board`, error);
   }
 
 }

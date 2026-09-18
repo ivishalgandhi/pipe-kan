@@ -22,6 +22,7 @@ export async function createBoardApp(opts: {
   env?: NodeJS.ProcessEnv;
   flags?: string;
   fetch?: typeof fetch;
+  retryDelayMs?: number;
 }): Promise<Boot> {
   const env = opts.env ?? process.env;
   const flags = opts.flags ?? "";
@@ -35,6 +36,7 @@ export async function createBoardApp(opts: {
         workspace: planeWorkspace(flags, env),
         flags,
         fetch: opts.fetch,
+        retryDelayMs: opts.retryDelayMs,
       })
     : bin
       ? createJiraCli({

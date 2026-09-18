@@ -122,6 +122,8 @@ export function createApp(opts: {
   let childrenRaw: unknown[] = [];
   let hasChildrenCache = false;
   let childrenError: string | undefined;
+  let refreshError: string | undefined;
+  let live = false;
   let targetEndFieldId =
     readTargetEndFieldMap(fieldMapPath).targetEnd ??
     targetEndFieldIdFromJiraConfig(safeRead(jiraConfigPath) ?? "");
@@ -234,11 +236,13 @@ export function createApp(opts: {
       childrenRaw = mergeSelectedChildren(childrenRaw, hydrated, keys);
       hasChildrenCache = true;
       childrenError = undefined;
+      refreshError = undefined;
       return app.board();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Refresh failed";
+      refreshError = message;
       console.error("Refresh failed", message);
-      return { ...app.board(), error: message };
+      return app.board();
     }
   }
 
@@ -258,12 +262,21 @@ export function createApp(opts: {
       return flags;
     },
     board() {
+      const error = refreshError ?? childrenError;
+      if (!live && refreshError) {
+        const empty = toBoard([]);
+        return {
+          columns: empty.columns,
+          epics: [],
+          ...(error ? { error } : {}),
+        };
+      }
       const board = toBoard(payload);
       return {
         columns: board.columns,
         epics: mergeEpics(toBoard(epicsPayload).epics, board.epics),
         ...(hasChildrenCache ? { children: columnsOf(childrenRaw, targetEndFieldId) } : {}),
-        ...(childrenError ? { error: childrenError } : {}),
+        ...(error ? { error } : {}),
       };
     },
     hydrate(raw, hydrateOpts) {
@@ -272,6 +285,8 @@ export function createApp(opts: {
       childrenRaw = [];
       hasChildrenCache = false;
       childrenError = undefined;
+      refreshError = undefined;
+      live = false;
       if (hydrateOpts?.fromStore) cacheFromStore();
       rememberTargetEndId([...payload, ...epicsPayload, ...childrenRaw]);
       return app.board();
@@ -323,11 +338,14 @@ export function createApp(opts: {
         childrenRaw = nextHasCache ? await hydrateRaw(nextChildren) : nextChildren;
         hasChildrenCache = nextHasCache;
         childrenError = nextError;
+        refreshError = undefined;
+        live = true;
         return app.board();
       } catch (err) {
         const message = err instanceof Error ? err.message : "Refresh failed";
+        refreshError = message;
         console.error("Refresh failed", message);
-        return { ...app.board(), error: message };
+        return app.board();
       }
     },
     async children(epic) {
