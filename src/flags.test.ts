@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { argvToFlags, DEFAULT_FLAGS, flagsToJql, parseFlags, wantsPlane } from "./flags.ts";
+import { argvToFlags, DEFAULT_FLAGS, flagsToJql, parseFlags, setWorkspaceFlag, wantsPlane } from "./flags.ts";
 
 test("default Scope has no project clause", () => {
   expect(DEFAULT_FLAGS).toBe("");
@@ -50,4 +50,34 @@ test("--plane and --workspace stay out of JQL", () => {
 
 test("--workspace=slug is accepted", () => {
   expect(parseFlags("--plane --workspace=personal").workspace).toBe("personal");
+});
+
+test("setWorkspaceFlag inserts one --workspace token", () => {
+  expect(setWorkspaceFlag("--plane --projects APH,PULSE", "team")).toBe(
+    "--plane --projects APH,PULSE --workspace team",
+  );
+});
+
+test("setWorkspaceFlag replaces an existing --workspace token", () => {
+  expect(setWorkspaceFlag("--plane --workspace personal --projects APH", "other")).toBe(
+    "--plane --workspace other --projects APH",
+  );
+});
+
+test("setWorkspaceFlag replaces --workspace= and does not leave a second token", () => {
+  expect(setWorkspaceFlag("--workspace=personal --plane --workspace team", "other")).toBe(
+    "--workspace other --plane",
+  );
+});
+
+test("setWorkspaceFlag writes personal and trims the slug", () => {
+  expect(setWorkspaceFlag("--plane", "personal")).toBe("--plane --workspace personal");
+  expect(setWorkspaceFlag("--plane --workspace team", " other ")).toBe(
+    "--plane --workspace other",
+  );
+});
+
+test("setWorkspaceFlag leaves flags unchanged for an empty slug", () => {
+  expect(setWorkspaceFlag("--plane --projects APH", "")).toBe("--plane --projects APH");
+  expect(setWorkspaceFlag("--plane --projects APH", "   ")).toBe("--plane --projects APH");
 });
