@@ -1,6 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import type { App } from "./app.ts";
+import type { Boot } from "./boot.ts";
+import { planeWorkspace } from "./plane.ts";
 
 function json(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status;
@@ -35,16 +37,29 @@ function reply(
     });
 }
 
+function boardEnvelope(
+  body: object,
+  kind: Boot["kind"],
+  flags: string,
+  env: NodeJS.ProcessEnv,
+) {
+  if (kind !== "plane") return { ...body, kind };
+  return { ...body, kind, workspace: planeWorkspace(flags, env) };
+}
+
 export function handleAppApi(
   req: IncomingMessage,
   res: ServerResponse,
   app: App,
+  opts: { kind?: Boot["kind"]; env?: NodeJS.ProcessEnv } = {},
 ): boolean {
+  const kind = opts.kind ?? "store";
+  const env = opts.env ?? process.env;
   const url = pathOf(req);
   const method = (req.method ?? "GET").toUpperCase();
 
   if (url.pathname === "/api/board" && method === "GET") {
-    json(res, 200, { ...app.board(), flags: app.flags });
+    json(res, 200, boardEnvelope({ ...app.board(), flags: app.flags }, kind, app.flags, env));
     return true;
   }
 
@@ -59,10 +74,14 @@ export function handleAppApi(
           json(res, 400, { error: "selected Refresh requires epicKeys" });
           return;
         }
-        json(res, 200, await app.refresh(undefined, { scope: "selected", epicKeys }));
+        json(
+          res,
+          200,
+          boardEnvelope(await app.refresh(undefined, { scope: "selected", epicKeys }), kind, app.flags, env),
+        );
         return;
       }
-      json(res, 200, await app.refresh(body.flags));
+      json(res, 200, boardEnvelope(await app.refresh(body.flags), kind, app.flags, env));
     });
     return true;
   }

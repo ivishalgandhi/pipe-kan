@@ -4,9 +4,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 
+import { createApp } from "./app.ts";
 import type { RawIssue } from "./board.ts";
 import { issuesToBoard } from "./board.ts";
 import { createBoardApp, refreshFromJira } from "./boot.ts";
+import { IssueStore } from "./store.ts";
 import {
   createPlaneCli,
   moduleToIssue,
@@ -135,10 +137,10 @@ function fakePlane(opts: { issuesOnly?: boolean } = {}) {
 
     const path = url.pathname.replace(/\/+$/, "") || "/";
     const parts = path.split("/").filter(Boolean);
-    // /api/v1/workspaces/personal/projects/...
+    // /api/v1/workspaces/{slug}/projects/...
     const resource = opts.issuesOnly ? "issues" : "work-items";
 
-    if (method === "GET" && /\/workspaces\/personal\/projects$/.test(path)) {
+    if (method === "GET" && /\/workspaces\/[^/]+\/projects$/.test(path)) {
       return jsonResponse(page(projects));
     }
 
@@ -400,4 +402,25 @@ test("boot without --plane does not select Plane", async () => {
     env: { PATH: "/tmp", JIRA_BIN: "jira" },
   });
   expect(kind).toBe("store");
+});
+
+test("Refresh-all with --workspace other lists that Workspace", async () => {
+  const plane = fakePlane();
+  const cli = planeCli("--plane --projects APH,PULSE", plane.fetch);
+  const app = createApp({
+    store: IssueStore.fromRaw(fixture),
+    cli,
+    flags: "--plane --projects APH,PULSE",
+  });
+  const result = await app.refresh("--plane --workspace other --projects APH,PULSE");
+  expect(result).not.toHaveProperty("error");
+  expect(result.columns.map((column) => column.title)).toEqual([
+    "Backlog",
+    "Todo",
+    "In Progress",
+    "Done",
+  ]);
+  const urls = plane.calls().map((call) => call.url);
+  expect(urls.some((url) => url.includes("/workspaces/other/"))).toBe(true);
+  expect(urls.some((url) => url.includes("/workspaces/personal/"))).toBe(false);
 });

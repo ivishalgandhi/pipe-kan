@@ -32,8 +32,12 @@ The left-pane opener for the Board whose Cards are Epics and non-Epic Issues tog
 _Avoid_: all combined, mix, everything
 
 **Project**:
-A Jira project identified by its key. Refresh and the default Scope are one Project. A Pipe may hold Issues from several keys until Refresh.
-_Avoid_: repo, codebase (those are this tool)
+A Jira project identified by its key, or a Plane project identified by its identifier (`--projects`). Refresh and the default Scope are one Project unless `--projects` lists several. A Pipe may hold Issues from several keys until Refresh.
+_Avoid_: repo, codebase (those are this tool), Workspace (that is the Plane tenant slug)
+
+**Workspace**:
+The Plane tenant slug in `/workspaces/{slug}/…`. Present only in Plane mode. Not a Project, not Scope, not Google SSO.
+_Avoid_: tenant, Plane workspace (say Workspace), project (when meaning this)
 
 **Epic**:
 An Issue of type Epic, listed from `jira issue list -tEpic`. On All stories it lives in the left pane; clicking it shows children. On All epics it is a Card. In Plane mode a Module is listed as an Epic in that same left rail.

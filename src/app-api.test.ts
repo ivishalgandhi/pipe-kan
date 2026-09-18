@@ -25,11 +25,15 @@ afterEach(() => {
   while (servers.length) servers.pop()?.close();
 });
 
-async function listen(store = IssueStore.fromRaw(fixture), cli?: Cli) {
-  const app = createApp({ store, cli });
+async function listen(
+  store = IssueStore.fromRaw(fixture),
+  cli?: Cli,
+  opts: { kind?: "plane" | "jira" | "store"; flags?: string; env?: NodeJS.ProcessEnv } = {},
+) {
+  const app = createApp({ store, cli, flags: opts.flags });
   await app.refresh();
   const server = createServer((req, res) => {
-    if (!handleAppApi(req, res, app)) {
+    if (!handleAppApi(req, res, app, { kind: opts.kind ?? "store", env: opts.env })) {
       res.statusCode = 404;
       res.end("no");
     }
@@ -1538,4 +1542,79 @@ test("failed edit is a 409 and leaves the Issue unchanged", async () => {
   expect(open.fields.find((field: { label: string }) => field.label === "Summary")?.value).toBe(
     "Parse jira-cli --raw JSON",
   );
+});
+
+test("store Board JSON reports kind store and omits workspace", async () => {
+  const { base } = await listen();
+  const board = await (await fetch(`${base}/api/board`)).json();
+  expect(board.kind).toBe("store");
+  expect(board).not.toHaveProperty("workspace");
+});
+
+test("Jira Board JSON reports kind jira and omits workspace", async () => {
+  const { base } = await listen(undefined, undefined, { kind: "jira" });
+  const board = await (await fetch(`${base}/api/board`)).json();
+  expect(board.kind).toBe("jira");
+  expect(board).not.toHaveProperty("workspace");
+});
+
+test("Board kind is boot kind not --plane in Scope flags", async () => {
+  const { base } = await listen(undefined, undefined, {
+    kind: "store",
+    flags: "--plane --workspace team",
+    env: {},
+  });
+  const board = await (await fetch(`${base}/api/board`)).json();
+  expect(board.kind).toBe("store");
+  expect(board).not.toHaveProperty("workspace");
+});
+
+test("Plane Board JSON reports workspace from flags", async () => {
+  const { base } = await listen(undefined, undefined, {
+    kind: "plane",
+    flags: "--workspace team",
+    env: { PLANE_WORKSPACE: "from-env" },
+  });
+  const board = await (await fetch(`${base}/api/board`)).json();
+  expect(board.kind).toBe("plane");
+  expect(board.workspace).toBe("team");
+});
+
+test("Plane Board JSON reports workspace from env when flags omit it", async () => {
+  const { base } = await listen(undefined, undefined, {
+    kind: "plane",
+    flags: "--plane",
+    env: { PLANE_WORKSPACE: "team" },
+  });
+  const board = await (await fetch(`${base}/api/board`)).json();
+  expect(board.kind).toBe("plane");
+  expect(board.workspace).toBe("team");
+});
+
+test("Plane Board JSON reports personal when flags and env omit workspace", async () => {
+  const { base } = await listen(undefined, undefined, {
+    kind: "plane",
+    flags: "--plane",
+    env: {},
+  });
+  const board = await (await fetch(`${base}/api/board`)).json();
+  expect(board.kind).toBe("plane");
+  expect(board.workspace).toBe("personal");
+});
+
+test("Plane Refresh-all JSON reports workspace after flags change", async () => {
+  const { base } = await listen(undefined, undefined, {
+    kind: "plane",
+    flags: "--plane",
+    env: {},
+  });
+  const res = await fetch(`${base}/api/refresh`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ flags: "--plane --workspace other" }),
+  });
+  const body = await res.json();
+  expect(res.status).toBe(200);
+  expect(body.kind).toBe("plane");
+  expect(body.workspace).toBe("other");
 });
