@@ -57,7 +57,7 @@ bunx pipe-kan --plane --projects APH,PULSE,PKAN,PUI,DEC
 | `PLANE_API_KEY` | (required in Plane mode) | personal access token (`X-API-Key`) |
 | `PLANE_HOST` | `https://plane.tail48fe8.ts.net` | Plane origin; API is `{host}/api/v1` |
 
-Same `--projects` style as Jira: comma-separated, trimmed, uppercased. The header **Scope flags** field accepts the same string, then **Refresh**.
+Same `--projects` style as Jira: comma-separated, trimmed, uppercased. The header **Scope flags** field accepts the same string, then **Refresh**. In Plane mode a header **Workspace** pill (beside the project-identifier chip) types a slug, writes `--workspace` into Scope flags, and Refresh-confirms all Epics. Jira omits the pill. Next launch still uses argv `--workspace`, else `PLANE_WORKSPACE`, else `personal`.
 
 On Refresh:
 

@@ -104,6 +104,16 @@ export function parseFlags(flags: string): ParsedFlags {
   return { jql: clauses.join(" AND "), projects, plane, workspace: workspaceSlug };
 }
 
+export function commitWorkspaceSlug(
+  liveSlug: string,
+  typed: string,
+): { action: "reject" } | { action: "noop" } | { action: "commit"; slug: string } {
+  const slug = typed.trim();
+  if (!slug) return { action: "reject" };
+  if (slug === liveSlug) return { action: "noop" };
+  return { action: "commit", slug };
+}
+
 export function setWorkspaceFlag(flags: string, slug: string): string {
   const trimmed = slug.trim();
   if (!trimmed) return flags;

@@ -26,6 +26,7 @@ import {
   rollbackColumns,
   stampEpic,
   toggleFavourite,
+  favouritesForWorkspace,
 } from "./visible.ts";
 
 const child: Card = { key: "DEMO-2", summary: "child", epic: "DEMO-1" };
@@ -878,4 +879,35 @@ test("combinedBoard copies Epic created and targetEnd onto Cards", () => {
     created: "2026-08-01T00:00:00.000Z",
     targetEnd: "2026-11-01",
   });
+});
+
+test("Favourites stamp a Workspace without resetting when unstamped", () => {
+  const state = {
+    keys: ["APH-1"],
+    folders: [{ name: "Now", keys: ["APH-1"] }],
+    projects: ["APH"],
+  };
+  expect(favouritesForWorkspace(state, "personal")).toEqual({
+    ...state,
+    workspace: "personal",
+  });
+});
+
+test("Favourites keep keys when Workspace matches the stamp", () => {
+  const state = { keys: ["APH-1"], folders: [], workspace: "personal" };
+  expect(favouritesForWorkspace(state, "personal")).toEqual(state);
+});
+
+test("Favourites reset when Workspace differs from the stamp", () => {
+  expect(
+    favouritesForWorkspace(
+      {
+        keys: ["APH-1"],
+        folders: [{ name: "Now", keys: ["APH-1"] }],
+        projects: ["APH"],
+        workspace: "personal",
+      },
+      "other",
+    ),
+  ).toEqual({ keys: [], folders: [], projects: ["APH"], workspace: "other" });
 });

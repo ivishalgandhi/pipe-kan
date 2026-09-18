@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { refreshRequestBody } from "./refresh.ts";
+import { refreshRequestBody, refreshWorkspaceWarning } from "./refresh.ts";
 
 test("Refresh all with a focused Epic still sends scope all", () => {
   expect(refreshRequestBody("all", "DEMO-1", "-pDEMO")).toEqual({
@@ -26,4 +26,8 @@ test("Refresh all with no focused Epic still sends all", () => {
     scope: "all",
     flags: "",
   });
+});
+
+test("Workspace Refresh copy names the target slug", () => {
+  expect(refreshWorkspaceWarning("other")).toBe("Refresh all Epics in Workspace other.");
 });
