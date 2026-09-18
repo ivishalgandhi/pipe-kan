@@ -6,12 +6,14 @@ import {
   type Cli,
 } from "./cli.ts";
 import { jiraCliConfigPath } from "./field-map.ts";
+import { wantsPlane } from "./flags.ts";
+import { createPlaneCli, planeHost, planeWorkspace } from "./plane.ts";
 import { IssueStore } from "./store.ts";
 
 export type Boot = {
   app: App;
   store: IssueStore;
-  kind: "jira" | "store";
+  kind: "jira" | "store" | "plane";
 };
 
 export async function createBoardApp(opts: {
@@ -19,19 +21,29 @@ export async function createBoardApp(opts: {
   piped?: boolean;
   env?: NodeJS.ProcessEnv;
   flags?: string;
+  fetch?: typeof fetch;
 }): Promise<Boot> {
   const env = opts.env ?? process.env;
   const flags = opts.flags ?? "";
   const store = IssueStore.fromRaw(opts.raw);
+  const plane = wantsPlane(flags);
   const bin = resolveJiraBin(env.JIRA_BIN ?? "jira", env.PATH ?? "");
-  const cli: Cli = bin
-    ? createJiraCli({
-        bin,
-        configPath: env.JIRA_CONFIG_FILE,
-        token: env.JIRA_API_TOKEN,
+  const cli: Cli = plane
+    ? createPlaneCli({
+        host: planeHost(env),
+        apiKey: env.PLANE_API_KEY ?? "",
+        workspace: planeWorkspace(flags, env),
         flags,
+        fetch: opts.fetch,
       })
-    : createStoreCli(store, flags);
+    : bin
+      ? createJiraCli({
+          bin,
+          configPath: env.JIRA_CONFIG_FILE,
+          token: env.JIRA_API_TOKEN,
+          flags,
+        })
+      : createStoreCli(store, flags);
   const app = createApp({
     store,
     cli,
@@ -44,7 +56,7 @@ export async function createBoardApp(opts: {
     const local = createStoreCli(store, flags);
     app.hydrate(JSON.parse(await local.list(app.flags)), { fromStore: true });
   }
-  return { app, store, kind: bin ? "jira" : "store" };
+  return { app, store, kind: plane ? "plane" : bin ? "jira" : "store" };
 }
 
 export async function refreshFromJira(
@@ -52,6 +64,7 @@ export async function refreshFromJira(
   kind: Boot["kind"],
   opts: { piped?: boolean } = {},
 ) {
-  if (kind !== "jira" || opts.piped) return;
+  if (opts.piped) return;
+  if (kind !== "jira" && kind !== "plane") return;
   await app.refresh();
 }

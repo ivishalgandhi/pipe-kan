@@ -3,6 +3,8 @@ export const DEFAULT_FLAGS = "";
 export type ParsedFlags = {
   jql: string;
   projects: string[];
+  plane: boolean;
+  workspace?: string;
 };
 
 function tokens(input: string): string[] {
@@ -28,12 +30,24 @@ export function parseFlags(flags: string): ParsedFlags {
   let type = "";
   let raw = "";
   let projectsValue = "";
+  let plane = false;
+  let workspace = "";
   const statusEq: string[] = [];
   const statusNeq: string[] = [];
 
   for (let i = 0; i < list.length; i++) {
     const token = list[i];
     if (token === "--raw") continue;
+    if (token === "--plane") {
+      plane = true;
+      continue;
+    }
+    if (token === "--workspace" || token.startsWith("--workspace=")) {
+      const [value, next] = takeValue(list, i, "--workspace");
+      workspace = value.startsWith("=") ? value.slice(1) : value;
+      i = next;
+      continue;
+    }
     if (token.startsWith("-a")) {
       [assignee, i] = takeValue(list, i, "-a");
       continue;
@@ -71,8 +85,10 @@ export function parseFlags(flags: string): ParsedFlags {
     .map((p) => p.trim().toUpperCase())
     .filter(Boolean);
 
+  const workspaceSlug = workspace.trim() || undefined;
+
   if (raw) {
-    return { jql: raw, projects };
+    return { jql: raw, projects, plane, workspace: workspaceSlug };
   }
 
   const projectClause = projects.length
@@ -85,7 +101,11 @@ export function parseFlags(flags: string): ParsedFlags {
   if (epic) clauses.push(`parent="${epic}"`);
   for (const status of statusEq) clauses.push(`status="${status}"`);
   for (const status of statusNeq) clauses.push(`status!="${status}"`);
-  return { jql: clauses.join(" AND "), projects };
+  return { jql: clauses.join(" AND "), projects, plane, workspace: workspaceSlug };
+}
+
+export function wantsPlane(flags: string): boolean {
+  return parseFlags(flags).plane;
 }
 
 export function flagsToJql(flags: string): string {

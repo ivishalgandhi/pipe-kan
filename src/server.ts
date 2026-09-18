@@ -9,6 +9,7 @@ import { argvToFlags } from "./flags.ts";
 import { handleRequest } from "./http.ts";
 import { writeJiraConfig } from "./jira-config.ts";
 import { bindListen, resolveListen } from "./listen.ts";
+import { DEFAULT_PLANE_HOST, planeHost, planeWorkspace } from "./plane.ts";
 import { readOptionalStdin } from "./stdin.ts";
 import { sendUi } from "./ui.ts";
 
@@ -51,16 +52,20 @@ export async function runServer(opts: {
   const origin = `http://127.0.0.1:${port}`;
   const fakeConfig = writeJiraConfig(join(tmpdir(), "pipe-kan"), origin);
   announce(`pipe-kan http://${host}:${port}`);
-  announce(`cli ${kind === "jira" ? resolveJiraBin() : "store"}`);
-  announce(`Fake Jira ${origin}/rest/api/2/search`);
-  announce(`Fake Jira config ${fakeConfig}`);
+  if (kind === "plane") {
+    announce(`cli plane ${planeHost()} ${planeWorkspace(flags)}`);
+    announce(`Plane host default ${DEFAULT_PLANE_HOST}`);
+  } else {
+    announce(`cli ${kind === "jira" ? resolveJiraBin() : "store"}`);
+    announce(`Fake Jira ${origin}/rest/api/2/search`);
+    announce(`Fake Jira config ${fakeConfig}`);
+  }
 
-
-  if (kind === "jira") {
+  if (kind === "jira" || kind === "plane") {
     try {
       await refreshFromJira(app, kind, { piped: Boolean(piped) });
     } catch (err) {
-      console.error("jira Refresh failed; keeping Fixture Board");
+      console.error(`${kind} Refresh failed; keeping Fixture Board`);
       console.error(err);
     }
   }
