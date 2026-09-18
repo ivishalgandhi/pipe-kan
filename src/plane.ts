@@ -534,7 +534,11 @@ export function createPlaneCli(opts: PlaneOpts): Cli {
       labels.set(project.id, labelById);
 
       const workItems = workRows as PlaneWorkItem[];
-      const missingModules = workItems.some((item) => moduleIdsOf(item).length === 0);
+      const missingModules =
+        moduleById.size > 0 &&
+        workItems.some(
+          (item) => item.module_ids == null && item.modules == null && item.module == null,
+        );
       const issueByModule = new Map<string, string[]>();
       if (missingModules && moduleById.size) {
         await Promise.all(
@@ -561,8 +565,9 @@ export function createPlaneCli(opts: PlaneOpts): Cli {
           labels: labelById,
           moduleKey: typeof moduleKey === "string" ? moduleKey : undefined,
         });
-        if (!issue?.key) continue;
-        works.set(issue.key, {
+        const issueKey = typeof issue?.key === "string" ? issue.key : undefined;
+        if (!issue || !issueKey) continue;
+        works.set(issueKey, {
           issue,
           item,
           project,
@@ -629,9 +634,10 @@ export function createPlaneCli(opts: PlaneOpts): Cli {
     const labelById = loaded.labels.get(project.id) ?? new Map();
     const item = raw as PlaneWorkItem;
     const issue = workItemToIssue(item, project, { states: stateById, labels: labelById });
-    if (!issue?.key) return undefined;
+    const issueKey = typeof issue?.key === "string" ? issue.key : undefined;
+    if (!issue || !issueKey) return undefined;
     const next = { issue, item, project };
-    loaded.works.set(issue.key, next);
+    loaded.works.set(issueKey, next);
     return next;
   }
 
