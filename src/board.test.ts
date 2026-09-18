@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, expectTypeOf, test } from "vitest";
 
-import { cardAge, epicsToColumns, formatTargetEnd, issuesToBoard, mergeEpics, targetEndDistance, type Board, type Card, type Epic, type RawIssue } from "./board.ts";
+import { cardAge, epicsToColumns, formatTargetEnd, isNeedsInputLabel, issuesToBoard, mergeEpics, targetEndDistance, type Board, type Card, type Epic, type RawIssue } from "./board.ts";
 
 const fixture = JSON.parse(
   readFileSync(
@@ -428,4 +428,28 @@ test("All epics maps listed Epics into Columns by first-seen status", () => {
 
 test("an Epic without status lands in To Do", () => {
   expect(epicsToColumns([{ key: "DEMO-9", summary: "Bare" }])[0]?.title).toBe("To Do");
+});
+
+test("known statuses become empty Columns before first-seen issue statuses", () => {
+  const board = issuesToBoard(
+    [
+      {
+        key: "APH-1",
+        fields: { summary: "Only started", status: { name: "In Progress" } },
+      },
+    ],
+    { statuses: ["Backlog", "Todo", "In Progress", "Done"] },
+  );
+  expect(board.columns.map((column) => [column.title, column.cards.map((card) => card.key)])).toEqual([
+    ["Backlog", []],
+    ["Todo", []],
+    ["In Progress", ["APH-1"]],
+    ["Done", []],
+  ]);
+});
+
+test("needs-input is the Plane blocked badge label", () => {
+  expect(isNeedsInputLabel("needs-input")).toBe(true);
+  expect(isNeedsInputLabel("Needs-Input")).toBe(true);
+  expect(isNeedsInputLabel("kanban")).toBe(false);
 });

@@ -125,9 +125,10 @@ export function createApp(opts: {
   let targetEndFieldId =
     readTargetEndFieldMap(fieldMapPath).targetEnd ??
     targetEndFieldIdFromJiraConfig(safeRead(jiraConfigPath) ?? "");
+  let workflowStates: string[] | undefined;
 
   function boardOpts() {
-    return { targetEndFieldId };
+    return { targetEndFieldId, ...(workflowStates?.length ? { statuses: workflowStates } : {}) };
   }
 
   function toBoard(raw: unknown) {
@@ -282,6 +283,14 @@ export function createApp(opts: {
       if (next !== undefined) flags = next;
       console.log("Refresh");
       try {
+        if (cli.states) {
+          try {
+            workflowStates = await cli.states(flags);
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.log(`Refresh states failed; ${message}`);
+          }
+        }
         const issues = await cli.list(flags);
         const epics = await cli.listEpics(flags);
         const listedPayload = JSON.parse(issues);

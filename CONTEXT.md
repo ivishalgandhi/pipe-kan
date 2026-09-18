@@ -1,18 +1,18 @@
 # pipe-kan
 
-A local Kanban view of Jira issues, fed by jira-cli. The first release changes Jira only by running jira-cli.
+A local Kanban view of Jira issues (jira-cli) or Plane work items (Plane REST). Jira is the default backend. `--plane` selects Plane.
 
 ## Language
 
 **Issue**:
-A Jira work item identified by its key.
-_Avoid_: ticket, item, task (when meaning the Jira record)
+A Jira work item identified by its key, or a Plane work item identified by `{project identifier}-{sequence}` (for example `APH-12`).
+_Avoid_: ticket, item, task (when meaning the tracked record)
 
 **Card**:
 The Board representation of one Issue. It shows the Issue key and summary, and when the payload has them, priority, assignee, due date, Target End Date, labels, and age since created. On All epics the Card is an Epic and is marked Epic.
 
 **Column**:
-A Board lane named by an Issue status present in the payload. Statuses with no Issues are omitted.
+A Board lane named by an Issue status. Jira omits statuses with no Issues. Plane keeps every workflow state so a Card can be dropped onto an empty Column.
 _Avoid_: lane, list
 
 **Board**:
@@ -36,7 +36,7 @@ A Jira project identified by its key. Refresh and the default Scope are one Proj
 _Avoid_: repo, codebase (those are this tool)
 
 **Epic**:
-An Issue of type Epic, listed from `jira issue list -tEpic`. On All stories it lives in the left pane; clicking it shows children. On All epics it is a Card.
+An Issue of type Epic, listed from `jira issue list -tEpic`. On All stories it lives in the left pane; clicking it shows children. On All epics it is a Card. In Plane mode a Module is listed as an Epic in that same left rail.
 _Avoid_: parent (jira-cli's `-P` flag name)
 
 **Favourite**:
@@ -84,7 +84,7 @@ Confirm first, then re-run jira-cli for all Epics or the focused left-pane Epic.
 _Avoid_: sync, reload (when meaning that action)
 
 **Move**:
-Changing an Issue's status by running `jira issue move`. A Card is Moved by dropping it on a Column, including an Epic Card on All epics. On All stories an Epic is Moved from its row menu. Dropping a Card on the same Column, or picking the Epic's current status, does nothing.
+Changing an Issue's status. Jira runs `jira issue move`. Plane PATCHes the work item state. A Card is Moved by dropping it on a Column, including an Epic Card on All epics. On All stories an Epic is Moved from its row menu. Dropping a Card on the same Column, or picking the Epic's current status, does nothing.
 _Avoid_: transition, drag (the gesture), update, file (putting a Favourite in a Folder)
 
 **Open**:
@@ -96,8 +96,8 @@ A read-only month tab on the main canvas of Issue created and Target End days fo
 _Avoid_: Board, scheduler, Jira calendar, sidebar calendar
 
 **Write-back**:
-Changing Jira from the Board, only by running jira-cli (`jira issue move`, `jira issue create`, `jira issue edit`). Never a direct Jira API call from this app.
-_Avoid_: sync, persist, save (when meaning a Jira mutation)
+Changing the source of truth from the Board. Jira: only by running jira-cli (`jira issue move`, `jira issue create`, `jira issue edit`) — never a direct Jira API call. Plane: Plane REST with `PLANE_API_KEY`.
+_Avoid_: sync, persist, save (when meaning a remote mutation)
 
 **Agent**:
 An external coding agent (Cursor today, Devin when available) spawned by pipe-kan over ACP to assist the user inside the app. The agent does not hold Jira credentials.

@@ -1,6 +1,6 @@
 # pipe-kan
 
-Local Kanban for [jira-cli](https://github.com/ankitpokhrel/jira-cli). The first release changes Jira only by running jira-cli.
+Local Kanban for [jira-cli](https://github.com/ankitpokhrel/jira-cli) or [Plane](https://plane.so). Jira write-back still goes through jira-cli. Plane write-back uses the Plane REST API.
 
 ## Run
 
@@ -16,8 +16,8 @@ First paint is the Fixture. If `jira` is on PATH, the process then Refresh-es fr
 
 The published CLI is on npm. From a clone: `bun run build && bun dist/pipe-kan.js`.
 
-- Left: All stories and All epics. Center: Cards (one Column per status in the payload). Right: Open URL; remote Jira is a link, not an iframe.
-- Drop a Card on a Column to Move (`jira issue move`).
+- Left: All stories and All epics (Plane: modules in that left rail). Center: Cards (one Column per status; Plane also keeps empty workflow states). Right: Open URL; remote Jira is a link, not an iframe.
+- Drop a Card on a Column to Move (`jira issue move`, or Plane `PATCH` work-item state).
 - Column `+` or Cmd+K **Create issue** opens a composer. **Create with AI** seeds the Agent to draft and call `create_issue` after approval.
 - Double-click a Card or Open-pane **Edit** to change summary, description, and labels (`jira issue edit`).
 - Drag a Column to change status order. The order is stored locally and kept after Refresh.
@@ -37,6 +37,36 @@ bunx pipe-kan
 ```
 
 Scope flags start empty (jira-cli's one Project). Add `-a you@work.com` or `-s~Done` if you want a tighter list, then Refresh. More than one Project key: `--projects` below.
+
+## Plane
+
+Plane is an alternate backend. Jira stays the default. Auth is environment-only — do not put the key in flags, git, or the Scope field.
+
+```sh
+export PLANE_API_KEY=...
+# optional; default is this self-hosted instance
+export PLANE_HOST=https://plane.tail48fe8.ts.net
+bunx pipe-kan --plane --projects APH,PULSE,PKAN,PUI,DEC
+```
+
+| Flag / env | Default | Role |
+| --- | --- | --- |
+| `--plane` | off | use Plane instead of jira-cli |
+| `--workspace` | `personal` | Plane workspace slug (`--workspace team` or `PLANE_WORKSPACE`) |
+| `--projects APH,PULSE` | all workspace projects | Plane project identifiers |
+| `PLANE_API_KEY` | (required in Plane mode) | personal access token (`X-API-Key`) |
+| `PLANE_HOST` | `https://plane.tail48fe8.ts.net` | Plane origin; API is `{host}/api/v1` |
+
+Same `--projects` style as Jira: comma-separated, trimmed, uppercased. The header **Scope flags** field accepts the same string, then **Refresh**.
+
+On Refresh:
+
+- Work items become Cards. Workflow states become Columns (including empty states, so you can drop onto them).
+- Modules fill the left rail like Epics. Selecting a module shows its work items.
+- Label `needs-input` is a warning badge on the Card.
+- Drop a Card on a Column PATCHes that work item's state. Same-Column drop is still a no-op.
+
+Create and Edit use Plane REST when `--plane` is set. Pulse, Plane Pro, scraping, and SQL workspace moves are out of scope.
 
 ## Multiple projects
 
@@ -98,11 +128,15 @@ Pipe is the first Board. Refresh and Move still go through `jira` when it is on 
 | `JIRA_BIN` | `jira` | binary name or path |
 | `JIRA_CONFIG_FILE` | jira-cli default | set only for Fake Jira |
 | `JIRA_API_TOKEN` | jira-cli default | Work Jira token if needed |
+| `PLANE_API_KEY` | (none) | Plane token; required with `--plane` |
+| `PLANE_HOST` | `https://plane.tail48fe8.ts.net` | Plane origin |
+| `PLANE_WORKSPACE` | `personal` | default workspace if `--workspace` is omitted |
 
 ## Limits
 
-- Write-back is `jira issue move`, `jira issue create`, and `jira issue edit`. Intra-column rank is not persisted.
+- Jira write-back is `jira issue move`, `jira issue create`, and `jira issue edit`. Intra-column rank is not persisted.
 - Never a direct Jira REST Write-back.
+- Plane write-back is Plane REST (`PATCH` work item state / create / edit). The key stays in `PLANE_API_KEY`.
 - Work Jira needs `jira` on PATH and a token. This repo does not ship one.
 
 ## Check

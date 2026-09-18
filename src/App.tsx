@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { cardAge, epicsToColumns, targetEndDistance, type Board, type Card, type Column, type Epic } from "./board.ts";
+import { cardAge, epicsToColumns, isNeedsInputLabel, targetEndDistance, type Board, type Card, type Column, type Epic } from "./board.ts";
 import { type CommandJump } from "./command.ts";
 import { REFRESH_NO_FOCUS_WARNING, refreshRequestBody } from "./refresh.ts";
 import { parseFlags } from "./flags.ts";
@@ -80,6 +80,7 @@ import { BoardCalendar } from "~/components/board-calendar.tsx";
 import { CommandOverlay } from "~/components/command-overlay.tsx";
 import { IssueComposer } from "~/components/issue-composer.tsx";
 import { Toaster } from "~/components/ui/sonner.tsx";
+import { Badge } from "~/components/ui/badge.tsx";
 import { Spinner } from "~/components/ui/spinner.tsx";
 import { Avatar, AvatarFallback } from "~/components/ui/avatar";
 import {
@@ -662,14 +663,20 @@ function IssueCard({
             </span>
           ) : null}
           {isShown("labels")
-            ? card.labels?.map((label) => (
-                <span
-                  key={label}
-                  className="text-muted-foreground inline-flex h-6 shrink-0 items-center rounded-full border px-2 text-[12px]"
-                >
-                  {label}
-                </span>
-              ))
+            ? card.labels?.map((label) =>
+                isNeedsInputLabel(label) ? (
+                  <Badge key={label} variant="warning-light" className="h-6 rounded-full px-2 text-[12px]">
+                    {label}
+                  </Badge>
+                ) : (
+                  <span
+                    key={label}
+                    className="text-muted-foreground inline-flex h-6 shrink-0 items-center rounded-full border px-2 text-[12px]"
+                  >
+                    {label}
+                  </span>
+                ),
+              )
             : null}
           <span className="flex-1" />
           {targetDistance ? (

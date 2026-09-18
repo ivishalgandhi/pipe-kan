@@ -1,10 +1,12 @@
 import { expect, test } from "vitest";
 
-import { argvToFlags, DEFAULT_FLAGS, flagsToJql, parseFlags } from "./flags.ts";
+import { argvToFlags, DEFAULT_FLAGS, flagsToJql, parseFlags, wantsPlane } from "./flags.ts";
 
 test("default Scope has no project clause", () => {
   expect(DEFAULT_FLAGS).toBe("");
   expect(flagsToJql("")).toBe("");
+  expect(wantsPlane("")).toBe(false);
+  expect(parseFlags("").plane).toBe(false);
 });
 
 test("Scope flags still add assignee and status", () => {
@@ -33,4 +35,19 @@ test("argvToFlags converts process.argv to flags string", () => {
     "-a user@test.com",
   );
   expect(argvToFlags(["node", "pipe-kan"])).toBe("");
+  expect(argvToFlags(["node", "pipe-kan", "--plane", "--projects", "APH,PULSE"])).toBe(
+    "--plane --projects APH,PULSE",
+  );
+});
+
+test("--plane and --workspace stay out of JQL", () => {
+  const parsed = parseFlags("--plane --workspace team --projects APH,PULSE");
+  expect(parsed.plane).toBe(true);
+  expect(parsed.workspace).toBe("team");
+  expect(parsed.projects).toEqual(["APH", "PULSE"]);
+  expect(parsed.jql).toBe('project in ("APH", "PULSE")');
+});
+
+test("--workspace=slug is accepted", () => {
+  expect(parseFlags("--plane --workspace=personal").workspace).toBe("personal");
 });

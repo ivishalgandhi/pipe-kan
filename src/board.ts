@@ -199,8 +199,15 @@ function issueAssignee(fields: RawIssue["fields"]): string | undefined {
   return undefined;
 }
 
+export const NEEDS_INPUT_LABEL = "needs-input";
+
+export function isNeedsInputLabel(label: string): boolean {
+  return label.trim().toLowerCase() === NEEDS_INPUT_LABEL;
+}
+
 export type BoardOpts = {
   targetEndFieldId?: string;
+  statuses?: string[];
 };
 
 function toEpic(face: {
@@ -267,6 +274,14 @@ export function issuesToBoard(raw: unknown, opts: BoardOpts = {}): Board {
   const byStatus = new Map<string, Column>();
   const epics: Epic[] = [];
   const epicByKey = new Map<string, Epic>();
+
+  for (const status of opts.statuses ?? []) {
+    const title = status.trim();
+    if (!title || byStatus.has(title)) continue;
+    const column = { id: title, title, cards: [] };
+    byStatus.set(title, column);
+    columns.push(column);
+  }
 
   function rememberEpic(epic: Epic) {
     const existing = epicByKey.get(epic.key);

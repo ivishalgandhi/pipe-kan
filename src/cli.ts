@@ -26,6 +26,7 @@ export type Cli = {
   ): Promise<{ ok: boolean; error?: string }>;
   open(key: string): Promise<string>;
   view(key: string): Promise<string>;
+  states?(flags?: string): Promise<string[]>;
 };
 
 export function createdKeyFromOutput(text: string): string | undefined {
