@@ -37,14 +37,22 @@ function reply(
     });
 }
 
-function boardEnvelope(
+async function boardEnvelope(
   body: object,
   kind: Boot["kind"],
   flags: string,
   env: NodeJS.ProcessEnv,
+  app: App,
 ) {
   if (kind !== "plane") return { ...body, kind };
-  return { ...body, kind, workspace: planeWorkspace(flags, env) };
+  const envelope = { ...body, kind, workspace: planeWorkspace(flags, env) };
+  try {
+    const workspaces = await app.listWorkspaces?.();
+    if (workspaces && workspaces.length) return { ...envelope, workspaces };
+  } catch {
+    /* omit list; never fail Board */
+  }
+  return envelope;
 }
 
 export function handleAppApi(
@@ -59,7 +67,30 @@ export function handleAppApi(
   const method = (req.method ?? "GET").toUpperCase();
 
   if (url.pathname === "/api/board" && method === "GET") {
-    json(res, 200, boardEnvelope({ ...app.board(), flags: app.flags }, kind, app.flags, env));
+    reply(req, res, async () => {
+      json(res, 200, await boardEnvelope({ ...app.board(), flags: app.flags }, kind, app.flags, env, app));
+    });
+    return true;
+  }
+
+  if (url.pathname === "/api/projects" && method === "GET") {
+    reply(req, res, async () => {
+      if (kind !== "plane") {
+        json(res, 404, { error: "not plane" });
+        return;
+      }
+      const workspace = (url.searchParams.get("workspace") ?? "").trim();
+      if (!workspace) {
+        json(res, 400, { error: "workspace required" });
+        return;
+      }
+      try {
+        json(res, 200, { projects: await app.listProjectIdentifiers?.(workspace) ?? [] });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "catalog failed";
+        json(res, 409, { error: message });
+      }
+    });
     return true;
   }
 
@@ -77,11 +108,11 @@ export function handleAppApi(
         json(
           res,
           200,
-          boardEnvelope(await app.refresh(undefined, { scope: "selected", epicKeys }), kind, app.flags, env),
+          await boardEnvelope(await app.refresh(undefined, { scope: "selected", epicKeys }), kind, app.flags, env, app),
         );
         return;
       }
-      json(res, 200, boardEnvelope(await app.refresh(body.flags), kind, app.flags, env));
+      json(res, 200, await boardEnvelope(await app.refresh(body.flags), kind, app.flags, env, app));
     });
     return true;
   }

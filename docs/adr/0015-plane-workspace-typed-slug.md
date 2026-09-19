@@ -4,7 +4,7 @@ Plane REST is always `/workspaces/{slug}/…`. Public PAT still has no shipped l
 
 ## Status
 
-Accepted
+Superseded by ADR-0016
 
 ## Considered options
 
