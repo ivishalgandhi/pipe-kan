@@ -11,7 +11,8 @@ export type CommandJump =
   | { kind: "create-ai" }
   | { kind: "preset"; name: string }
   | { kind: "epic"; key: string }
-  | { kind: "card"; key: string; epic?: string };
+  | { kind: "card"; key: string; epic?: string }
+  | { kind: "workspace"; slug: string };
 
 export type CommandRow = {
   label: string;
@@ -21,7 +22,7 @@ export type CommandRow = {
 };
 
 export type CommandGroup = {
-  id: "actions" | "epics" | "cards";
+  id: "actions" | "epics" | "cards" | "workspace";
   title: string;
   rows: CommandRow[];
 };
@@ -32,7 +33,41 @@ export type CommandCatalogInput = {
   epics?: Epic[];
   cards?: Card[];
   favouriteKeys?: string[];
+  plane?: boolean;
+  workspaces?: PlaneWorkspace[];
 };
+
+export type PlaneWorkspace = { id: string; name: string; slug: string };
+
+export function workspacePickerRows(
+  workspaces: PlaneWorkspace[] | undefined,
+  query: string,
+): { listed: PlaneWorkspace[]; other: boolean } {
+  const needle = query.trim().toLowerCase();
+  const list = workspaces ?? [];
+  const listed = needle
+    ? list.filter(
+        (ws) =>
+          ws.name.toLowerCase().includes(needle) || ws.slug.toLowerCase().includes(needle),
+      )
+    : list;
+  const trimmed = query.trim();
+  const other = !list.length || !list.some((ws) => ws.slug === trimmed);
+  return { listed, other };
+}
+
+function workspaceGroup(input: CommandCatalogInput): CommandGroup | null {
+  if (!input.plane) return null;
+  const { listed, other } = workspacePickerRows(input.workspaces, input.query);
+  const rows: CommandRow[] = listed.map((ws) => ({
+    label: ws.name.trim() || ws.slug,
+    key: ws.slug,
+    jump: { kind: "workspace" as const, slug: ws.slug },
+  }));
+  if (other) rows.push({ label: "Other", jump: { kind: "workspace", slug: input.query.trim() } });
+  if (!rows.length) return null;
+  return { id: "workspace", title: "Workspace", rows };
+}
 
 export function commandCatalog(input: CommandCatalogInput): CommandGroup[] {
   const needle = input.query.trim().toLowerCase();
@@ -52,6 +87,8 @@ export function commandCatalog(input: CommandCatalogInput): CommandGroup[] {
   const actionRows = actions.filter((row) => !needle || row.label.toLowerCase().includes(needle));
   const groups: CommandGroup[] = [];
   if (actionRows.length) groups.push({ id: "actions", title: "Actions", rows: actionRows });
+  const workspaces = workspaceGroup(input);
+  if (workspaces) groups.push(workspaces);
   if (!needle) return groups;
 
   const favourites = new Set(input.favouriteKeys ?? []);

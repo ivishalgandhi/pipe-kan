@@ -21,9 +21,9 @@ import {
 import { toast } from "sonner";
 
 import { cardAge, epicsToColumns, isNeedsInputLabel, targetEndDistance, type Board, type Card, type Column, type Epic } from "./board.ts";
-import { type CommandJump } from "./command.ts";
+import { workspacePickerRows, type CommandJump, type PlaneWorkspace } from "./command.ts";
 import { REFRESH_NO_FOCUS_WARNING, refreshRequestBody, refreshWorkspaceWarning } from "./refresh.ts";
-import { commitWorkspaceSlug, parseFlags, setWorkspaceFlag } from "./flags.ts";
+import { commitWorkspaceSlug, parseFlags, setProjectsFlag, setWorkspaceFlag } from "./flags.ts";
 import {
   buildCreatePayload,
   buildEditPayload,
@@ -415,6 +415,7 @@ type BoardPayload = Board & {
   flags?: string;
   kind?: "jira" | "store" | "plane";
   workspace?: string;
+  workspaces?: PlaneWorkspace[];
 };
 type Theme = "light" | "dark";
 
@@ -1097,61 +1098,66 @@ function OpenFields({ fields }: { fields: OpenField[] }) {
   );
 }
 
-function WorkspacePill({
+function WorkspacePicker({
   slug,
+  workspaces,
   onCommit,
 }: {
   slug: string;
+  workspaces?: PlaneWorkspace[];
   onCommit: (typed: string) => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(slug);
-  const skipBlur = useRef(false);
-
-  useEffect(() => {
-    if (!editing) setDraft(slug);
-  }, [slug, editing]);
-
-  if (!editing) {
-    return (
-      <button
-        type="button"
-        aria-label="Workspace"
-        className="bg-primary/10 text-primary inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium"
-        onClick={() => {
-          setDraft(slug);
-          setEditing(true);
-        }}
-      >
-        {slug}
-      </button>
-    );
-  }
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState("");
+  const { listed, other } = workspacePickerRows(workspaces, draft);
 
   return (
-    <input
-      aria-label="Workspace"
-      autoFocus
-      value={draft}
-      spellCheck={false}
-      className="bg-primary/10 text-primary h-6 w-28 rounded-full px-2 text-[11px] font-medium outline-none"
-      onChange={(event) => setDraft(event.target.value)}
-      onBlur={() => {
-        if (skipBlur.current) {
-          skipBlur.current = false;
-          return;
-        }
-        setDraft(slug);
-        setEditing(false);
+    <DropdownMenu
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) setDraft("");
       }}
-      onKeyDown={(event) => {
-        if (event.key !== "Enter") return;
-        event.preventDefault();
-        skipBlur.current = true;
-        setEditing(false);
-        onCommit(draft);
-      }}
-    />
+    >
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label="Workspace"
+          className="bg-primary/10 text-primary inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium"
+        >
+          {slug}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-56">
+        <div className="px-2 pb-2">
+          <input
+            aria-label="Workspace"
+            autoFocus
+            spellCheck={false}
+            value={draft}
+            placeholder="Filter or type a slug"
+            className="border-input h-7 w-full rounded-md border bg-transparent px-2 text-[13px] outline-none"
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              event.stopPropagation();
+              if (event.key !== "Enter") return;
+              event.preventDefault();
+              setOpen(false);
+              onCommit(draft);
+            }}
+          />
+        </div>
+        {listed.map((ws) => (
+          <DropdownMenuItem key={ws.slug} onSelect={() => onCommit(ws.slug)}>
+            <span className="min-w-0 flex-1 truncate">{ws.name.trim() || ws.slug}</span>
+            <span className="text-muted-foreground text-[11px]">{ws.slug}</span>
+          </DropdownMenuItem>
+        ))}
+        {other ? (
+          <DropdownMenuItem onSelect={() => onCommit(draft)}>Other</DropdownMenuItem>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -1198,6 +1204,7 @@ export function App() {
   const [processKind, setProcessKind] = useState<"jira" | "store" | "plane" | "">("");
   const [workspaceSlug, setWorkspaceSlug] = useState("");
   const [committedWorkspace, setCommittedWorkspace] = useState("");
+  const [workspaces, setWorkspaces] = useState<PlaneWorkspace[] | undefined>(undefined);
   const [workspaceSwitch, setWorkspaceSwitch] = useState<{ previousFlags: string; previousSlug: string } | null>(null);
   const workspaceSwitchRef = useRef(workspaceSwitch);
   workspaceSwitchRef.current = workspaceSwitch;
@@ -1338,15 +1345,19 @@ export function App() {
     applyBoard(data);
     if (data.flags) setFlags(data.flags);
     setProcessKind(data.kind ?? "store");
-    if (data.kind === "plane" && data.workspace) {
-      setCommittedWorkspace(data.workspace);
-      setWorkspaceSlug(data.workspace);
-      const projects = parseFlags(data.flags ?? flags).projects;
-      persistFavourites(
-        favouritesForWorkspace(filterFavouritesByProject(readFavourites(), projects), data.workspace),
-        data.workspace,
-      );
+    if (data.kind === "plane") {
+      setWorkspaces(data.workspaces);
+      if (data.workspace) {
+        setCommittedWorkspace(data.workspace);
+        setWorkspaceSlug(data.workspace);
+        const projects = parseFlags(data.flags ?? flags).projects;
+        persistFavourites(
+          favouritesForWorkspace(filterFavouritesByProject(readFavourites(), projects), data.workspace),
+          data.workspace,
+        );
+      }
     } else {
+      setWorkspaces(undefined);
       setCommittedWorkspace("");
       setWorkspaceSlug("");
     }
@@ -1403,12 +1414,25 @@ export function App() {
     setRefreshOpen(true);
   }
 
-  function commitWorkspace(typed: string) {
+  async function commitWorkspace(typed: string) {
     const live = workspaceSlug || committedWorkspace;
     const decision = commitWorkspaceSlug(live, typed);
     if (decision.action !== "commit") return;
-    const nextFlags = setWorkspaceFlag(flags, decision.slug);
-    const pending = { previousFlags: flags, previousSlug: live };
+    const previousFlags = flags;
+    const previousSlug = live;
+    let ids: string[] = [];
+    try {
+      const data = await api<{ projects?: unknown }>(
+        `/api/projects?workspace=${encodeURIComponent(decision.slug)}`,
+      );
+      if (Array.isArray(data.projects)) {
+        ids = data.projects.filter((item): item is string => typeof item === "string");
+      }
+    } catch {
+      ids = [];
+    }
+    const nextFlags = setProjectsFlag(setWorkspaceFlag(previousFlags, decision.slug), ids);
+    const pending = { previousFlags, previousSlug };
     workspaceSwitchRef.current = pending;
     setWorkspaceSwitch(pending);
     setFlags(nextFlags);
@@ -1454,6 +1478,7 @@ export function App() {
           setProcessKind("plane");
           setCommittedWorkspace(data.workspace);
           setWorkspaceSlug(data.workspace);
+          setWorkspaces(data.workspaces);
           persistFavourites(favouritesForWorkspace(favourites, data.workspace), data.workspace);
         }
       }
@@ -1848,6 +1873,7 @@ export function App() {
     else if (jump.kind === "all-epics") openEpics();
     else if (jump.kind === "all-combined") openCombined();
     else if (jump.kind === "refresh") openRefreshConfirm();
+    else if (jump.kind === "workspace") void commitWorkspace(jump.slug);
     else if (jump.kind === "agent") setAgentOpen(true);
     else if (jump.kind === "create") openCreate();
     else if (jump.kind === "create-ai") openCreateAi();
@@ -2115,7 +2141,11 @@ export function App() {
                   })()}
                 </span>
                 {processKind === "plane" ? (
-                  <WorkspacePill slug={workspaceSlug} onCommit={commitWorkspace} />
+                  <WorkspacePicker
+                    slug={workspaceSlug}
+                    workspaces={workspaces}
+                    onCommit={(typed) => void commitWorkspace(typed)}
+                  />
                 ) : null}
                 <InputGroup className="h-7 max-w-72 min-w-40 flex-1 border-transparent bg-muted shadow-none">
                   <InputGroupAddon>
@@ -2605,6 +2635,8 @@ export function App() {
           epics={pipeBoard?.epics ?? epics}
           cards={commandCards}
           favouriteKeys={favourites.keys}
+          plane={processKind === "plane"}
+          workspaces={workspaces}
           onPick={applyCommand}
           onClose={() => {
             commandOpenRef.current = false;

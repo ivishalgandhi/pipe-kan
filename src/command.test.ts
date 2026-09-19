@@ -326,3 +326,114 @@ test("commandComposerAction maps Create issue and Create with AI", () => {
   expect(commandComposerAction({ kind: "create-ai" })).toBe("create-ai");
   expect(commandComposerAction({ kind: "agent" })).toBeNull();
 });
+
+const teamWs = { id: "ws-team", name: "Team", slug: "team" };
+const personalWs = { id: "ws-personal", name: "Personal", slug: "personal" };
+
+function workspaceGroup(
+  input: Parameters<typeof commandCatalog>[0],
+) {
+  return commandCatalog(input).find((group) => group.id === "workspace");
+}
+
+test("Jira and store omit the Workspace group even when a list is passed", () => {
+  expect(workspaceGroup({ presets: [], query: "", workspaces: [teamWs] })).toBeUndefined();
+  expect(
+    workspaceGroup({ presets: [], query: "", plane: false, workspaces: [teamWs] }),
+  ).toBeUndefined();
+});
+
+test("Plane empty query lists Workspace tenants and Other", () => {
+  expect(
+    workspaceGroup({
+      presets: [],
+      query: "",
+      plane: true,
+      workspaces: [personalWs, teamWs],
+    }),
+  ).toEqual({
+    id: "workspace",
+    title: "Workspace",
+    rows: [
+      { label: "Personal", key: "personal", jump: { kind: "workspace", slug: "personal" } },
+      { label: "Team", key: "team", jump: { kind: "workspace", slug: "team" } },
+      { label: "Other", jump: { kind: "workspace", slug: "" } },
+    ],
+  });
+});
+
+test("Plane empty query still omits Epics and Cards when Workspace is listed", () => {
+  const ids = commandCatalog({
+    presets: [],
+    query: "",
+    plane: true,
+    workspaces: [teamWs],
+    epics: [listedEpic],
+    cards: [child],
+  }).map((group) => group.id);
+  expect(ids).toEqual(["actions", "workspace"]);
+});
+
+test("Plane Other is the only Workspace row when the list is omitted or empty", () => {
+  expect(workspaceGroup({ presets: [], query: "", plane: true })).toEqual({
+    id: "workspace",
+    title: "Workspace",
+    rows: [{ label: "Other", jump: { kind: "workspace", slug: "" } }],
+  });
+  expect(workspaceGroup({ presets: [], query: "", plane: true, workspaces: [] })).toEqual({
+    id: "workspace",
+    title: "Workspace",
+    rows: [{ label: "Other", jump: { kind: "workspace", slug: "" } }],
+  });
+});
+
+test("typing filters Workspace rows by name and slug", () => {
+  expect(
+    workspaceGroup({
+      presets: [],
+      query: "TEA",
+      plane: true,
+      workspaces: [personalWs, teamWs],
+    })?.rows.map((row) => row.key ?? row.label),
+  ).toEqual(["team", "Other"]);
+  expect(
+    workspaceGroup({
+      presets: [],
+      query: "personal",
+      plane: true,
+      workspaces: [personalWs, teamWs],
+    })?.rows,
+  ).toEqual([
+    { label: "Personal", key: "personal", jump: { kind: "workspace", slug: "personal" } },
+  ]);
+});
+
+test("Other stays when the query is a slug that is not listed", () => {
+  const row = workspaceGroup({
+    presets: [],
+    query: " other ",
+    plane: true,
+    workspaces: [teamWs],
+  })?.rows.find((item) => item.label === "Other");
+  expect(row && commandPick(row)).toEqual({ kind: "workspace", slug: "other" });
+});
+
+test("picking a listed Workspace row yields that slug", () => {
+  const row = workspaceGroup({
+    presets: [],
+    query: "",
+    plane: true,
+    workspaces: [teamWs],
+  })?.rows[0];
+  expect(row && commandPick(row)).toEqual({ kind: "workspace", slug: "team" });
+});
+
+test("empty query Other is an empty slug", () => {
+  const row = workspaceGroup({
+    presets: [],
+    query: "",
+    plane: true,
+    workspaces: [],
+  })?.rows.find((item) => item.label === "Other");
+  expect(row && commandPick(row)).toEqual({ kind: "workspace", slug: "" });
+});

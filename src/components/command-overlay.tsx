@@ -2,7 +2,13 @@ import { useState, type KeyboardEvent } from "react";
 import { SearchIcon, StarIcon } from "lucide-react";
 
 import type { Card, Epic } from "~/board.ts";
-import { commandCatalog, commandPick, type CommandJump, type CommandRow } from "~/command.ts";
+import {
+  commandCatalog,
+  commandPick,
+  type CommandJump,
+  type CommandRow,
+  type PlaneWorkspace,
+} from "~/command.ts";
 import { cn } from "~/lib/utils";
 
 function rowId(row: CommandRow) {
@@ -14,6 +20,8 @@ export function CommandOverlay({
   epics,
   cards,
   favouriteKeys,
+  plane,
+  workspaces,
   onPick,
   onClose,
 }: {
@@ -21,12 +29,14 @@ export function CommandOverlay({
   epics: Epic[];
   cards: Card[];
   favouriteKeys: string[];
+  plane?: boolean;
+  workspaces?: PlaneWorkspace[];
   onPick: (jump: CommandJump) => void;
   onClose: () => void;
 }) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
-  const groups = commandCatalog({ presets, query, epics, cards, favouriteKeys });
+  const groups = commandCatalog({ presets, query, epics, cards, favouriteKeys, plane, workspaces });
   const rows = groups.flatMap((group) => group.rows);
   const highlight = rows.length ? Math.min(active, rows.length - 1) : 0;
 
