@@ -36,7 +36,7 @@ export async function runServer(opts: {
   });
 
   const server = createServer((req, res) => {
-    if (handleRequest(req, res, { app, store })) return;
+    if (handleRequest(req, res, { app, store, kind })) return;
     if (opts.fallback) {
       opts.fallback(req, res);
       return;
@@ -47,21 +47,31 @@ export async function runServer(opts: {
     }
   });
 
+  if (kind === "plane") {
+    try {
+      await refreshFromJira(app, kind, { piped: Boolean(piped) });
+    } catch (err) {
+      console.error(`${kind} Refresh failed`, err);
+    }
+    const error = app.board().error;
+    if (error) console.error(`${kind} Refresh failed; keeping last live Board`, error);
+  }
+
   const { host, port } = resolveListen();
   await bindListen(server, host, port);
   const origin = `http://127.0.0.1:${port}`;
-  const fakeConfig = writeJiraConfig(join(tmpdir(), "pipe-kan"), origin);
   announce(`pipe-kan http://${host}:${port}`);
   if (kind === "plane") {
     announce(`cli plane ${planeHost()} ${planeWorkspace(flags)}`);
     announce(`Plane host default ${DEFAULT_PLANE_HOST}`);
   } else {
+    const fakeConfig = writeJiraConfig(join(tmpdir(), "pipe-kan"), origin);
     announce(`cli ${kind === "jira" ? resolveJiraBin() : "store"}`);
     announce(`Fake Jira ${origin}/rest/api/2/search`);
     announce(`Fake Jira config ${fakeConfig}`);
   }
 
-  if (kind === "jira" || kind === "plane") {
+  if (kind === "jira") {
     try {
       await refreshFromJira(app, kind, { piped: Boolean(piped) });
     } catch (err) {

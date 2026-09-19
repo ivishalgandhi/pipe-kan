@@ -17,3 +17,4 @@ Accepted
 - Contradicts ADR-0001 for the Plane path only. Jira write-back is still jira-cli.
 - Auth is `PLANE_API_KEY` + `PLANE_HOST`. Do not hardcode the key.
 - `--projects` still means project identifiers (`APH,PULSE`). `--workspace` defaults to `personal`.
+- Catalog HTTP is serialized and paced; see ADR-0017.

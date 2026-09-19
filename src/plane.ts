@@ -6,8 +6,6 @@ export const DEFAULT_PLANE_HOST = "https://plane.tail48fe8.ts.net";
 export const DEFAULT_PLANE_WORKSPACE = "personal";
 
 const STATE_GROUPS = ["backlog", "unstarted", "started", "completed", "cancelled"];
-const RETRY_LIMIT = 4;
-
 export type PlaneFetch = typeof fetch;
 
 export type PlaneOpts = {
@@ -17,6 +15,8 @@ export type PlaneOpts = {
   flags?: string;
   fetch?: PlaneFetch;
   retryDelayMs?: number;
+  now?: () => number;
+  sleep?: (ms: number) => Promise<void>;
 };
 
 type PlaneState = {
@@ -309,6 +309,27 @@ function queryPath(path: string, query: Record<string, string | undefined>): str
   return `${path}${path.includes("?") ? "&" : "?"}${encoded}`;
 }
 
+function rateLimitWaitMs(headers: Headers, nowMs: number, on429: boolean): number {
+  const retryAfter = headers.get("Retry-After");
+  if (retryAfter) {
+    const seconds = Number(retryAfter.trim());
+    if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+    const parsed = Date.parse(retryAfter);
+    if (!Number.isNaN(parsed)) return Math.max(0, parsed - nowMs);
+  }
+  const reset = headers.get("X-RateLimit-Reset");
+  if (reset) {
+    const n = Number(reset.trim());
+    if (Number.isFinite(n)) {
+      const resetMs = n < 1e12 ? n * 1000 : n;
+      return Math.max(0, resetMs - nowMs);
+    }
+  }
+  if (on429) return 60_000;
+  if (headers.get("X-RateLimit-Remaining")?.trim() === "0") return 60_000;
+  return 0;
+}
+
 function errorMessage(status: number, body: string): string {
   try {
     const parsed = JSON.parse(body) as Record<string, unknown>;
@@ -341,7 +362,11 @@ export function createPlaneCli(opts: PlaneOpts): Cli {
   const apiBase = planeApiBase(host);
   const defaultFlags = opts.flags ?? DEFAULT_FLAGS;
   const fetchFn = opts.fetch ?? fetch;
-  const retryDelayMs = opts.retryDelayMs ?? 1000;
+  const nowFn = opts.now ?? Date.now;
+  const sleepFn =
+    opts.sleep ??
+    ((ms: number) =>
+      ms <= 0 ? Promise.resolve() : new Promise<void>((resolve) => setTimeout(resolve, ms)));
   let lastFlags = defaultFlags;
   let workItemResource = "work-items";
   let catalog:
@@ -361,29 +386,57 @@ export function createPlaneCli(opts: PlaneOpts): Cli {
     return planeWorkspace(flags || defaultFlags);
   }
 
+  let notBefore = 0;
+  let gate: Promise<void> = Promise.resolve();
+
+  function locked<T>(fn: () => Promise<T>): Promise<T> {
+    const run = gate.then(fn, fn);
+    gate = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
+  function fail(status: number, body: string): never {
+    const error = new Error(errorMessage(status, body)) as Error & { status?: number };
+    error.status = status;
+    throw error;
+  }
+
+  function noteHeaders(headers: Headers, status: number) {
+    const remaining = headers.get("X-RateLimit-Remaining")?.trim();
+    if (status !== 429 && remaining !== "0") return;
+    const wait = rateLimitWaitMs(headers, nowFn(), status === 429);
+    notBefore = Math.max(notBefore, nowFn() + wait);
+  }
+
   async function request(
     path: string,
     init: RequestInit = {},
-    attempt = 0,
   ): Promise<{ status: number; body: string }> {
-    const headers = new Headers(init.headers);
-    headers.set("X-API-Key", opts.apiKey);
-    if (init.body && !headers.has("content-type")) {
-      headers.set("content-type", "application/json");
-    }
-    const response = await fetchFn(joinUrl(apiBase, path), { ...init, headers });
-    const body = await response.text();
-    if (response.status === 429 && attempt < RETRY_LIMIT) {
-      const delay = retryDelayMs * 2 ** attempt;
-      if (retryDelayMs) await new Promise((resolve) => setTimeout(resolve, delay));
-      return request(path, init, attempt + 1);
-    }
-    if (!response.ok) {
-      const error = new Error(errorMessage(response.status, body)) as Error & { status?: number };
-      error.status = response.status;
-      throw error;
-    }
-    return { status: response.status, body };
+    return locked(async () => {
+      let retried = false;
+      while (true) {
+        const headers = new Headers(init.headers);
+        headers.set("X-API-Key", opts.apiKey);
+        if (init.body && !headers.has("content-type")) {
+          headers.set("content-type", "application/json");
+        }
+        const delay = notBefore - nowFn();
+        if (delay > 0) await sleepFn(delay);
+        const response = await fetchFn(joinUrl(apiBase, path), { ...init, headers });
+        const body = await response.text();
+        noteHeaders(response.headers, response.status);
+        if (response.status === 429) {
+          if (retried) fail(response.status, body);
+          retried = true;
+          continue;
+        }
+        if (!response.ok) fail(response.status, body);
+        return { status: response.status, body };
+      }
+    });
   }
 
   async function requestJson(path: string, init?: RequestInit): Promise<unknown> {
@@ -497,18 +550,16 @@ export function createPlaneCli(opts: PlaneOpts): Cli {
     const columnStates: PlaneState[] = [];
 
     for (const project of projects) {
-      const [stateRows, labelRows, moduleRows, workRows] = await Promise.all([
-        paginate(`/workspaces/${workspace}/projects/${project.id}/states/`),
-        paginate(`/workspaces/${workspace}/projects/${project.id}/labels/`),
-        paginate(`/workspaces/${workspace}/projects/${project.id}/modules/`),
-        withResource((resource) =>
-          paginate(
-            queryPath(`/workspaces/${workspace}/projects/${project.id}/${resource}/`, {
-              expand: "assignees,labels,state,module",
-            }),
-          ),
+      const stateRows = await paginate(`/workspaces/${workspace}/projects/${project.id}/states/`);
+      const labelRows = await paginate(`/workspaces/${workspace}/projects/${project.id}/labels/`);
+      const moduleRows = await paginate(`/workspaces/${workspace}/projects/${project.id}/modules/`);
+      const workRows = await withResource((resource) =>
+        paginate(
+          queryPath(`/workspaces/${workspace}/projects/${project.id}/${resource}/`, {
+            expand: "assignees,labels,state,module",
+          }),
         ),
-      ]);
+      );
       const stateById = new Map<string, PlaneState>();
       for (const row of stateRows) {
         const state = parseState(row);
@@ -541,17 +592,15 @@ export function createPlaneCli(opts: PlaneOpts): Cli {
         );
       const issueByModule = new Map<string, string[]>();
       if (missingModules && moduleById.size) {
-        await Promise.all(
-          [...moduleById.keys()].map(async (moduleId) => {
-            const rows = await paginate(
-              `/workspaces/${workspace}/projects/${project.id}/modules/${moduleId}/module-issues/`,
-            );
-            const ids = rows
-              .map((row) => asId(asRecord(row)?.issue) ?? asId(row))
-              .filter((id): id is string => !!id);
-            issueByModule.set(moduleId, ids);
-          }),
-        );
+        for (const moduleId of moduleById.keys()) {
+          const rows = await paginate(
+            `/workspaces/${workspace}/projects/${project.id}/modules/${moduleId}/module-issues/`,
+          );
+          const ids = rows
+            .map((row) => asId(asRecord(row)?.issue) ?? asId(row))
+            .filter((id): id is string => !!id);
+          issueByModule.set(moduleId, ids);
+        }
       }
 
       for (const raw of workItems) {

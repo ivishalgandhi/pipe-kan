@@ -7,6 +7,7 @@ import { expect, test } from "vitest";
 import type { RawIssue } from "./board.ts";
 import { issuesToBoard } from "./board.ts";
 import { createBoardApp, refreshFromJira } from "./boot.ts";
+import { handleRequest } from "./http.ts";
 import {
   createPlaneCli,
   moduleToIssue,
@@ -52,7 +53,9 @@ function page(results: unknown[]) {
   return { results, next_page_results: false, next_cursor: "" };
 }
 
-function fakePlane(opts: { issuesOnly?: boolean } = {}) {
+const MOD_TWO = "mod-two";
+
+function fakePlane(opts: { issuesOnly?: boolean; join?: boolean } = {}) {
   const calls: { method: string; url: string; body?: unknown; key?: string | null }[] = [];
   let loginState = ST_PROGRESS;
   let createdSeq = 40;
@@ -71,6 +74,9 @@ function fakePlane(opts: { issuesOnly?: boolean } = {}) {
   const labels = [{ id: LBL_NEEDS, name: "needs-input" }];
   const modules = [
     { id: AUTH, name: "Auth", status: "in_progress", created_at: "2026-09-01T00:00:00Z" },
+    ...(opts.join
+      ? [{ id: MOD_TWO, name: "Two", status: "planned", created_at: "2026-09-01T00:00:00Z" }]
+      : []),
   ];
 
   function workItems(projectId: string) {
@@ -83,7 +89,7 @@ function fakePlane(opts: { issuesOnly?: boolean } = {}) {
         state: { id: loginState, name: states.find((state) => state.id === loginState)?.name },
         labels: [LBL_NEEDS],
         label_details: [{ id: LBL_NEEDS, name: "needs-input" }],
-        module_ids: [AUTH],
+        ...(opts.join ? {} : { module_ids: [AUTH] }),
         assignees: [{ display_name: "Ada" }],
         created_at: "2026-09-02T00:00:00Z",
         target_date: "2026-09-20",
@@ -95,7 +101,7 @@ function fakePlane(opts: { issuesOnly?: boolean } = {}) {
         sequence_id: 13,
         state: { id: ST_TODO, name: "Todo" },
         labels: [],
-        module_ids: [],
+        ...(opts.join ? {} : { module_ids: [] }),
         project: APH,
       },
       {
@@ -104,7 +110,7 @@ function fakePlane(opts: { issuesOnly?: boolean } = {}) {
         sequence_id: 1,
         state: { id: ST_PROGRESS, name: "In Progress" },
         labels: [],
-        module_ids: [],
+        ...(opts.join ? {} : { module_ids: [] }),
         project: PULSE,
       },
       {
@@ -113,7 +119,7 @@ function fakePlane(opts: { issuesOnly?: boolean } = {}) {
         sequence_id: 9,
         state: { id: ST_TODO, name: "Todo" },
         labels: [],
-        module_ids: [],
+        ...(opts.join ? {} : { module_ids: [] }),
         project: OTHER,
       },
     ];
@@ -138,7 +144,7 @@ function fakePlane(opts: { issuesOnly?: boolean } = {}) {
     // /api/v1/workspaces/personal/projects/...
     const resource = opts.issuesOnly ? "issues" : "work-items";
 
-    if (method === "GET" && /\/workspaces\/personal\/projects$/.test(path)) {
+    if (method === "GET" && /\/workspaces\/[^/]+\/projects$/.test(path)) {
       return jsonResponse(page(projects));
     }
 
@@ -210,6 +216,30 @@ function planeCli(flags = "--plane --projects APH,PULSE", fetch = fakePlane().fe
     fetch,
     retryDelayMs: 0,
   });
+}
+
+function withInFlight(base: typeof fetch) {
+  let current = 0;
+  let max = 0;
+  const fetchImpl: typeof fetch = async (input, init) => {
+    current += 1;
+    max = Math.max(max, current);
+    try {
+      await Promise.resolve();
+      return await base(input, init);
+    } finally {
+      current -= 1;
+    }
+  };
+  return {
+    fetch: fetchImpl,
+    maxInFlight() {
+      return max;
+    },
+    resetMax() {
+      max = 0;
+    },
+  };
 }
 
 test("plane host and workspace defaults", () => {
@@ -376,9 +406,8 @@ test("boot --plane uses Plane even when jira is on PATH", async () => {
     fetch: plane.fetch,
   });
   expect(kind).toBe("plane");
-  expect(
-    app.board().columns.flatMap((column) => column.cards.map((card) => card.key)),
-  ).toEqual(["DEMO-2", "DEMO-4", "DEMO-6", "DEMO-3", "DEMO-5"]);
+  expect(app.board().error).toBeUndefined();
+  expect(app.board().columns.flatMap((column) => column.cards.map((card) => card.key))).toEqual([]);
 
   await refreshFromJira(app, kind);
   expect(app.board().columns.map((column) => column.title)).toEqual([
@@ -400,4 +429,303 @@ test("boot without --plane does not select Plane", async () => {
     env: { PATH: "/tmp", JIRA_BIN: "jira" },
   });
   expect(kind).toBe("store");
+});
+
+test("Plane boot does not expose Fixture cards before live Refresh", async () => {
+  const { kind, app } = await createBoardApp({
+    raw: fixture,
+    flags: "--plane --workspace team",
+    env: {
+      PATH: "/tmp",
+      JIRA_BIN: "jira",
+      PLANE_API_KEY: "test-key",
+      PLANE_HOST: "https://plane.test",
+    },
+    fetch: async () => new Response("no", { status: 500 }),
+  });
+  expect(kind).toBe("plane");
+  expect(app.board().error).toBeUndefined();
+  expect(app.board().columns.flatMap((column) => column.cards.map((card) => card.key))).toEqual([]);
+  expect(app.board().epics).toEqual([]);
+});
+
+function plane429() {
+  return new Response(JSON.stringify({ error: "RATE_LIMIT_EXCEEDED" }), {
+    status: 429,
+    headers: { "content-type": "application/json", "Retry-After": "0" },
+  });
+}
+
+test("Plane 429 keeps Plane mode and does not present the Fixture as live", async () => {
+  const { kind, app } = await createBoardApp({
+    raw: fixture,
+    flags: "--plane --workspace team",
+    env: {
+      PATH: "/tmp",
+      JIRA_BIN: "jira",
+      PLANE_API_KEY: "test-key",
+      PLANE_HOST: "https://plane.test",
+    },
+    fetch: async () => plane429(),
+  });
+  expect(kind).toBe("plane");
+  expect(app.board().columns.flatMap((column) => column.cards.map((card) => card.key))).toEqual([]);
+  await refreshFromJira(app, kind);
+  expect(kind).toBe("plane");
+  expect(app.board().error).toMatch(/Plane 429: RATE_LIMIT_EXCEEDED/);
+  expect(app.board().columns.flatMap((column) => column.cards.map((card) => card.key))).toEqual([]);
+});
+
+test("Plane mode does not serve Fake Jira", async () => {
+  const { kind, app, store } = await createBoardApp({
+    raw: fixture,
+    flags: "--plane --workspace team",
+    env: {
+      PATH: "/tmp",
+      JIRA_BIN: "jira",
+      PLANE_API_KEY: "test-key",
+      PLANE_HOST: "https://plane.test",
+    },
+    fetch: async () => new Response("no", { status: 500 }),
+  });
+  expect(kind).toBe("plane");
+  const { createServer } = await import("node:http");
+  const server = createServer((req, res) => {
+    if (!handleRequest(req, res, { app, store, kind })) {
+      res.statusCode = 404;
+      res.end("no fake");
+    }
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const addr = server.address();
+  if (!addr || typeof addr === "string") throw new Error("no port");
+  const res = await fetch(`http://127.0.0.1:${addr.port}/rest/api/2/search`);
+  const body = await res.text();
+  server.close();
+  expect(res.status).toBe(404);
+  expect(body).toBe("no fake");
+});
+
+test("Plane boot Refresh settles before listen", async () => {
+  const { kind, app, store } = await createBoardApp({
+    raw: fixture,
+    flags: "--plane --workspace team",
+    env: {
+      PATH: "/tmp",
+      JIRA_BIN: "jira",
+      PLANE_API_KEY: "test-key",
+      PLANE_HOST: "https://plane.test",
+    },
+    fetch: async () => plane429(),
+  });
+  expect(kind).toBe("plane");
+  expect(app.board().columns.flatMap((column) => column.cards.map((card) => card.key))).toEqual([]);
+  await refreshFromJira(app, kind);
+  const { createServer } = await import("node:http");
+  const server = createServer((req, res) => {
+    if (!handleRequest(req, res, { app, store, kind })) {
+      res.statusCode = 404;
+      res.end("no");
+    }
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const addr = server.address();
+  if (!addr || typeof addr === "string") throw new Error("no port");
+  const board = await (await fetch(`http://127.0.0.1:${addr.port}/api/board`)).json();
+  server.close();
+  expect(board.error).toMatch(/Plane 429: RATE_LIMIT_EXCEEDED/);
+  expect(board.columns.flatMap((column: { cards: { key: string }[] }) => column.cards.map((card) => card.key))).toEqual([]);
+});
+
+test("a later 429 keeps the last Plane payload and the error", async () => {
+  const plane = fakePlane();
+  let fail = false;
+  const fetchImpl: typeof fetch = async (input, init) => {
+    if (fail) return plane429();
+    return plane.fetch(input, init);
+  };
+  const { kind, app } = await createBoardApp({
+    raw: fixture,
+    flags: "--plane --workspace team",
+    env: {
+      PATH: "/tmp",
+      JIRA_BIN: "jira",
+      PLANE_API_KEY: "test-key",
+      PLANE_HOST: "https://plane.test",
+    },
+    fetch: fetchImpl,
+  });
+  await refreshFromJira(app, kind);
+  const keys = app.board().columns.flatMap((column) => column.cards.map((card) => card.key));
+  expect(keys).toContain("APH-12");
+  expect(keys.some((key) => key.startsWith("DEMO-"))).toBe(false);
+  fail = true;
+  await app.refresh("--plane --workspace other");
+  expect(app.board().error).toMatch(/Plane 429: RATE_LIMIT_EXCEEDED/);
+  expect(app.board().columns.flatMap((column) => column.cards.map((card) => card.key))).toEqual(keys);
+  expect(app.board().columns.flatMap((column) => column.cards.map((card) => card.key)).some((key) => key.startsWith("DEMO-"))).toBe(false);
+});
+
+test("unscoped workspace catalog keeps Plane HTTP in-flight at 1 including module joins", async () => {
+  const plane = fakePlane({ join: true });
+  const tracked = withInFlight(plane.fetch);
+  const flags = "--plane --workspace team";
+  const cli = createPlaneCli({
+    host: "https://plane.test",
+    apiKey: "test-key",
+    flags,
+    fetch: tracked.fetch,
+    retryDelayMs: 0,
+  });
+  const issues = JSON.parse(await cli.list(flags)) as RawIssue[];
+  expect(issues.map((issue) => issue.key)).toEqual(["APH-12", "APH-13", "PULSE-1", "DEC-9"]);
+  expect(tracked.maxInFlight()).toBe(1);
+  expect(plane.calls().some((call) => call.url.includes("/module-issues/"))).toBe(true);
+  expect(plane.calls().filter((call) => call.url.includes("/states/")).length).toBe(3);
+  expect(plane.calls().some((call) => call.url.includes(APH))).toBe(true);
+  expect(plane.calls().some((call) => call.url.includes(PULSE))).toBe(true);
+  expect(plane.calls().some((call) => call.url.includes(OTHER))).toBe(true);
+
+  tracked.resetMax();
+  await Promise.all([
+    cli.move("APH-12", "Done"),
+    cli.edit("APH-12", { summary: "Login form v2" }),
+  ]);
+  expect(tracked.maxInFlight()).toBe(1);
+});
+
+test("unscoped other workspace still requests every listed Project", async () => {
+  const plane = fakePlane();
+  const flags = "--plane --workspace other";
+  const cli = planeCli(flags, plane.fetch);
+  await cli.list(flags);
+  const itemGets = plane
+    .calls()
+    .filter((call) => call.method === "GET" && /\/projects\/[^/]+\//.test(call.url))
+    .map((call) => call.url);
+  expect(itemGets.some((url) => url.includes(APH))).toBe(true);
+  expect(itemGets.some((url) => url.includes(PULSE))).toBe(true);
+  expect(itemGets.some((url) => url.includes(OTHER))).toBe(true);
+});
+
+test("--projects still narrows item endpoints after the project list", async () => {
+  const plane = fakePlane();
+  const flags = "--plane --workspace personal --projects APH";
+  const cli = planeCli(flags, plane.fetch);
+  await cli.list(flags);
+  expect(plane.calls().some((call) => /\/workspaces\/[^/]+\/projects\/?$/.test(call.url))).toBe(true);
+  expect(plane.calls().some((call) => call.url.includes(APH) && call.url.includes("/states/"))).toBe(
+    true,
+  );
+  expect(plane.calls().some((call) => call.url.includes(PULSE))).toBe(false);
+  expect(plane.calls().some((call) => call.url.includes(OTHER))).toBe(false);
+});
+
+function clock() {
+  let now = 1_700_000_000_000;
+  const slept: number[] = [];
+  return {
+    now() {
+      return now;
+    },
+    async sleep(ms: number) {
+      slept.push(ms);
+      now += ms;
+    },
+    slept,
+  };
+}
+
+function jsonRate(body: unknown, status: number, headers: Record<string, string>) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json", ...headers },
+  });
+}
+
+test("429 waits the Retry-After window then continues the catalog", async () => {
+  const plane = fakePlane();
+  const time = clock();
+  let seen = 0;
+  const fetchImpl: typeof fetch = async (input, init) => {
+    seen += 1;
+    if (seen === 2) {
+      return jsonRate(
+        { error_code: 5900, error_message: "RATE_LIMIT_EXCEEDED" },
+        429,
+        { "Retry-After": "2" },
+      );
+    }
+    return plane.fetch(input, init);
+  };
+  const flags = "--plane --workspace team";
+  const cli = createPlaneCli({
+    host: "https://plane.test",
+    apiKey: "test-key",
+    flags,
+    fetch: fetchImpl,
+    retryDelayMs: 0,
+    now: time.now,
+    sleep: time.sleep,
+  });
+  const issues = JSON.parse(await cli.list(flags)) as RawIssue[];
+  expect(issues.map((issue) => issue.key)).toContain("APH-12");
+  expect(time.slept).toEqual([2000]);
+  expect(seen).toBeGreaterThan(2);
+});
+
+test("remaining 0 waits until X-RateLimit-Reset before the next request", async () => {
+  const plane = fakePlane();
+  const time = clock();
+  let seen = 0;
+  const fetchImpl: typeof fetch = async (input, init) => {
+    seen += 1;
+    const response = await plane.fetch(input, init);
+    if (seen === 1) {
+      return jsonRate(JSON.parse(await response.text()), 200, {
+        "X-RateLimit-Remaining": "0",
+        "X-RateLimit-Reset": String(1_700_000_030),
+      });
+    }
+    return response;
+  };
+  const flags = "--plane --workspace other";
+  const cli = createPlaneCli({
+    host: "https://plane.test",
+    apiKey: "test-key",
+    flags,
+    fetch: fetchImpl,
+    retryDelayMs: 0,
+    now: time.now,
+    sleep: time.sleep,
+  });
+  await cli.list(flags);
+  expect(time.slept[0]).toBe(30_000);
+  expect(seen).toBeGreaterThan(1);
+});
+
+test("exhausted 429 policy surfaces the Plane 429 error without same-window retries", async () => {
+  const time = clock();
+  const urls: string[] = [];
+  const fetchImpl: typeof fetch = async (input) => {
+    urls.push(new URL(String(input)).pathname);
+    return jsonRate(
+      { error_code: 5900, error_message: "RATE_LIMIT_EXCEEDED" },
+      429,
+      { "Retry-After": "60" },
+    );
+  };
+  const flags = "--plane --workspace team";
+  const cli = createPlaneCli({
+    host: "https://plane.test",
+    apiKey: "test-key",
+    flags,
+    fetch: fetchImpl,
+    retryDelayMs: 0,
+    now: time.now,
+    sleep: time.sleep,
+  });
+  await expect(cli.list(flags)).rejects.toThrow(/Plane 429:.*RATE_LIMIT_EXCEEDED/);
+  expect(urls).toHaveLength(2);
+  expect(time.slept).toEqual([60_000]);
 });
