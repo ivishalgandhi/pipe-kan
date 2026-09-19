@@ -7,6 +7,7 @@ import { expect, test } from "vitest";
 import type { RawIssue } from "./board.ts";
 import { issuesToBoard } from "./board.ts";
 import { createBoardApp, refreshFromJira } from "./boot.ts";
+import { handleRequest } from "./http.ts";
 import {
   createPlaneCli,
   moduleToIssue,
@@ -405,9 +406,8 @@ test("boot --plane uses Plane even when jira is on PATH", async () => {
     fetch: plane.fetch,
   });
   expect(kind).toBe("plane");
-  expect(
-    app.board().columns.flatMap((column) => column.cards.map((card) => card.key)),
-  ).toEqual(["DEMO-2", "DEMO-4", "DEMO-6", "DEMO-3", "DEMO-5"]);
+  expect(app.board().error).toBeUndefined();
+  expect(app.board().columns.flatMap((column) => column.cards.map((card) => card.key))).toEqual([]);
 
   await refreshFromJira(app, kind);
   expect(app.board().columns.map((column) => column.title)).toEqual([
@@ -429,6 +429,141 @@ test("boot without --plane does not select Plane", async () => {
     env: { PATH: "/tmp", JIRA_BIN: "jira" },
   });
   expect(kind).toBe("store");
+});
+
+test("Plane boot does not expose Fixture cards before live Refresh", async () => {
+  const { kind, app } = await createBoardApp({
+    raw: fixture,
+    flags: "--plane --workspace team",
+    env: {
+      PATH: "/tmp",
+      JIRA_BIN: "jira",
+      PLANE_API_KEY: "test-key",
+      PLANE_HOST: "https://plane.test",
+    },
+    fetch: async () => new Response("no", { status: 500 }),
+  });
+  expect(kind).toBe("plane");
+  expect(app.board().error).toBeUndefined();
+  expect(app.board().columns.flatMap((column) => column.cards.map((card) => card.key))).toEqual([]);
+  expect(app.board().epics).toEqual([]);
+});
+
+function plane429() {
+  return new Response(JSON.stringify({ error: "RATE_LIMIT_EXCEEDED" }), {
+    status: 429,
+    headers: { "content-type": "application/json", "Retry-After": "0" },
+  });
+}
+
+test("Plane 429 keeps Plane mode and does not present the Fixture as live", async () => {
+  const { kind, app } = await createBoardApp({
+    raw: fixture,
+    flags: "--plane --workspace team",
+    env: {
+      PATH: "/tmp",
+      JIRA_BIN: "jira",
+      PLANE_API_KEY: "test-key",
+      PLANE_HOST: "https://plane.test",
+    },
+    fetch: async () => plane429(),
+  });
+  expect(kind).toBe("plane");
+  expect(app.board().columns.flatMap((column) => column.cards.map((card) => card.key))).toEqual([]);
+  await refreshFromJira(app, kind);
+  expect(kind).toBe("plane");
+  expect(app.board().error).toMatch(/Plane 429: RATE_LIMIT_EXCEEDED/);
+  expect(app.board().columns.flatMap((column) => column.cards.map((card) => card.key))).toEqual([]);
+});
+
+test("Plane mode does not serve Fake Jira", async () => {
+  const { kind, app, store } = await createBoardApp({
+    raw: fixture,
+    flags: "--plane --workspace team",
+    env: {
+      PATH: "/tmp",
+      JIRA_BIN: "jira",
+      PLANE_API_KEY: "test-key",
+      PLANE_HOST: "https://plane.test",
+    },
+    fetch: async () => new Response("no", { status: 500 }),
+  });
+  expect(kind).toBe("plane");
+  const { createServer } = await import("node:http");
+  const server = createServer((req, res) => {
+    if (!handleRequest(req, res, { app, store, kind })) {
+      res.statusCode = 404;
+      res.end("no fake");
+    }
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const addr = server.address();
+  if (!addr || typeof addr === "string") throw new Error("no port");
+  const res = await fetch(`http://127.0.0.1:${addr.port}/rest/api/2/search`);
+  const body = await res.text();
+  server.close();
+  expect(res.status).toBe(404);
+  expect(body).toBe("no fake");
+});
+
+test("Plane boot Refresh settles before listen", async () => {
+  const { kind, app, store } = await createBoardApp({
+    raw: fixture,
+    flags: "--plane --workspace team",
+    env: {
+      PATH: "/tmp",
+      JIRA_BIN: "jira",
+      PLANE_API_KEY: "test-key",
+      PLANE_HOST: "https://plane.test",
+    },
+    fetch: async () => plane429(),
+  });
+  expect(kind).toBe("plane");
+  expect(app.board().columns.flatMap((column) => column.cards.map((card) => card.key))).toEqual([]);
+  await refreshFromJira(app, kind);
+  const { createServer } = await import("node:http");
+  const server = createServer((req, res) => {
+    if (!handleRequest(req, res, { app, store, kind })) {
+      res.statusCode = 404;
+      res.end("no");
+    }
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const addr = server.address();
+  if (!addr || typeof addr === "string") throw new Error("no port");
+  const board = await (await fetch(`http://127.0.0.1:${addr.port}/api/board`)).json();
+  server.close();
+  expect(board.error).toMatch(/Plane 429: RATE_LIMIT_EXCEEDED/);
+  expect(board.columns.flatMap((column: { cards: { key: string }[] }) => column.cards.map((card) => card.key))).toEqual([]);
+});
+
+test("a later 429 keeps the last Plane payload and the error", async () => {
+  const plane = fakePlane();
+  let fail = false;
+  const fetchImpl: typeof fetch = async (input, init) => {
+    if (fail) return plane429();
+    return plane.fetch(input, init);
+  };
+  const { kind, app } = await createBoardApp({
+    raw: fixture,
+    flags: "--plane --workspace team",
+    env: {
+      PATH: "/tmp",
+      JIRA_BIN: "jira",
+      PLANE_API_KEY: "test-key",
+      PLANE_HOST: "https://plane.test",
+    },
+    fetch: fetchImpl,
+  });
+  await refreshFromJira(app, kind);
+  const keys = app.board().columns.flatMap((column) => column.cards.map((card) => card.key));
+  expect(keys).toContain("APH-12");
+  expect(keys.some((key) => key.startsWith("DEMO-"))).toBe(false);
+  fail = true;
+  await app.refresh("--plane --workspace other");
+  expect(app.board().error).toMatch(/Plane 429: RATE_LIMIT_EXCEEDED/);
+  expect(app.board().columns.flatMap((column) => column.cards.map((card) => card.key))).toEqual(keys);
+  expect(app.board().columns.flatMap((column) => column.cards.map((card) => card.key)).some((key) => key.startsWith("DEMO-"))).toBe(false);
 });
 
 test("unscoped workspace catalog keeps Plane HTTP in-flight at 1 including module joins", async () => {
