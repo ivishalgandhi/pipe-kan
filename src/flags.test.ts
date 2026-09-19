@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { argvToFlags, DEFAULT_FLAGS, flagsToJql, parseFlags, wantsPlane } from "./flags.ts";
+import { argvToFlags, commitWorkspaceSlug, DEFAULT_FLAGS, flagsToJql, parseFlags, setProjectsFlag, setWorkspaceFlag, wantsPlane } from "./flags.ts";
 
 test("default Scope has no project clause", () => {
   expect(DEFAULT_FLAGS).toBe("");
@@ -50,4 +50,85 @@ test("--plane and --workspace stay out of JQL", () => {
 
 test("--workspace=slug is accepted", () => {
   expect(parseFlags("--plane --workspace=personal").workspace).toBe("personal");
+});
+
+test("setWorkspaceFlag inserts one --workspace token", () => {
+  expect(setWorkspaceFlag("--plane --projects APH,PULSE", "team")).toBe(
+    "--plane --projects APH,PULSE --workspace team",
+  );
+});
+
+test("setWorkspaceFlag replaces an existing --workspace token", () => {
+  expect(setWorkspaceFlag("--plane --workspace personal --projects APH", "other")).toBe(
+    "--plane --workspace other --projects APH",
+  );
+});
+
+test("setWorkspaceFlag replaces --workspace= and does not leave a second token", () => {
+  expect(setWorkspaceFlag("--workspace=personal --plane --workspace team", "other")).toBe(
+    "--workspace other --plane",
+  );
+});
+
+test("setWorkspaceFlag writes personal and trims the slug", () => {
+  expect(setWorkspaceFlag("--plane", "personal")).toBe("--plane --workspace personal");
+  expect(setWorkspaceFlag("--plane --workspace team", " other ")).toBe(
+    "--plane --workspace other",
+  );
+});
+
+test("setWorkspaceFlag leaves flags unchanged for an empty slug", () => {
+  expect(setWorkspaceFlag("--plane --projects APH", "")).toBe("--plane --projects APH");
+  expect(setWorkspaceFlag("--plane --projects APH", "   ")).toBe("--plane --projects APH");
+});
+
+test("commitWorkspaceSlug rejects an empty typed slug", () => {
+  expect(commitWorkspaceSlug("personal", "")).toEqual({ action: "reject" });
+  expect(commitWorkspaceSlug("personal", "   ")).toEqual({ action: "reject" });
+});
+
+test("commitWorkspaceSlug is a no-op for the live slug", () => {
+  expect(commitWorkspaceSlug("personal", "personal")).toEqual({ action: "noop" });
+  expect(commitWorkspaceSlug("team", " team ")).toEqual({ action: "noop" });
+});
+
+test("commitWorkspaceSlug trims and keeps typed case", () => {
+  expect(commitWorkspaceSlug("personal", " other ")).toEqual({ action: "commit", slug: "other" });
+  expect(commitWorkspaceSlug("personal", "Personal")).toEqual({ action: "commit", slug: "Personal" });
+});
+
+test("setProjectsFlag inserts one --projects token and keeps --plane", () => {
+  expect(setProjectsFlag("--plane --workspace other", ["dec", "aph"])).toBe(
+    "--plane --workspace other --projects DEC,APH",
+  );
+});
+
+test("setProjectsFlag replaces an existing --projects token", () => {
+  expect(setProjectsFlag("--plane --projects APH,PULSE --workspace other", ["dec"])).toBe(
+    "--plane --projects DEC --workspace other",
+  );
+});
+
+test("setProjectsFlag replaces --projects= and does not leave a second token", () => {
+  expect(setProjectsFlag("--projects=APH --plane --projects PULSE", ["dec"])).toBe(
+    "--projects DEC --plane",
+  );
+});
+
+test("setProjectsFlag uppercases identifiers like parseFlags", () => {
+  expect(parseFlags(setProjectsFlag("--plane", ["dec", " aph "])).projects).toEqual(["DEC", "APH"]);
+});
+
+test("setWorkspaceFlag then setProjectsFlag writes both and drops previous tenant ids", () => {
+  expect(
+    setProjectsFlag(setWorkspaceFlag("--plane --workspace personal --projects APH,PULSE", "other"), [
+      "dec",
+    ]),
+  ).toBe("--plane --workspace other --projects DEC");
+});
+
+test("catalog failure empties --projects and keeps attempted --workspace", () => {
+  expect(
+    setProjectsFlag(setWorkspaceFlag("--plane --workspace personal --projects APH,PULSE", "other"), []),
+  ).toBe("--plane --workspace other");
 });

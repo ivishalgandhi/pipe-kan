@@ -499,6 +499,19 @@ export function createPlaneCli(opts: PlaneOpts): Cli {
     return { id, identifier, name: asString(row?.name) ?? identifier };
   }
 
+  function parseWorkspace(raw: unknown): { id: string; name: string; slug: string } | undefined {
+    const row = asRecord(raw);
+    const slug = asString(row?.slug);
+    if (!slug) return undefined;
+    return { id: asString(row?.id) ?? slug, name: asString(row?.name) ?? slug, slug };
+  }
+
+  function parseWorkspaceList(raw: unknown): { id: string; name: string; slug: string }[] | undefined {
+    const rows = Array.isArray(raw) ? raw : asRecord(raw)?.results;
+    if (!Array.isArray(rows)) return undefined;
+    return rows.map(parseWorkspace).filter((row): row is { id: string; name: string; slug: string } => !!row);
+  }
+
   function parseState(raw: unknown): PlaneState | undefined {
     const row = asRecord(raw);
     const id = asString(row?.id);
@@ -734,6 +747,26 @@ export function createPlaneCli(opts: PlaneOpts): Cli {
     async states(flags) {
       const loaded = await loadCatalog(flags || defaultFlags);
       return loaded.columns;
+    },
+    async listWorkspaces() {
+      for (const path of ["/users/me/workspaces/", "/workspaces/"] as const) {
+        try {
+          return parseWorkspaceList(await requestJson(path)) ?? [];
+        } catch (err) {
+          const status = (err as { status?: number }).status;
+          if (status === 404 && path === "/users/me/workspaces/") continue;
+          return [];
+        }
+      }
+      return [];
+    },
+    async listProjectIdentifiers(workspace: string) {
+      const slug = workspace.trim();
+      if (!slug) return [];
+      return (await paginate(`/workspaces/${slug}/projects/`))
+        .map(parseProject)
+        .filter((row): row is PlaneProject => !!row)
+        .map((row) => row.identifier);
     },
     async move(key, status) {
       try {

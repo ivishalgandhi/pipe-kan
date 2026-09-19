@@ -27,7 +27,14 @@ export type FavouriteState = {
   keys: string[];
   folders: FavouriteFolder[];
   projects?: string[];
+  workspace?: string;
 };
+
+export function favouritesForWorkspace(state: FavouriteState, workspace: string): FavouriteState {
+  if (state.workspace === workspace) return state;
+  if (state.workspace == null) return { ...state, workspace };
+  return { keys: [], folders: [], projects: state.projects, workspace };
+}
 
 function ofEpic(card: Card, epic: string) {
   return card.epic === epic;

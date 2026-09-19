@@ -104,6 +104,64 @@ export function parseFlags(flags: string): ParsedFlags {
   return { jql: clauses.join(" AND "), projects, plane, workspace: workspaceSlug };
 }
 
+export function commitWorkspaceSlug(
+  liveSlug: string,
+  typed: string,
+): { action: "reject" } | { action: "noop" } | { action: "commit"; slug: string } {
+  const slug = typed.trim();
+  if (!slug) return { action: "reject" };
+  if (slug === liveSlug) return { action: "noop" };
+  return { action: "commit", slug };
+}
+
+export function setWorkspaceFlag(flags: string, slug: string): string {
+  const trimmed = slug.trim();
+  if (!trimmed) return flags;
+  const list = tokens(flags.trim());
+  const out: string[] = [];
+  let wrote = false;
+  for (let i = 0; i < list.length; i++) {
+    const token = list[i]!;
+    if (token === "--workspace" || token.startsWith("--workspace=")) {
+      if (token === "--workspace") i += 1;
+      if (!wrote) {
+        out.push("--workspace", trimmed);
+        wrote = true;
+      }
+      continue;
+    }
+    out.push(token);
+  }
+  if (!wrote) out.push("--workspace", trimmed);
+  return out.join(" ");
+}
+
+export function setProjectsFlag(flags: string, identifiers: string[]): string {
+  const value = identifiers
+    .map((identifier) => identifier.trim().toUpperCase())
+    .filter(Boolean)
+    .join(",");
+  const list = tokens(flags.trim());
+  const out: string[] = [];
+  let wrote = false;
+  for (let i = 0; i < list.length; i++) {
+    const token = list[i]!;
+    if (token === "--projects" || token.startsWith("--projects=")) {
+      if (token === "--projects") i += 1;
+      if (!wrote && value) {
+        out.push("--projects", value);
+        wrote = true;
+      } else {
+        wrote = true;
+      }
+      continue;
+    }
+    out.push(token);
+  }
+  if (!wrote && value) out.push("--projects", value);
+  return out.join(" ");
+}
+
 export function wantsPlane(flags: string): boolean {
   return parseFlags(flags).plane;
 }

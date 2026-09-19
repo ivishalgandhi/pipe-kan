@@ -1,6 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import type { App } from "./app.ts";
+import type { Boot } from "./boot.ts";
+import { planeWorkspace } from "./plane.ts";
 
 function json(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status;
@@ -35,16 +37,60 @@ function reply(
     });
 }
 
+async function boardEnvelope(
+  body: object,
+  kind: Boot["kind"],
+  flags: string,
+  env: NodeJS.ProcessEnv,
+  app: App,
+) {
+  if (kind !== "plane") return { ...body, kind };
+  const envelope = { ...body, kind, workspace: planeWorkspace(flags, env) };
+  try {
+    const workspaces = await app.listWorkspaces?.();
+    if (workspaces && workspaces.length) return { ...envelope, workspaces };
+  } catch {
+    /* omit list; never fail Board */
+  }
+  return envelope;
+}
+
 export function handleAppApi(
   req: IncomingMessage,
   res: ServerResponse,
   app: App,
+  opts: { kind?: Boot["kind"]; env?: NodeJS.ProcessEnv } = {},
 ): boolean {
+  const kind = opts.kind ?? "store";
+  const env = opts.env ?? process.env;
   const url = pathOf(req);
   const method = (req.method ?? "GET").toUpperCase();
 
   if (url.pathname === "/api/board" && method === "GET") {
-    json(res, 200, { ...app.board(), flags: app.flags });
+    reply(req, res, async () => {
+      json(res, 200, await boardEnvelope({ ...app.board(), flags: app.flags }, kind, app.flags, env, app));
+    });
+    return true;
+  }
+
+  if (url.pathname === "/api/projects" && method === "GET") {
+    reply(req, res, async () => {
+      if (kind !== "plane") {
+        json(res, 404, { error: "not plane" });
+        return;
+      }
+      const workspace = (url.searchParams.get("workspace") ?? "").trim();
+      if (!workspace) {
+        json(res, 400, { error: "workspace required" });
+        return;
+      }
+      try {
+        json(res, 200, { projects: await app.listProjectIdentifiers?.(workspace) ?? [] });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "catalog failed";
+        json(res, 409, { error: message });
+      }
+    });
     return true;
   }
 
@@ -59,10 +105,14 @@ export function handleAppApi(
           json(res, 400, { error: "selected Refresh requires epicKeys" });
           return;
         }
-        json(res, 200, await app.refresh(undefined, { scope: "selected", epicKeys }));
+        json(
+          res,
+          200,
+          await boardEnvelope(await app.refresh(undefined, { scope: "selected", epicKeys }), kind, app.flags, env, app),
+        );
         return;
       }
-      json(res, 200, await app.refresh(body.flags));
+      json(res, 200, await boardEnvelope(await app.refresh(body.flags), kind, app.flags, env, app));
     });
     return true;
   }

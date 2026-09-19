@@ -4,10 +4,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 
+import { createApp } from "./app.ts";
 import type { RawIssue } from "./board.ts";
 import { issuesToBoard } from "./board.ts";
 import { createBoardApp, refreshFromJira } from "./boot.ts";
 import { handleRequest } from "./http.ts";
+import { IssueStore } from "./store.ts";
 import {
   createPlaneCli,
   moduleToIssue,
@@ -55,7 +57,14 @@ function page(results: unknown[]) {
 
 const MOD_TWO = "mod-two";
 
-function fakePlane(opts: { issuesOnly?: boolean; join?: boolean } = {}) {
+function fakePlane(
+  opts: {
+    issuesOnly?: boolean;
+    join?: boolean;
+    workspaces?: unknown;
+    workspacesAll?: unknown;
+  } = {},
+) {
   const calls: { method: string; url: string; body?: unknown; key?: string | null }[] = [];
   let loginState = ST_PROGRESS;
   let createdSeq = 40;
@@ -141,11 +150,22 @@ function fakePlane(opts: { issuesOnly?: boolean; join?: boolean } = {}) {
 
     const path = url.pathname.replace(/\/+$/, "") || "/";
     const parts = path.split("/").filter(Boolean);
-    // /api/v1/workspaces/personal/projects/...
+    // /api/v1/workspaces/{slug}/projects/...
     const resource = opts.issuesOnly ? "issues" : "work-items";
 
+    if (method === "GET" && parts[2] === "users" && parts[3] === "me" && parts[4] === "workspaces" && !parts[5]) {
+      if (opts.workspaces === undefined) return new Response("missing", { status: 404 });
+      return jsonResponse(opts.workspaces);
+    }
+    if (method === "GET" && parts[2] === "workspaces" && !parts[3]) {
+      if (opts.workspacesAll === undefined) return new Response("missing", { status: 404 });
+      return jsonResponse(opts.workspacesAll);
+    }
     if (method === "GET" && /\/workspaces\/[^/]+\/projects$/.test(path)) {
-      return jsonResponse(page(projects));
+      const slug = parts[3];
+      const catalog =
+        slug === "other" ? [{ id: OTHER, identifier: "DEC", name: "Decisions" }] : projects;
+      return jsonResponse(page(catalog));
     }
 
     const projectId = parts[5];
@@ -603,9 +623,9 @@ test("unscoped other workspace still requests every listed Project", async () =>
     .calls()
     .filter((call) => call.method === "GET" && /\/projects\/[^/]+\//.test(call.url))
     .map((call) => call.url);
-  expect(itemGets.some((url) => url.includes(APH))).toBe(true);
-  expect(itemGets.some((url) => url.includes(PULSE))).toBe(true);
   expect(itemGets.some((url) => url.includes(OTHER))).toBe(true);
+  expect(itemGets.some((url) => url.includes(APH))).toBe(false);
+  expect(itemGets.some((url) => url.includes(PULSE))).toBe(false);
 });
 
 test("--projects still narrows item endpoints after the project list", async () => {
@@ -728,4 +748,82 @@ test("exhausted 429 policy surfaces the Plane 429 error without same-window retr
   await expect(cli.list(flags)).rejects.toThrow(/Plane 429:.*RATE_LIMIT_EXCEEDED/);
   expect(urls).toHaveLength(2);
   expect(time.slept).toEqual([60_000]);
+});
+
+test("Refresh-all with --workspace other and rewritten --projects lists that Workspace", async () => {
+  const plane = fakePlane();
+  const cli = planeCli("--plane --projects APH,PULSE", plane.fetch);
+  const app = createApp({
+    store: IssueStore.fromRaw(fixture),
+    cli,
+    flags: "--plane --projects APH,PULSE",
+  });
+  const result = await app.refresh("--plane --workspace other --projects DEC");
+  expect(result).not.toHaveProperty("error");
+  expect(result.columns.map((column) => column.title)).toEqual([
+    "Backlog",
+    "Todo",
+    "In Progress",
+    "Done",
+  ]);
+  const urls = plane.calls().map((call) => call.url);
+  expect(urls.some((url) => url.includes("/workspaces/other/"))).toBe(true);
+  expect(urls.some((url) => url.includes(`/projects/${OTHER}`))).toBe(true);
+  expect(urls.some((url) => url.includes("/workspaces/personal/"))).toBe(false);
+  expect(urls.some((url) => url.includes(APH) || url.includes(PULSE))).toBe(false);
+});
+
+function workspaceIndexUrl(url: string) {
+  return url.replace(/\/+$/, "") === "/api/v1/workspaces";
+}
+
+test("list-workspaces probe 404s both paths as an empty list", async () => {
+  const plane = fakePlane();
+  const cli = planeCli("--plane --projects APH", plane.fetch);
+  expect(await cli.listWorkspaces?.()).toEqual([]);
+  const urls = plane.calls().map((call) => call.url);
+  expect(urls.some((url) => url.includes("/users/me/workspaces"))).toBe(true);
+  expect(urls.some(workspaceIndexUrl)).toBe(true);
+});
+
+test("list-workspaces probe parses a me list and skips rows without slug", async () => {
+  const plane = fakePlane({
+    workspaces: [
+      { id: "ws-personal", name: "Personal", slug: "personal" },
+      { id: "ws-missing", name: "No slug" },
+      { id: "ws-team", name: "Team", slug: "team" },
+    ],
+  });
+  const cli = planeCli("--plane --projects APH", plane.fetch);
+  expect(await cli.listWorkspaces?.()).toEqual([
+    { id: "ws-personal", name: "Personal", slug: "personal" },
+    { id: "ws-team", name: "Team", slug: "team" },
+  ]);
+  expect(plane.calls().some((call) => workspaceIndexUrl(call.url))).toBe(false);
+});
+
+test("list-workspaces probe falls back to /workspaces/ after me 404", async () => {
+  const plane = fakePlane({
+    workspacesAll: page([{ id: "ws-team", name: "Team", slug: "team" }]),
+  });
+  const cli = planeCli("--plane --projects APH", plane.fetch);
+  expect(await cli.listWorkspaces?.()).toEqual([{ id: "ws-team", name: "Team", slug: "team" }]);
+  const urls = plane.calls().map((call) => call.url);
+  expect(urls.some((url) => url.includes("/users/me/workspaces"))).toBe(true);
+  expect(urls.some(workspaceIndexUrl)).toBe(true);
+});
+
+test("list-workspaces probe treats a non-list body as no list", async () => {
+  const plane = fakePlane({ workspaces: { error: "Page not found." } });
+  const cli = planeCli("--plane --projects APH", plane.fetch);
+  expect(await cli.listWorkspaces?.()).toEqual([]);
+});
+
+test("project identifiers for a named Workspace are unscoped", async () => {
+  const plane = fakePlane();
+  const cli = planeCli("--plane --projects APH", plane.fetch);
+  expect(await cli.listProjectIdentifiers?.("other")).toEqual(["DEC"]);
+  const urls = plane.calls().map((call) => call.url);
+  expect(urls.some((url) => url.includes("/workspaces/other/projects"))).toBe(true);
+  expect(urls.some((url) => url.includes("/workspaces/personal/"))).toBe(false);
 });

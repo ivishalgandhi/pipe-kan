@@ -21,9 +21,9 @@ import {
 import { toast } from "sonner";
 
 import { cardAge, epicsToColumns, isNeedsInputLabel, targetEndDistance, type Board, type Card, type Column, type Epic } from "./board.ts";
-import { type CommandJump } from "./command.ts";
-import { REFRESH_NO_FOCUS_WARNING, refreshRequestBody } from "./refresh.ts";
-import { parseFlags } from "./flags.ts";
+import { workspacePickerRows, type CommandJump, type PlaneWorkspace } from "./command.ts";
+import { REFRESH_NO_FOCUS_WARNING, refreshRequestBody, refreshWorkspaceWarning } from "./refresh.ts";
+import { commitWorkspaceSlug, parseFlags, setProjectsFlag, setWorkspaceFlag } from "./flags.ts";
 import {
   buildCreatePayload,
   buildEditPayload,
@@ -45,6 +45,7 @@ import {
   cardMatches,
   combinedBoard,
   epicChildCount,
+  favouritesForWorkspace,
   filterEpics,
   filterFacets,
   filterValue,
@@ -255,7 +256,7 @@ function readFavourites(): FavouriteState {
       return { keys: raw, folders: [] };
     }
     if (raw && typeof raw === "object") {
-      const value = raw as { keys?: unknown; folders?: unknown; projects?: unknown };
+      const value = raw as { keys?: unknown; folders?: unknown; projects?: unknown; workspace?: unknown };
       const keys = Array.isArray(value.keys)
         ? value.keys.filter((item): item is string => typeof item === "string")
         : [];
@@ -275,7 +276,10 @@ function readFavourites(): FavouriteState {
       const projects = Array.isArray(value.projects)
         ? value.projects.filter((item): item is string => typeof item === "string")
         : undefined;
-      return { keys, folders, projects };
+      const workspace = typeof value.workspace === "string" && value.workspace.trim()
+        ? value.workspace
+        : undefined;
+      return { keys, folders, projects, workspace };
     }
     return DEFAULT_FAVS;
   } catch {
@@ -334,7 +338,7 @@ function filterFavouritesByProject(
 ): FavouriteState {
   if (!projects.length) return state;
   if (projectsMatch(state.projects, projects)) return state;
-  return { keys: [], folders: [], projects };
+  return { keys: [], folders: [], projects, workspace: state.workspace };
 }
 
 function filterPresetsByProject(presets: Preset[], projects: string[]): Preset[] {
@@ -407,7 +411,12 @@ function fieldsFromCard(card: Card, url?: string | null): OpenField[] {
   return rows;
 }
 
-type BoardPayload = Board & { flags?: string };
+type BoardPayload = Board & {
+  flags?: string;
+  kind?: "jira" | "store" | "plane";
+  workspace?: string;
+  workspaces?: PlaneWorkspace[];
+};
 type Theme = "light" | "dark";
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -1089,6 +1098,69 @@ function OpenFields({ fields }: { fields: OpenField[] }) {
   );
 }
 
+function WorkspacePicker({
+  slug,
+  workspaces,
+  onCommit,
+}: {
+  slug: string;
+  workspaces?: PlaneWorkspace[];
+  onCommit: (typed: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState("");
+  const { listed, other } = workspacePickerRows(workspaces, draft);
+
+  return (
+    <DropdownMenu
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) setDraft("");
+      }}
+    >
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label="Workspace"
+          className="bg-primary/10 text-primary inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium"
+        >
+          {slug}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-56">
+        <div className="px-2 pb-2">
+          <input
+            aria-label="Workspace"
+            autoFocus
+            spellCheck={false}
+            value={draft}
+            placeholder="Filter or type a slug"
+            className="border-input h-7 w-full rounded-md border bg-transparent px-2 text-[13px] outline-none"
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              event.stopPropagation();
+              if (event.key !== "Enter") return;
+              event.preventDefault();
+              setOpen(false);
+              onCommit(draft);
+            }}
+          />
+        </div>
+        {listed.map((ws) => (
+          <DropdownMenuItem key={ws.slug} onSelect={() => onCommit(ws.slug)}>
+            <span className="min-w-0 flex-1 truncate">{ws.name.trim() || ws.slug}</span>
+            <span className="text-muted-foreground text-[11px]">{ws.slug}</span>
+          </DropdownMenuItem>
+        ))}
+        {other ? (
+          <DropdownMenuItem onSelect={() => onCommit(draft)}>Other</DropdownMenuItem>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export function App() {
   const [columns, setColumns] = useState<Record<string, Card[]>>({});
   const [epics, setEpics] = useState<Epic[]>([]);
@@ -1129,6 +1201,13 @@ export function App() {
   const [commandOpen, setCommandOpen] = useState(false);
   const [refreshOpen, setRefreshOpen] = useState(false);
   const [pendingRefreshFlags, setPendingRefreshFlags] = useState<string | undefined>(undefined);
+  const [processKind, setProcessKind] = useState<"jira" | "store" | "plane" | "">("");
+  const [workspaceSlug, setWorkspaceSlug] = useState("");
+  const [committedWorkspace, setCommittedWorkspace] = useState("");
+  const [workspaces, setWorkspaces] = useState<PlaneWorkspace[] | undefined>(undefined);
+  const [workspaceSwitch, setWorkspaceSwitch] = useState<{ previousFlags: string; previousSlug: string } | null>(null);
+  const workspaceSwitchRef = useRef(workspaceSwitch);
+  workspaceSwitchRef.current = workspaceSwitch;
   const commandOpenRef = useRef(false);
   const commandReturnFocus = useRef<HTMLElement | null>(null);
   const queue = useMoveQueue(setColumns, setEpics);
@@ -1204,8 +1283,12 @@ export function App() {
     writeChrome(next);
   }
 
-  function persistFavourites(next: FavouriteState) {
-    const stamped = activeProjects.length ? { ...next, projects: activeProjects } : next;
+  function persistFavourites(next: FavouriteState, workspace = committedWorkspace) {
+    const stamped = {
+      ...next,
+      ...(activeProjects.length ? { projects: activeProjects } : {}),
+      ...(workspace ? { workspace } : {}),
+    };
     setFavourites(stamped);
     writeFavourites(stamped);
   }
@@ -1261,6 +1344,23 @@ export function App() {
     const data = await api<BoardPayload>("/api/board");
     applyBoard(data);
     if (data.flags) setFlags(data.flags);
+    setProcessKind(data.kind ?? "store");
+    if (data.kind === "plane") {
+      setWorkspaces(data.workspaces);
+      if (data.workspace) {
+        setCommittedWorkspace(data.workspace);
+        setWorkspaceSlug(data.workspace);
+        const projects = parseFlags(data.flags ?? flags).projects;
+        persistFavourites(
+          favouritesForWorkspace(filterFavouritesByProject(readFavourites(), projects), data.workspace),
+          data.workspace,
+        );
+      }
+    } else {
+      setWorkspaces(undefined);
+      setCommittedWorkspace("");
+      setWorkspaceSlug("");
+    }
   }
 
   useEffect(() => {
@@ -1314,9 +1414,38 @@ export function App() {
     setRefreshOpen(true);
   }
 
+  async function commitWorkspace(typed: string) {
+    const live = workspaceSlug || committedWorkspace;
+    const decision = commitWorkspaceSlug(live, typed);
+    if (decision.action !== "commit") return;
+    const previousFlags = flags;
+    const previousSlug = live;
+    let ids: string[] = [];
+    try {
+      const data = await api<{ projects?: unknown }>(
+        `/api/projects?workspace=${encodeURIComponent(decision.slug)}`,
+      );
+      if (Array.isArray(data.projects)) {
+        ids = data.projects.filter((item): item is string => typeof item === "string");
+      }
+    } catch {
+      ids = [];
+    }
+    const nextFlags = setProjectsFlag(setWorkspaceFlag(previousFlags, decision.slug), ids);
+    const pending = { previousFlags, previousSlug };
+    workspaceSwitchRef.current = pending;
+    setWorkspaceSwitch(pending);
+    setFlags(nextFlags);
+    setWorkspaceSlug(decision.slug);
+    openRefreshConfirm(nextFlags);
+  }
+
   async function confirmRefresh(choice: "all" | "selected") {
+    if (workspaceSwitch && choice !== "all") return;
     const body = refreshRequestBody(choice, selectedEpic, pendingRefreshFlags ?? flags);
     if (!body) return;
+    workspaceSwitchRef.current = null;
+    setWorkspaceSwitch(null);
     setRefreshOpen(false);
     setPendingRefreshFlags(undefined);
     await refresh(body);
@@ -1345,6 +1474,13 @@ export function App() {
           id: toastId,
           description: body.scope === "selected" ? body.epicKeys?.join(", ") : `${data.epics.length} epics`,
         });
+        if (body.scope === "all" && data.kind === "plane" && data.workspace) {
+          setProcessKind("plane");
+          setCommittedWorkspace(data.workspace);
+          setWorkspaceSlug(data.workspace);
+          setWorkspaces(data.workspaces);
+          persistFavourites(favouritesForWorkspace(favourites, data.workspace), data.workspace);
+        }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Refresh failed";
@@ -1737,6 +1873,7 @@ export function App() {
     else if (jump.kind === "all-epics") openEpics();
     else if (jump.kind === "all-combined") openCombined();
     else if (jump.kind === "refresh") openRefreshConfirm();
+    else if (jump.kind === "workspace") void commitWorkspace(jump.slug);
     else if (jump.kind === "agent") setAgentOpen(true);
     else if (jump.kind === "create") openCreate();
     else if (jump.kind === "create-ai") openCreateAi();
@@ -2003,6 +2140,13 @@ export function App() {
                     return projects.length > 0 ? projects.join(", ") : "DEMO";
                   })()}
                 </span>
+                {processKind === "plane" ? (
+                  <WorkspacePicker
+                    slug={workspaceSlug}
+                    workspaces={workspaces}
+                    onCommit={(typed) => void commitWorkspace(typed)}
+                  />
+                ) : null}
                 <InputGroup className="h-7 max-w-72 min-w-40 flex-1 border-transparent bg-muted shadow-none">
                   <InputGroupAddon>
                     <SearchIcon className="size-3.5" />
@@ -2424,6 +2568,13 @@ export function App() {
       <AlertDialog
         open={refreshOpen}
         onOpenChange={(open) => {
+          if (!open && workspaceSwitchRef.current) {
+            const pending = workspaceSwitchRef.current;
+            workspaceSwitchRef.current = null;
+            setFlags(pending.previousFlags);
+            setWorkspaceSlug(pending.previousSlug);
+            setWorkspaceSwitch(null);
+          }
           setRefreshOpen(open);
           if (!open) setPendingRefreshFlags(undefined);
         }}
@@ -2432,9 +2583,13 @@ export function App() {
           <AlertDialogHeader>
             <AlertDialogTitle>Refresh</AlertDialogTitle>
             <AlertDialogDescription>
-              {selectedEpic
-                ? `Refresh all Epics, or only the focused Epic ${selectedEpic}.`
-                : REFRESH_NO_FOCUS_WARNING}
+              {workspaceSwitch
+                ? refreshWorkspaceWarning(
+                    parseFlags(pendingRefreshFlags ?? flags).workspace ?? workspaceSlug,
+                  )
+                : selectedEpic
+                  ? `Refresh all Epics, or only the focused Epic ${selectedEpic}.`
+                  : REFRESH_NO_FOCUS_WARNING}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -2442,7 +2597,7 @@ export function App() {
             <Button
               type="button"
               variant="outline"
-              disabled={busy || !selectedEpic}
+              disabled={busy || Boolean(workspaceSwitch) || !selectedEpic}
               onClick={() => void confirmRefresh("selected")}
             >
               {selectedEpic ? `Refresh selected (${selectedEpic})` : "Refresh selected"}
@@ -2480,6 +2635,8 @@ export function App() {
           epics={pipeBoard?.epics ?? epics}
           cards={commandCards}
           favouriteKeys={favourites.keys}
+          plane={processKind === "plane"}
+          workspaces={workspaces}
           onPick={applyCommand}
           onClose={() => {
             commandOpenRef.current = false;

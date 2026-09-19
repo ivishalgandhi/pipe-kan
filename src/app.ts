@@ -37,6 +37,8 @@ export type App = {
     input: Parameters<Cli["edit"]>[1],
   ): Promise<{ ok: boolean; error?: string; board: Board }>;
   open(key: string): Promise<{ url: string; fields: OpenField[]; error?: string }>;
+  listWorkspaces?(): Promise<{ id: string; name: string; slug: string }[]>;
+  listProjectIdentifiers?(workspace: string): Promise<string[]>;
 };
 
 function columnsOf(raw: unknown, fieldId?: string): Record<string, Card[]> {
@@ -418,6 +420,12 @@ export function createApp(opts: {
           error: err instanceof Error ? err.message : "jira issue view failed",
         };
       }
+    },
+    async listWorkspaces() {
+      return cli.listWorkspaces?.() ?? [];
+    },
+    async listProjectIdentifiers(workspace: string) {
+      return cli.listProjectIdentifiers?.(workspace) ?? [];
     },
   };
   return app;
