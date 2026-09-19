@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { argvToFlags, commitWorkspaceSlug, DEFAULT_FLAGS, flagsToJql, parseFlags, setWorkspaceFlag, wantsPlane } from "./flags.ts";
+import { argvToFlags, commitWorkspaceSlug, DEFAULT_FLAGS, flagsToJql, parseFlags, setProjectsFlag, setWorkspaceFlag, wantsPlane } from "./flags.ts";
 
 test("default Scope has no project clause", () => {
   expect(DEFAULT_FLAGS).toBe("");
@@ -95,4 +95,40 @@ test("commitWorkspaceSlug is a no-op for the live slug", () => {
 test("commitWorkspaceSlug trims and keeps typed case", () => {
   expect(commitWorkspaceSlug("personal", " other ")).toEqual({ action: "commit", slug: "other" });
   expect(commitWorkspaceSlug("personal", "Personal")).toEqual({ action: "commit", slug: "Personal" });
+});
+
+test("setProjectsFlag inserts one --projects token and keeps --plane", () => {
+  expect(setProjectsFlag("--plane --workspace other", ["dec", "aph"])).toBe(
+    "--plane --workspace other --projects DEC,APH",
+  );
+});
+
+test("setProjectsFlag replaces an existing --projects token", () => {
+  expect(setProjectsFlag("--plane --projects APH,PULSE --workspace other", ["dec"])).toBe(
+    "--plane --projects DEC --workspace other",
+  );
+});
+
+test("setProjectsFlag replaces --projects= and does not leave a second token", () => {
+  expect(setProjectsFlag("--projects=APH --plane --projects PULSE", ["dec"])).toBe(
+    "--projects DEC --plane",
+  );
+});
+
+test("setProjectsFlag uppercases identifiers like parseFlags", () => {
+  expect(parseFlags(setProjectsFlag("--plane", ["dec", " aph "])).projects).toEqual(["DEC", "APH"]);
+});
+
+test("setWorkspaceFlag then setProjectsFlag writes both and drops previous tenant ids", () => {
+  expect(
+    setProjectsFlag(setWorkspaceFlag("--plane --workspace personal --projects APH,PULSE", "other"), [
+      "dec",
+    ]),
+  ).toBe("--plane --workspace other --projects DEC");
+});
+
+test("catalog failure empties --projects and keeps attempted --workspace", () => {
+  expect(
+    setProjectsFlag(setWorkspaceFlag("--plane --workspace personal --projects APH,PULSE", "other"), []),
+  ).toBe("--plane --workspace other");
 });

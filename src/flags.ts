@@ -136,6 +136,32 @@ export function setWorkspaceFlag(flags: string, slug: string): string {
   return out.join(" ");
 }
 
+export function setProjectsFlag(flags: string, identifiers: string[]): string {
+  const value = identifiers
+    .map((identifier) => identifier.trim().toUpperCase())
+    .filter(Boolean)
+    .join(",");
+  const list = tokens(flags.trim());
+  const out: string[] = [];
+  let wrote = false;
+  for (let i = 0; i < list.length; i++) {
+    const token = list[i]!;
+    if (token === "--projects" || token.startsWith("--projects=")) {
+      if (token === "--projects") i += 1;
+      if (!wrote && value) {
+        out.push("--projects", value);
+        wrote = true;
+      } else {
+        wrote = true;
+      }
+      continue;
+    }
+    out.push(token);
+  }
+  if (!wrote && value) out.push("--projects", value);
+  return out.join(" ");
+}
+
 export function wantsPlane(flags: string): boolean {
   return parseFlags(flags).plane;
 }

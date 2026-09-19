@@ -60,7 +60,7 @@ Typing in the header that hides Epics and Cards that do not match. An Epic match
 _Avoid_: filter, query (when meaning this)
 
 **Command**:
-A keyboard overlay that jumps to an Epic, Card, opener, Favourite, Preset, Refresh, or Agent from Issues already listed by Refresh. It is not Search, Scope, or a live jira-cli lookup.
+A keyboard overlay that jumps to an Epic, Card, opener, Favourite, Preset, Refresh, or Agent from Issues already listed by Refresh, and in Plane mode can switch Workspace. It is not Search, Scope, or a live jira-cli lookup.
 _Avoid_: palette, cmd+k, launcher, search (when meaning this)
 
 **Filter**:

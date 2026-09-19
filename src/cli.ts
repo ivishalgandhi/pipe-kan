@@ -27,6 +27,8 @@ export type Cli = {
   open(key: string): Promise<string>;
   view(key: string): Promise<string>;
   states?(flags?: string): Promise<string[]>;
+  listWorkspaces?(): Promise<{ id: string; name: string; slug: string }[]>;
+  listProjectIdentifiers?(workspace: string): Promise<string[]>;
 };
 
 export function createdKeyFromOutput(text: string): string | undefined {

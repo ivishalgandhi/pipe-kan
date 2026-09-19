@@ -9,6 +9,7 @@ import { createApp } from "./app.ts";
 import { handleAppApi } from "./app-api.ts";
 import type { RawIssue } from "./board.ts";
 import { createStoreCli, type Cli } from "./cli.ts";
+import { createPlaneCli } from "./plane.ts";
 import { readTargetEndFieldMap } from "./field-map.ts";
 import { IssueStore } from "./store.ts";
 
@@ -1615,6 +1616,7 @@ test("store Board JSON reports kind store and omits workspace", async () => {
   const board = await (await fetch(`${base}/api/board`)).json();
   expect(board.kind).toBe("store");
   expect(board).not.toHaveProperty("workspace");
+  expect(board).not.toHaveProperty("workspaces");
 });
 
 test("Jira Board JSON reports kind jira and omits workspace", async () => {
@@ -1622,6 +1624,7 @@ test("Jira Board JSON reports kind jira and omits workspace", async () => {
   const board = await (await fetch(`${base}/api/board`)).json();
   expect(board.kind).toBe("jira");
   expect(board).not.toHaveProperty("workspace");
+  expect(board).not.toHaveProperty("workspaces");
 });
 
 test("Board kind is boot kind not --plane in Scope flags", async () => {
@@ -1633,6 +1636,7 @@ test("Board kind is boot kind not --plane in Scope flags", async () => {
   const board = await (await fetch(`${base}/api/board`)).json();
   expect(board.kind).toBe("store");
   expect(board).not.toHaveProperty("workspace");
+  expect(board).not.toHaveProperty("workspaces");
 });
 
 test("Plane Board JSON reports workspace from flags", async () => {
@@ -1644,6 +1648,7 @@ test("Plane Board JSON reports workspace from flags", async () => {
   const board = await (await fetch(`${base}/api/board`)).json();
   expect(board.kind).toBe("plane");
   expect(board.workspace).toBe("team");
+  expect(board).not.toHaveProperty("workspaces");
 });
 
 test("Plane Board JSON reports workspace from env when flags omit it", async () => {
@@ -1655,6 +1660,7 @@ test("Plane Board JSON reports workspace from env when flags omit it", async () 
   const board = await (await fetch(`${base}/api/board`)).json();
   expect(board.kind).toBe("plane");
   expect(board.workspace).toBe("team");
+  expect(board).not.toHaveProperty("workspaces");
 });
 
 test("Plane Board JSON reports personal when flags and env omit workspace", async () => {
@@ -1666,6 +1672,7 @@ test("Plane Board JSON reports personal when flags and env omit workspace", asyn
   const board = await (await fetch(`${base}/api/board`)).json();
   expect(board.kind).toBe("plane");
   expect(board.workspace).toBe("personal");
+  expect(board).not.toHaveProperty("workspaces");
 });
 
 test("Plane Refresh-all JSON reports workspace after flags change", async () => {
@@ -1683,4 +1690,133 @@ test("Plane Refresh-all JSON reports workspace after flags change", async () => 
   expect(res.status).toBe(200);
   expect(body.kind).toBe("plane");
   expect(body.workspace).toBe("other");
+  expect(body).not.toHaveProperty("workspaces");
+});
+
+test("Plane Board JSON includes workspaces when the probe returns a list", async () => {
+  const store = IssueStore.fromRaw(fixture);
+  const cli: Cli = {
+    ...createStoreCli(store),
+    async listWorkspaces() {
+      return [{ id: "ws-team", name: "Team", slug: "team" }];
+    },
+  };
+  const { base } = await listen(store, cli, { kind: "plane", flags: "--plane", env: {} });
+  const board = await (await fetch(`${base}/api/board`)).json();
+  expect(board.kind).toBe("plane");
+  expect(board.workspaces).toEqual([{ id: "ws-team", name: "Team", slug: "team" }]);
+});
+
+test("Plane Refresh JSON includes workspaces when the probe returns a list", async () => {
+  const store = IssueStore.fromRaw(fixture);
+  const cli: Cli = {
+    ...createStoreCli(store),
+    async listWorkspaces() {
+      return [{ id: "ws-other", name: "Other", slug: "other" }];
+    },
+  };
+  const { base } = await listen(store, cli, { kind: "plane", flags: "--plane", env: {} });
+  const res = await fetch(`${base}/api/refresh`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ flags: "--plane --workspace other" }),
+  });
+  const body = await res.json();
+  expect(res.status).toBe(200);
+  expect(body.workspaces).toEqual([{ id: "ws-other", name: "Other", slug: "other" }]);
+});
+
+test("Plane Board JSON omits workspaces when the probe list is empty", async () => {
+  const store = IssueStore.fromRaw(fixture);
+  const cli: Cli = {
+    ...createStoreCli(store),
+    async listWorkspaces() {
+      return [];
+    },
+  };
+  const { base } = await listen(store, cli, { kind: "plane", flags: "--plane", env: {} });
+  const board = await (await fetch(`${base}/api/board`)).json();
+  expect(board.kind).toBe("plane");
+  expect(board).not.toHaveProperty("workspaces");
+});
+
+test("a failing list-workspaces probe still loads the Board", async () => {
+  const store = IssueStore.fromRaw(fixture);
+  const cli: Cli = {
+    ...createStoreCli(store),
+    async listWorkspaces() {
+      throw new Error("probe down");
+    },
+  };
+  const { base } = await listen(store, cli, { kind: "plane", flags: "--plane", env: {} });
+  const res = await fetch(`${base}/api/board`);
+  const board = await res.json();
+  expect(res.status).toBe(200);
+  expect(board.kind).toBe("plane");
+  expect(board).not.toHaveProperty("workspaces");
+});
+
+test("Jira Board omits workspaces even when a list helper exists", async () => {
+  const store = IssueStore.fromRaw(fixture);
+  const cli: Cli = {
+    ...createStoreCli(store),
+    async listWorkspaces() {
+      return [{ id: "ws-team", name: "Team", slug: "team" }];
+    },
+  };
+  const { base } = await listen(store, cli, { kind: "jira" });
+  const board = await (await fetch(`${base}/api/board`)).json();
+  expect(board.kind).toBe("jira");
+  expect(board).not.toHaveProperty("workspaces");
+});
+
+test("project identifier read for other hits that Workspace catalog unscoped", async () => {
+  const calls: string[] = [];
+  const fetchFn: typeof fetch = async (input) => {
+    const url = new URL(String(input));
+    const path = url.pathname.replace(/\/+$/, "") || "/";
+    calls.push(path);
+    const parts = path.split("/").filter(Boolean);
+    if (parts[2] === "users" && parts[4] === "workspaces") return new Response("missing", { status: 404 });
+    if (parts[2] === "workspaces" && !parts[3]) return new Response("missing", { status: 404 });
+    if (/\/workspaces\/[^/]+\/projects$/.test(path)) {
+      const slug = parts[3];
+      const rows =
+        slug === "other"
+          ? [
+              { id: "proj-other", identifier: "DEC", name: "Decisions" },
+              { id: "proj-aph", identifier: "APH", name: "Aphrodite" },
+            ]
+          : [{ id: "proj-aph", identifier: "APH", name: "Aphrodite" }];
+      return new Response(JSON.stringify({ results: rows, next_page_results: false }), {
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (["states", "labels", "modules", "work-items"].includes(parts[6] ?? "")) {
+      return new Response(JSON.stringify({ results: [], next_page_results: false }), {
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return new Response(`unhandled ${path}`, { status: 404 });
+  };
+  const cli = createPlaneCli({
+    host: "https://plane.test",
+    apiKey: "test-key",
+    flags: "--plane --projects APH",
+    fetch: fetchFn,
+    retryDelayMs: 0,
+  });
+  const store = IssueStore.fromRaw(fixture);
+  const { base, app } = await listen(store, cli, {
+    kind: "plane",
+    flags: "--plane --projects APH",
+    env: {},
+  });
+  const before = app.board();
+  const res = await fetch(`${base}/api/projects?workspace=other`);
+  const body = await res.json();
+  expect(res.status).toBe(200);
+  expect(body.projects).toEqual(["DEC", "APH"]);
+  expect(app.board()).toEqual(before);
+  expect(calls.some((url) => url.includes("/workspaces/other/projects"))).toBe(true);
 });
