@@ -623,9 +623,9 @@ test("unscoped other workspace still requests every listed Project", async () =>
     .calls()
     .filter((call) => call.method === "GET" && /\/projects\/[^/]+\//.test(call.url))
     .map((call) => call.url);
-  expect(itemGets.some((url) => url.includes(APH))).toBe(true);
-  expect(itemGets.some((url) => url.includes(PULSE))).toBe(true);
   expect(itemGets.some((url) => url.includes(OTHER))).toBe(true);
+  expect(itemGets.some((url) => url.includes(APH))).toBe(false);
+  expect(itemGets.some((url) => url.includes(PULSE))).toBe(false);
 });
 
 test("--projects still narrows item endpoints after the project list", async () => {
