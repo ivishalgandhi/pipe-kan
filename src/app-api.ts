@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import type { App } from "./app.ts";
 import type { Boot } from "./boot.ts";
+import { readLedger } from "./factory-ledger.ts";
 import { planeWorkspace } from "./plane.ts";
 
 function json(res: ServerResponse, status: number, body: unknown) {
@@ -179,6 +180,28 @@ export function handleAppApi(
       }
       const result = await app.edit(String(body.key ?? ""), input);
       json(res, result.ok ? 200 : 409, result);
+    });
+    return true;
+  }
+
+  if (url.pathname === "/api/factory/jobs" && method === "GET") {
+    reply(req, res, async () => {
+      const result = readLedger();
+      json(res, result.error && result.jobs.length === 0 ? 503 : 200, result);
+    });
+    return true;
+  }
+
+  if (/^\/api\/factory\/jobs\/[^/]+$/.test(url.pathname) && method === "GET") {
+    reply(req, res, async () => {
+      const id = url.pathname.slice("/api/factory/jobs/".length);
+      const result = readLedger();
+      const job = result.jobs.find((j) => j.id === id);
+      if (!job) {
+        json(res, 404, { error: `Job not found: ${id}`, ledgerError: result.error });
+        return;
+      }
+      json(res, 200, { job });
     });
     return true;
   }

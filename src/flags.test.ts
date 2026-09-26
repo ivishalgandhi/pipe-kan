@@ -27,6 +27,43 @@ test("--projects parses multiple projects into JQL", async () => {
   );
 });
 
+test("--projects PROJ1, PROJ2 (space after comma) parses both projects", () => {
+  // Bug: shell/token split turns "PROJ1, PROJ2" into two tokens ["PROJ1,", "PROJ2"];
+  // the old takeValue only grabbed the first token and silently dropped PROJ2.
+  const parsed = parseFlags("--projects PROJ1, PROJ2");
+  expect(parsed.projects).toEqual(["PROJ1", "PROJ2"]);
+  expect(parsed.jql).toBe('project in ("PROJ1", "PROJ2")');
+});
+
+test("--projects PROJ1, PROJ2, PROJ3 (spaces after commas) parses all three", () => {
+  const parsed = parseFlags("--projects PROJ1, PROJ2, PROJ3");
+  expect(parsed.projects).toEqual(["PROJ1", "PROJ2", "PROJ3"]);
+});
+
+test("--projects PROJ1 , PROJ2 (spaces around comma) parses both projects", () => {
+  // Standalone comma token is consumed and filtered out
+  const parsed = parseFlags("--projects PROJ1 , PROJ2");
+  expect(parsed.projects).toEqual(["PROJ1", "PROJ2"]);
+});
+
+test("--projects spaced list followed by another flag keeps the flag", () => {
+  const parsed = parseFlags("--projects PROJ1, PROJ2 --plane");
+  expect(parsed.projects).toEqual(["PROJ1", "PROJ2"]);
+  expect(parsed.plane).toBe(true);
+});
+
+test("--projects spaced list with --jql: projects parsed, jql not overridden", () => {
+  // ADR constraint: when --jql is set, projects are parsed but NOT injected into JQL
+  const parsed = parseFlags('--jql "type=Story" --projects PROJ1, PROJ2');
+  expect(parsed.projects).toEqual(["PROJ1", "PROJ2"]);
+  expect(parsed.jql).toBe("type=Story"); // raw jql is preserved, project clause NOT injected
+});
+
+test("--projects=PROJ1,PROJ2 glued form is parsed", () => {
+  const parsed = parseFlags("--projects=PROJ1,PROJ2");
+  expect(parsed.projects).toEqual(["PROJ1", "PROJ2"]);
+});
+
 test("argvToFlags converts process.argv to flags string", () => {
   expect(argvToFlags(["node", "pipe-kan", "--projects", "SQLPOD"])).toBe(
     "--projects SQLPOD",

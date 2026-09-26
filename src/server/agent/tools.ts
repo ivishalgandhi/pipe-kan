@@ -1,7 +1,8 @@
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { App } from "../../app.ts";
+import { readLedger } from "../../factory-ledger.ts";
 import { createSkillRegistry, skillContextBlock } from "./skills.ts";
 import type { AgentContextBlock, ToolCall } from "./types.ts";
 
@@ -98,6 +99,38 @@ const TOOLS: ToolSchema[] = [
       summary: { type: "string", description: "New summary" },
       description: { type: "string", description: "New description" },
       labels: { type: "string", description: "Comma-separated replacement labels" },
+    },
+    mutates: true,
+  },
+  {
+    name: "factory_job_status",
+    description:
+      "Read the latest status and factory stage tag for one or more software-factory jobs from the local ledger. Pass a job id (gbj-YYYYMMDD-NNN) for a single job, or omit id to get the 20 most-recent active jobs.",
+    parameters: {
+      id: { type: "string", description: "Optional job id, e.g. gbj-20260926-011" },
+    },
+    mutates: false,
+  },
+  {
+    name: "factory_start_job",
+    description:
+      "Request the Grokbot Coordinator to start a new factory job. Writes a start-request to docs/factory/outbox/ for the coordinator to pick up. Requires user approval. Does NOT append to jobs.jsonl directly.",
+    parameters: {
+      summary: { type: "string", description: "One-line job summary" },
+      repo: { type: "string", description: "Target repo path, e.g. ~/code/pipe-kan" },
+      session: { type: "string", description: "Herdr session name, e.g. jira-kan" },
+      notes: { type: "string", description: "Optional extra context for the coordinator" },
+    },
+    mutates: true,
+  },
+  {
+    name: "factory_move_job",
+    description:
+      "Request the Grokbot Coordinator to move a factory job to a new status or stage. Writes a move-request to docs/factory/outbox/ for the coordinator to pick up. Requires user approval. Does NOT append to jobs.jsonl directly.",
+    parameters: {
+      id: { type: "string", description: "Job id to move, e.g. gbj-20260926-011" },
+      status: { type: "string", description: "Target status: queued|routed|in_progress|blocked|done|cancelled" },
+      detail: { type: "string", description: "Optional detail message for the ledger event" },
     },
     mutates: true,
   },
@@ -206,6 +239,89 @@ const EXECUTORS: Record<string, ToolExecutor> = {
     const result = await app.edit(key, input);
     if (result.error) return { ok: false, error: result.error };
     return { ok: true, value: { key, __ui_action: "refresh_board" } };
+  },
+  factory_job_status(args) {
+    const id = typeof args.id === "string" ? args.id.trim() : "";
+    const ledger = readLedger();
+    if (id) {
+      const job = ledger.jobs.find((j) => j.id === id);
+      if (!job) {
+        return { ok: false, error: `Job not found: ${id}${ledger.error ? ` (${ledger.error})` : ""}` };
+      }
+      return { ok: true, value: { job, ledgerError: ledger.error } };
+    }
+    // Return up to 20 most-recent active (non-terminal) jobs, or all if fewer
+    const active = ledger.jobs.filter((j) => j.stageTag !== null).slice(0, 20);
+    return {
+      ok: true,
+      value: { jobs: active, total: ledger.jobs.length, ledgerError: ledger.error },
+    };
+  },
+  factory_start_job(args) {
+    const summary = String(args.summary ?? "").trim();
+    if (!summary) return { ok: false, error: "Missing summary" };
+    const repo = String(args.repo ?? "").trim();
+    const session = String(args.session ?? "").trim();
+    const notes = typeof args.notes === "string" ? args.notes.trim() : undefined;
+    const ts = new Date().toISOString();
+    const requestId = crypto.randomUUID();
+    const outboxDir = join(process.cwd(), "docs/factory/outbox");
+    mkdirSync(outboxDir, { recursive: true });
+    const filename = `${ts.replace(/[:.]/g, "-")}-${requestId}-start.json`;
+    const payload = {
+      action: "start_job",
+      requested_by: "pipe-kan-acp",
+      ts,
+      requestId,
+      summary,
+      ...(repo ? { repo } : {}),
+      ...(session ? { session } : {}),
+      ...(notes ? { notes } : {}),
+    };
+    writeFileSync(join(outboxDir, filename), JSON.stringify(payload, null, 2) + "\n", "utf8");
+    return {
+      ok: true,
+      value: {
+        message: `Start request written to docs/factory/outbox/${filename}. The Grokbot Coordinator will pick this up and append the real ledger event.`,
+        outboxFile: filename,
+      },
+    };
+  },
+  factory_move_job(args) {
+    const id = String(args.id ?? "").trim();
+    const status = String(args.status ?? "").trim();
+    if (!id) return { ok: false, error: "Missing job id" };
+    if (!status) return { ok: false, error: "Missing target status" };
+    const validStatuses = ["queued", "routed", "in_progress", "blocked", "done", "cancelled"];
+    if (!validStatuses.includes(status)) {
+      return {
+        ok: false,
+        error: `Invalid status '${status}'. Must be one of: ${validStatuses.join(", ")}`,
+      };
+    }
+    const detail = typeof args.detail === "string" ? args.detail.trim() : undefined;
+    const ts = new Date().toISOString();
+    const requestId = crypto.randomUUID();
+    const outboxDir = join(process.cwd(), "docs/factory/outbox");
+    mkdirSync(outboxDir, { recursive: true });
+    const filename = `${ts.replace(/[:.]/g, "-")}-${requestId}-move.json`;
+    const payload = {
+      action: "move_job",
+      requested_by: "pipe-kan-acp",
+      ts,
+      requestId,
+      id,
+      status,
+      ...(detail ? { detail } : {}),
+    };
+    writeFileSync(join(outboxDir, filename), JSON.stringify(payload, null, 2) + "\n", "utf8");
+    return {
+      ok: true,
+      value: {
+        message: `Move request for ${id} → ${status} written to docs/factory/outbox/${filename}. The Grokbot Coordinator will pick this up and append the real ledger event.`,
+        outboxFile: filename,
+      },
+    };
   },
 };
 

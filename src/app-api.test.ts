@@ -1820,3 +1820,30 @@ test("project identifier read for other hits that Workspace catalog unscoped", a
   expect(app.board()).toEqual(before);
   expect(calls.some((url) => url.includes("/workspaces/other/projects"))).toBe(true);
 });
+
+// ---------------------------------------------------------------------------
+// Factory API routes
+// ---------------------------------------------------------------------------
+
+test("/api/factory/jobs returns 200 with jobs array (or 503 with error if ledger missing)", async () => {
+  const { base } = await listen();
+  const res = await fetch(`${base}/api/factory/jobs`);
+  // 200 = ledger found; 503 = ledger missing — both are valid depending on environment
+  expect([200, 503]).toContain(res.status);
+  const body = await res.json() as { jobs: unknown[]; error?: string };
+  expect(Array.isArray(body.jobs)).toBe(true);
+});
+
+test("/api/factory/jobs/:id returns 404 for unknown id", async () => {
+  const { base } = await listen();
+  const res = await fetch(`${base}/api/factory/jobs/gbj-99999999-999`);
+  expect(res.status).toBe(404);
+  const body = await res.json() as { error: string };
+  expect(body.error).toContain("gbj-99999999-999");
+});
+
+test("/api/factory/jobs does not handle POST (returns 404)", async () => {
+  const { base } = await listen();
+  const res = await fetch(`${base}/api/factory/jobs`, { method: "POST" });
+  expect(res.status).toBe(404);
+});
