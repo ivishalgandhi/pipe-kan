@@ -67,8 +67,22 @@ export function parseFlags(flags: string): ParsedFlags {
       else statusEq.push(status);
       continue;
     }
-    if (token === "--projects") {
-      [projectsValue, i] = takeValue(list, i, "--projects");
+    if (token === "--projects" || token.startsWith("--projects=")) {
+      const parts: string[] = [];
+      if (token.startsWith("--projects=")) {
+        // glued form: --projects=PROJ1,PROJ2
+        parts.push(token.slice("--projects=".length));
+      }
+      // Consume all following non-flag tokens so that a space after a comma
+      // does not silently drop projects:
+      //   --projects PROJ1, PROJ2  → tokens ["PROJ1,", "PROJ2"]  → both consumed
+      //   --projects PROJ1 , PROJ2 → tokens ["PROJ1", ",", "PROJ2"] → all consumed
+      while (i + 1 < list.length && !list[i + 1].startsWith("-")) {
+        i++;
+        parts.push(list[i]);
+      }
+      // Join with "," then the existing split/trim/filter handles deduplication
+      projectsValue = parts.join(",");
       continue;
     }
     if (token === "-q" || token === "--jql") {
