@@ -4,3 +4,4 @@ dist
 *.local
 fixtures/jira.config.yml
 graphify-out
+docs/factory/outbox/*.json

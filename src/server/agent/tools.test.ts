@@ -194,3 +194,119 @@ test("refresh_board without flags still yields confirm", async () => {
   if (!result.ok) return;
   expect(result.value).toEqual({ __ui_action: "confirm_refresh" });
 });
+
+// ---------------------------------------------------------------------------
+// Factory tool schemas
+// ---------------------------------------------------------------------------
+
+test("factory_job_status is in definitions and not mutating", () => {
+  const registry = createToolRegistry();
+  const def = registry.definitions().find((t) => t.name === "factory_job_status");
+  expect(def).toBeDefined();
+  expect(def?.mutates).toBe(false);
+  expect(registry.isMutating("factory_job_status")).toBe(false);
+});
+
+test("factory_start_job is in definitions and mutating", () => {
+  const registry = createToolRegistry();
+  const def = registry.definitions().find((t) => t.name === "factory_start_job");
+  expect(def).toBeDefined();
+  expect(def?.mutates).toBe(true);
+  expect(registry.isMutating("factory_start_job")).toBe(true);
+});
+
+test("factory_move_job is in definitions and mutating", () => {
+  const registry = createToolRegistry();
+  const def = registry.definitions().find((t) => t.name === "factory_move_job");
+  expect(def).toBeDefined();
+  expect(def?.mutates).toBe(true);
+  expect(registry.isMutating("factory_move_job")).toBe(true);
+});
+
+test("factory_job_status lists active jobs from ledger (or error if missing)", async () => {
+  const registry = createToolRegistry();
+  // Ledger may or may not exist in CI; either way we get a valid result shape
+  const result = await registry.execute("factory_job_status", {}, mockApp);
+  // If ledger missing, still returns ok:true with jobs array
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  const val = result.value as { jobs?: unknown[]; job?: unknown };
+  expect(val.jobs !== undefined || val.job !== undefined).toBe(true);
+});
+
+test("factory_job_status returns error for unknown job id", async () => {
+  const registry = createToolRegistry();
+  const result = await registry.execute(
+    "factory_job_status",
+    { id: "gbj-99999999-999" },
+    mockApp,
+  );
+  // If ledger exists and job not found → ok:false; if ledger missing → ok:false
+  expect(result.ok).toBe(false);
+});
+
+test("factory_start_job requires summary", async () => {
+  const registry = createToolRegistry();
+  const result = await registry.execute("factory_start_job", {}, mockApp);
+  expect(result.ok).toBe(false);
+  if (result.ok) return;
+  expect(result.error).toContain("summary");
+});
+
+test("factory_start_job writes outbox file and returns filename", async () => {
+  const registry = createToolRegistry();
+  const result = await registry.execute(
+    "factory_start_job",
+    { summary: "test job", repo: "~/code/pipe-kan", session: "jira-kan" },
+    mockApp,
+  );
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  const val = result.value as { outboxFile: string; message: string };
+  expect(val.outboxFile).toMatch(/-start\.json$/);
+  expect(val.message).toContain("outbox");
+});
+
+test("factory_move_job requires id and status", async () => {
+  const registry = createToolRegistry();
+  const missingId = await registry.execute("factory_move_job", { status: "done" }, mockApp);
+  expect(missingId.ok).toBe(false);
+  const missingStatus = await registry.execute("factory_move_job", { id: "gbj-001" }, mockApp);
+  expect(missingStatus.ok).toBe(false);
+});
+
+test("factory_move_job rejects invalid status", async () => {
+  const registry = createToolRegistry();
+  const result = await registry.execute(
+    "factory_move_job",
+    { id: "gbj-001", status: "invalid" },
+    mockApp,
+  );
+  expect(result.ok).toBe(false);
+  if (result.ok) return;
+  expect(result.error).toContain("Invalid status");
+});
+
+test("factory_move_job writes outbox file", async () => {
+  const registry = createToolRegistry();
+  const result = await registry.execute(
+    "factory_move_job",
+    { id: "gbj-20260926-001", status: "done", detail: "shipped" },
+    mockApp,
+  );
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  const val = result.value as { outboxFile: string; message: string };
+  expect(val.outboxFile).toMatch(/-move\.json$/);
+  expect(val.message).toContain("gbj-20260926-001");
+});
+
+test("system block mentions factory tools", () => {
+  const registry = createToolRegistry();
+  const block = registry.systemBlock();
+  if (block.type !== "text") throw new Error("expected text block");
+  expect(block.text).toContain("factory_job_status");
+  expect(block.text).toContain("factory_start_job");
+  expect(block.text).toContain("factory_move_job");
+});
+
