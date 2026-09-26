@@ -92,6 +92,41 @@ reads and acts on these files, then appends the real ledger event.
   for the sidepanel.  Factory tools are a natural extension of the existing
   tool registry.
 
+## Additive-overlay constraint (Vishal, 2026-09-26)
+
+Factory integration is a **read-only overlay** that must not alter any
+existing Plane or Jira code path.  Specifically:
+
+1. **No writes to Plane/Jira from factory code.**  Stage tags are derived
+   solely from `jobs.jsonl` and rendered as overlay chips in the UI.  They
+   are never written back to Plane issue state, Jira labels, or any remote
+   API.  The Plane `needs-input` badge path (`src/plane.ts`, existing) is
+   untouched.
+
+2. **No changes to flag parsing or JQL construction.**  The Jira
+   `--projects KEY1,KEY2` comma-split path (`src/flags.ts` lines 82–85) is
+   not touched by this feature.  Regression evidence:
+
+   | Test file | Test name | Status |
+   |-----------|-----------|--------|
+   | `src/flags.test.ts:22` | `--projects parses multiple projects into JQL` | ✅ pass |
+   | `src/flags.test.ts:44` | `--plane + --workspace + --projects parses combined flags` | ✅ pass |
+   | `src/cli.test.ts:446` | `createJiraCli scopes epics to multiple projects via --projects` | ✅ pass |
+   | `src/cli.test.ts:465` | `createJiraCli scopes epic children to multiple projects via --projects` | ✅ pass |
+
+   All 54 tests in `src/flags.test.ts` + `src/cli.test.ts` pass without
+   modification (`bun test src/flags.test.ts src/cli.test.ts`: 54 pass, 0 fail).
+
+3. **`handleAppApi` route handler is strictly append-only.**  The two new
+   factory routes (`/api/factory/jobs`, `/api/factory/jobs/:id`) are appended
+   after all existing routes and before the final `return false`.  No existing
+   route handler, URL pattern, or response logic is modified.
+
+4. **`tools.ts` changes are import-expansion + append only.**  The only
+   modification to existing lines is widening
+   `import { readFileSync }` → `import { mkdirSync, readFileSync, writeFileSync }`.
+   All existing tool definitions and executor implementations are unchanged.
+
 ## Consequences
 
 - `src/factory-ledger.ts` owns all ledger parsing and stage-tag logic.
