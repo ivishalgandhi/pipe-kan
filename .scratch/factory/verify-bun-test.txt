@@ -1,0 +1,597 @@
+bun test v1.4.0 (1381054db)
+
+src/agent-context.test.ts:
+(pass) boardViewContext puts visible Jira cards in prompt text [0.39ms]
+(pass) pipedBoardContext uses the full unfiltered Jira pipe, not GitHub [0.10ms]
+(pass) withPipedBoardContext keeps an attached board view instead of the full pipe [0.09ms]
+
+src/flags.test.ts:
+(pass) default Scope has no project clause [0.14ms]
+(pass) Scope flags still add assignee and status [0.04ms]
+(pass) Scope type flag lists Epics
+(pass) --projects parses multiple projects into JQL [0.03ms]
+(pass) argvToFlags converts process.argv to flags string [0.02ms]
+
+src/store.test.ts:
+(pass) create assigns the next DEMO key and stores fields [0.23ms]
+(pass) create rejects an empty summary [0.04ms]
+(pass) edit changes summary description and labels [0.05ms]
+(pass) edit fails for a missing key [0.03ms]
+(pass) create stores parent Epic and does not write when summary is empty [0.08ms]
+
+src/visible.test.ts:
+(pass) rollback under an Epic keeps hidden Cards [0.29ms]
+(pass) rollback with no Epic restores the previous Board [0.02ms]
+(pass) merge under an Epic keeps hidden Cards [0.02ms]
+(pass) stamp Epic links children that jira-cli --raw dropped [0.06ms]
+(pass) stamp Epic adds a child that was missing from Scope [0.03ms]
+(pass) Search hides Cards that do not match [0.12ms]
+(pass) Search adds a matching story that Scope missed [0.06ms]
+(pass) Search under an Epic keeps only matching children [0.02ms]
+(pass) merge under Search keeps hidden Cards [0.02ms]
+(pass) Search keeps an Epic that matches or has a matching Card [0.07ms]
+(pass) Search keeps an Epic whose labels match [0.01ms]
+(pass) Filter keeps an Epic whose own labels match [0.10ms]
+(pass) Filter keeps an Epic when a remaining child matches [0.03ms]
+(pass) Filter hides an Epic when neither self nor child matches [0.02ms]
+(pass) Filter keeps an Epic with no children
+(pass) Filter keeps an Epic whose own priority or assignee matches [0.03ms]
+(pass) epicAssignee Filter hides an Epic that misses and has no remaining child [0.04ms]
+(pass) Epic row count is remaining children after Search and Filter [0.03ms]
+(pass) left pane keeps In Progress, Completed, and Cancelled Epics [0.01ms]
+(pass) Epics group by first-seen status [0.05ms]
+(pass) Filter by priority keeps matching Cards [0.02ms]
+(pass) Filter Unassigned keeps Cards with no person [0.01ms]
+(pass) Filter ANDs with Search and the selected Epic [0.01ms]
+(pass) Filter omits a Column with no remaining Cards [0.01ms]
+(pass) Filter facets come from Card values [0.15ms]
+(pass) Filter facets include Labels and Epic assignee [0.22ms]
+(pass) Filter facets union Card values with listed Epic values [0.03ms]
+(pass) Filter by labels keeps Cards with any selected label [0.02ms]
+(pass) Filter by Epic assignee keeps children of those Epics [0.04ms]
+(pass) Filter Unassigned Epic assignee keeps Cards whose Epic has no person [0.02ms]
+(pass) Filter keeps Jira P-numbers and Taskwarrior names [0.02ms]
+(pass) priority rank is P-numbers then named scales, missing last [0.04ms]
+(pass) Sort by priority uses the shared rank and missing last [0.07ms]
+(pass) Sort by age is oldest first and due is soonest first [1.48ms]
+(pass) Sort by key is A-Z and missing Sort field is last [0.04ms]
+(pass) Hide omits a Column while Cards remain in the input [0.02ms]
+(pass) a Hidden Column is not a drop target
+(pass) merge under Filter keeps hidden Cards [0.04ms]
+(pass) merge under Hide keeps the Hidden Column [0.01ms]
+(pass) Favourites order by priority rank then Issue key [0.08ms]
+(pass) Favourites hide when empty and ignore stale keys [0.02ms]
+(pass) Search omits a Favourite that does not match [0.01ms]
+(pass) Search keeps a Favourite that has a matching Card [0.01ms]
+(pass) Folders keep one home and unfile on delete [0.10ms]
+(pass) Folder name collision is rejected and Search omits a miss [0.06ms]
+(pass) unfiled Favourites paint before Folders [0.03ms]
+(pass) toggleFavourite does not invent a Folder home [0.03ms]
+(pass) Favourites hide under the same Filter as status-group Epics [0.02ms]
+(pass) an empty Folder stays after Filter hides its Favourites [0.02ms]
+(pass) Save appends a Preset and Apply returns that chrome [0.05ms]
+(pass) empty or clashing Preset names fail [0.01ms]
+(pass) two Preset names may hold the same chrome [0.02ms]
+(pass) Save over replaces Preset chrome and keeps the name [0.04ms]
+(pass) Rename Preset uses the same uniqueness rule as Save [0.04ms]
+(pass) Delete drops a Preset and leaves the others [0.03ms]
+(pass) combinedBoard mixes Epics and Stories into status Columns [0.16ms]
+(pass) combinedBoard filters by assignee on Epics and Stories [0.03ms]
+(pass) combinedBoard hides empty statuses and respects Hide [0.02ms]
+(pass) combinedBoard searches both Epics and Stories [0.02ms]
+(pass) combinedBoard applies sort across mixed Cards [0.03ms]
+(pass) merge prefers the next Column when the same Card is in two Columns [0.02ms]
+(pass) merge does not keep a moved Card in its previous Column [0.02ms]
+(pass) applyColumnOrder restores saved statuses and appends new ones [0.03ms]
+(pass) combinedBoard keeps Column order from the Board [0.02ms]
+
+src/board.test.ts:
+(pass) Board.epics are Epics; Cards hold an Epic key [0.01ms]
+(pass) groups Issues into Columns by first-seen status [1.50ms]
+(pass) Epics leave the Board and children keep the Epic key [0.28ms]
+(pass) Cards keep labels from the payload [0.03ms]
+(pass) Epics keep labels the same way Cards do [0.03ms]
+(pass) Cards keep assignee from displayName, name, or string [0.04ms]
+(pass) Card age is days since created [0.05ms]
+(pass) Cards keep target end from explicit fields [0.06ms]
+(pass) Cards keep target end from a date-shaped custom field [0.03ms]
+(pass) Target end distance is relative like Linear [0.14ms]
+(pass) formatTargetEnd formats ISO dates [0.04ms]
+(pass) Cards keep created from the payload [0.02ms]
+(pass) parent-only payload still names the Epic [0.02ms]
+(pass) hides a status that has no Issues [0.01ms]
+(pass) Cards keep an Epic key from Epic Link [0.02ms]
+(pass) Cards keep an Epic key from parentEpic [0.01ms]
+(pass) Cards keep an Epic key from a customfield issue key [0.03ms]
+(pass) a child without parent has no Epic key [0.03ms]
+(pass) Epics keep status from the payload [0.01ms]
+(pass) mergeEpics keeps listed Epics that Scope missed [0.03ms]
+(pass) All epics maps listed Epics into Columns by first-seen status [0.04ms]
+(pass) an Epic without status lands in To Do
+
+src/command.test.ts:
+(pass) empty query lists Actions only and omits Apply when there are no Presets [0.06ms]
+(pass) Apply rows follow Preset create order [0.03ms]
+(pass) typing filters Actions by case-insensitive row label [0.04ms]
+(pass) pick yields all-stories, all-epics, all-combined, refresh, agent, create, and preset intents [0.02ms]
+(pass) typing create lists Create issue and Create with AI [0.02ms]
+(pass) empty query omits Epics and Cards even when listed [0.02ms]
+(pass) typing lists matching Epics then Cards after filtered Actions [0.06ms]
+(pass) Epic match is key summary labels and ignores a matching child [0.03ms]
+(pass) Card match uses the same needles as Search [0.04ms]
+(pass) typing lists every matching Epic and Card in payload order and Actions never cap [0.13ms]
+(pass) Filter Hide Search and selected Epic do not drop catalog rows [0.02ms]
+(pass) children-cache Cards omitted unless they are in Scope [0.02ms]
+(pass) Favourite is a starred Epic whose pick is the epic jump [0.02ms]
+(pass) pick yields card and epic intents [0.03ms]
+(pass) a Card without a parent Epic picks without an epic [0.02ms]
+(pass) a miss is an empty list with no Issue rows
+(pass) commandComposerAction maps Create issue and Create with AI [0.01ms]
+
+src/open.test.ts:
+(pass) same-origin Open embeds; remote Jira does not [0.04ms]
+(pass) flattenIssue orders Card fields then remaining A-Z [0.23ms]
+(pass) flattenIssue extracts wiki text and skips empty custom fields [0.05ms]
+
+src/scale.test.ts:
+(pass) issuesToBoard and epicsToColumns keep 200 unique Epics [0.91ms]
+Refresh
+Refresh listed 240 issues, 200 epics
+Refresh children 40
+(pass) Refresh lists 200 Epics and their children [9.46ms]
+(pass) Filter, Search, and Combined stay unique across 200 Epics [4.45ms]
+(pass) issuesToBoard and epicsToColumns keep 250 unique Epics [0.57ms]
+Refresh
+Refresh listed 300 issues, 250 epics
+Refresh children 50
+(pass) Refresh lists 250 Epics and their children [2.70ms]
+(pass) Filter, Search, and Combined stay unique across 250 Epics [4.17ms]
+(pass) issuesToBoard and epicsToColumns keep 300 unique Epics [0.46ms]
+Refresh
+Refresh listed 360 issues, 300 epics
+Refresh children 60
+(pass) Refresh lists 300 Epics and their children [2.92ms]
+(pass) Filter, Search, and Combined stay unique across 300 Epics [6.86ms]
+(pass) merge keeps one Card when 250 Epics include a duplicate after Move [0.25ms]
+(pass) applyColumnOrder restores Draft first among 300 Epic statuses [0.10ms]
+(pass) mergeEpics keeps listed order for 300 Epics and fills missing summaries [0.10ms]
+(pass) Command finds one Epic among 300 [0.12ms]
+
+src/label-suggest.test.ts:
+(pass) uniqueLabels keeps first-seen order and dedupes case-insensitively [0.04ms]
+(pass) suggestLabels substring match [0.09ms]
+(pass) suggestLabels case-insensitive
+(pass) suggestLabels hyphen token write hits write-back
+(pass) suggestLabels selected excluded
+(pass) suggestLabels empty text
+(pass) suggestLabels one-char tokens do not match
+(pass) suggestLabels stable catalog order not relevance
+(pass) suggestLabels caps at 5 and preserves catalog order [0.01ms]
+
+src/issue-composer.test.ts:
+(pass) composerSuggestions match title and description then drop dismissed [0.05ms]
+(pass) acceptSuggestion appends and is a no-op when already selected [0.02ms]
+(pass) dismissSuggestion hides a chip until the draft is new [0.02ms]
+(pass) removeLabel drops a selected label and does not un-dismiss [0.02ms]
+(pass) emptyCreateDraft starts create mode with optional column and Epic [0.02ms]
+(pass) draftFromOpen prefills edit fields from Open fields [0.05ms]
+(pass) mergeOpenIntoDraft fills empty description without clobbering typed title [0.03ms]
+(pass) createAiSeed asks the Agent to call create_issue and includes a working draft [0.03ms]
+
+src/move-queue.test.ts:
+(pass) createMoveQueue > runs a single move and reports success [0.20ms]
+(pass) createMoveQueue > rolls back a failed move and reports the error [0.07ms]
+(pass) createMoveQueue > rolls back when run throws [0.10ms]
+(pass) createMoveQueue > drains queued moves in order [0.06ms]
+(pass) createMoveQueue > keeps draining when one move fails in the middle [0.06ms]
+(pass) createMoveQueue > bulk selection moves fail independently [0.09ms]
+(pass) createMoveQueue > enqueue while running is picked up by the active loop [0.05ms]
+
+src/issue-write.test.ts:
+(pass) column + opens create composer with that Column status [0.03ms]
+(pass) Cmd+K Create issue opens create composer [0.03ms]
+(pass) Cmd+K Create with AI seeds Agent [0.03ms]
+(pass) submit create payload writes title description labels status and parent [0.03ms]
+(pass) empty title blocks create write [0.01ms]
+(pass) label suggestions from typed title accept and dismiss chips [0.04ms]
+(pass) AI-assisted create path asks Agent to call create_issue [0.02ms]
+(pass) column create keeps selected Epic as parent except on All epics [0.01ms]
+(pass) open edit from a Card uses the same composer in edit mode [0.02ms]
+(pass) edit prefills title description and labels from the Issue [0.02ms]
+(pass) save edit payload writes key summary description and labels [0.02ms]
+(pass) Escape and cancel discard without a write payload [0.03ms]
+(pass) label suggest works in edit mode too [0.02ms]
+(pass) empty title blocks edit write
+(pass) command catalog Create actions are the Cmd+K entry points [0.02ms]
+
+src/app-api.test.ts:
+Refresh
+Refresh listed 8 issues, 3 epics
+Refresh children 4
+(pass) default Board is the Project [7.20ms]
+Refresh
+Refresh listed 8 issues, 3 epics
+Refresh children 4
+Refresh
+Refresh listed 8 issues, 3 epics
+Refresh children 4
+(pass) successful Move Refresh-es and keeps Done [4.85ms]
+Refresh
+Refresh listed 8 issues, 3 epics
+Refresh children 4
+(pass) illegal Move snaps back with jira-cli stderr [3.61ms]
+Refresh
+Refresh listed 8 issues, 3 epics
+Refresh children 4
+(pass) same-Column drop is a no-op [3.59ms]
+Refresh
+Refresh listed 8 issues, 3 epics
+Refresh children 4
+(pass) raw Move succeeds without Refreshing [3.35ms]
+Refresh
+Refresh listed 8 issues, 3 epics
+Refresh children 4
+(pass) raw Move returns failure without Refreshing [3.25ms]
+Refresh
+Refresh listed 8 issues, 3 epics
+Refresh children 4
+(pass) raw Move noop for same status [3.15ms]
+Refresh
+Refresh listed 8 issues, 3 epics
+Refresh children 4
+Refresh
+Refresh listed 4 issues, 3 epics
+Refresh children 4
+(pass) Refresh with Epic flag lists Epic children [2.93ms]
+Refresh
+Refresh listed 8 issues, 3 epics
+Refresh children 4
+(pass) Open returns the browse URL and flattened fields [2.53ms]
+Refresh
+Refresh listed 8 issues, 0 epics
+Refresh children 0
+(pass) Open keeps the URL and an error when view fails [2.14ms]
+Refresh
+Refresh listed 8 issues, 3 epics
+Refresh children 4
+(pass) Epic children keep the Epic key [2.71ms]
+Refresh
+Refresh listed 1 issues, 2 epics
+Refresh children 0
+(pass) Board.epics come from the Epic list, not only Scope [1.80ms]
+(pass) store hydrate fills the children cache [0.14ms]
+(pass) Pipe hydrate has no children cache [0.29ms]
+Refresh
+Refresh listed 1 issues, 1 epics
+Refresh children 2
+(pass) Refresh fills the children cache from one batched list [1.79ms]
+Refresh
+Refresh listed 1 issues, 1 epics
+Refresh children failed; keeping existing children children list failed
+(pass) a failed children call keeps the Board and falls counts back [2.14ms]
+Refresh
+Refresh listed 1 issues, 1 epics
+Refresh children 1
+(pass) Refresh keeps the last Board until children land [2.30ms]
+Refresh
+Refresh listed 1 issues, 1 epics
+Refresh children 1
+Refresh
+Refresh listed 1 issues, 1 epics
+Refresh children failed; keeping existing children children 400
+(pass) a failed children refresh keeps previously cached children [0.19ms]
+Refresh
+Refresh listed 0 issues, 220 epics
+Refresh children missing Epic keys; skip 220 per-Epic lists
+(pass) Refresh of 220 Epics does not list each Epic when Epic Link is missing [0.98ms]
+Refresh
+Refresh listed 1 issues, 1 epics
+Refresh children 0
+Refresh
+Refresh failed Unexpected response '429' from jira
+(pass) a failed Issues list keeps the last Board [0.21ms]
+Refresh
+Refresh listed 0 issues, 1 epics
+Refresh children missing Epic keys; skip 1 per-Epic lists
+(pass) select falls back to listEpic when cached children lost their Epic key [1.89ms]
+Refresh
+Refresh listed 0 issues, 1 epics
+Refresh children 0
+(pass) select returns empty columns for an epic not in the current list [2.12ms]
+Refresh
+Refresh listed 1 issues, 0 epics
+Refresh children 0
+(pass) Refresh without epics still shows story columns [2.04ms]
+Refresh
+Refresh listed 0 issues, 1 epics
+Refresh children 0
+(pass) select lists Epic children when the cache has none for that key [1.72ms]
+Refresh
+Refresh listed 0 issues, 1 epics
+Refresh children 1
+(pass) select stamps cached children without a second list [2.06ms]
+Refresh
+Refresh listed 8 issues, 3 epics
+Refresh children 4
+(pass) same-status Epic Move is a no-op [2.81ms]
+Refresh
+Refresh listed 8 issues, 3 epics
+Refresh children 4
+Refresh
+Refresh listed 8 issues, 3 epics
+Refresh children 4
+(pass) Epic Move Refreshes and leaves children on the Board [3.23ms]
+Refresh
+Refresh listed 8 issues, 3 epics
+Refresh children 4
+(pass) Fixture lists Epics in To Do, In Progress, and Done [2.72ms]
+Refresh
+Refresh listed 8 issues, 3 epics
+Refresh children 4
+(pass) Open returns the browse URL and fields for an Epic [2.31ms]
+Refresh
+Refresh listed 1 issues, 1 epics
+Refresh children 0
+(pass) same-status Epic Move noops when the Epic is only listed [2.33ms]
+Refresh
+Refresh listed 8 issues, 3 epics
+Refresh children 4
+Refresh
+Refresh listed 9 issues, 3 epics
+Refresh children 4
+(pass) successful create Refresh-es and returns the new key [3.62ms]
+Refresh
+Refresh listed 8 issues, 3 epics
+Refresh children 4
+(pass) empty summary create is a 409 [2.96ms]
+Refresh
+Refresh listed 8 issues, 3 epics
+Refresh children 4
+Refresh
+Refresh listed 8 issues, 3 epics
+Refresh children 4
+(pass) edit updates summary description and labels [3.76ms]
+Refresh
+Refresh listed 8 issues, 3 epics
+Refresh children 4
+(pass) edit missing key is a 409 [2.77ms]
+Refresh
+Refresh listed 8 issues, 3 epics
+Refresh children 4
+Refresh
+Refresh listed 9 issues, 3 epics
+Refresh children 5
+(pass) create with parent and status lands on the Board under that Epic [3.32ms]
+Refresh
+Refresh listed 8 issues, 3 epics
+Refresh children 4
+(pass) failed create is a 409 and leaves the Board unchanged [3.81ms]
+Refresh
+Refresh listed 8 issues, 3 epics
+Refresh children 4
+(pass) failed edit is a 409 and leaves the Issue unchanged [6.22ms]
+
+src/stdin.test.ts:
+(pass) a TTY is not a Pipe [0.10ms]
+(pass) a console that is not a TTY is not a Pipe [0.02ms]
+(pass) a redirected file is a Pipe [0.77ms]
+(pass) an empty FIFO is not a Pipe [0.07ms]
+(pass) a FIFO with Issues is a Pipe [0.07ms]
+
+src/ui.test.ts:
+(pass) package root is the install directory [0.05ms]
+(pass) built Board is served from dist/ui [3.85ms]
+(pass) unknown paths fall back to the Board [2.56ms]
+(pass) UI is missing until build [2.06ms]
+(pass) path traversal stays inside the UI [2.46ms]
+
+src/fake-jira.test.ts:
+(pass) search returns Fixture Issues matching jira-cli default Scope JQL [2.62ms]
+(pass) myself is the Fixture login [2.11ms]
+(pass) To Do cannot Move to Done [2.13ms]
+(pass) In Progress can Move to Done [2.02ms]
+(pass) search returns 400 for empty children IN clause [1.94ms]
+(pass) search returns 400 for invalid parent key in children JQL [1.92ms]
+(pass) Fake Jira view returns the stored Issue [1.81ms]
+(pass) Fake Jira creates an Issue [2.18ms]
+(pass) Fake Jira edits an Issue [2.08ms]
+(pass) Fake Jira create rejects an empty summary [2.10ms]
+(pass) Fake Jira edit missing key is 404 [1.92ms]
+
+src/copy-text.test.ts:
+(pass) copyText uses the clipboard API when it succeeds [0.07ms]
+(pass) copyText falls back when clipboard write is denied [0.06ms]
+(pass) copyText falls back when clipboard is missing [0.03ms]
+
+src/listen.test.ts:
+(pass) listen defaults to localhost [0.02ms]
+(pass) listen honors HOST and PORT [0.01ms]
+(pass) bindListen rejects when the port is taken [3.28ms]
+
+src/cli.test.ts:
+(pass) resolveJiraBin finds an explicit path and misses a missing name [0.25ms]
+jira issue list -a user@test.com -s~Done -> 1 (260ms)
+(pass) createJiraCli lists with flags and --raw [260.38ms]
+jira issue list -q EMPTY -> 0 (306ms)
+(pass) createJiraCli treats an empty jira list as no Issues [306.13ms]
+jira 429 retry 0ms issue list
+jira 429 retry 0ms issue list
+jira issue list -> 1 (189ms)
+(pass) createJiraCli retries a 429 list until Jira answers [190.22ms]
+jira 429 retry 0ms issue list
+jira 429 retry 0ms issue list
+jira 429 retry 0ms issue list
+jira 429 retry 0ms issue list
+jira issue list fail (212ms)
+(pass) createJiraCli still fails a 429 that does not recover [212.08ms]
+jira issue list -q type="Epic" --paginate 0:100 -> 1 (159ms)
+jira issue list -q type="Epic" 1 total
+(pass) createJiraCli lists every Epic without a project clause [159.90ms]
+jira issue list -q type="Epic" --paginate 0:100 -> 100 (154ms)
+jira issue list -q type="Epic" --paginate 100:100 -> 1 (19ms)
+jira issue list -q type="Epic" 101 total
+(pass) createJiraCli lists every Epic past jira-cli's 100-item page [173.35ms]
+jira issue list -q type="Epic" --paginate 0:100 -> 100 (158ms)
+jira issue list -q type="Epic" --paginate 100:100 -> 100 (16ms)
+jira issue list -q type="Epic" --paginate 200:100 -> 0 (14ms)
+jira issue list -q type="Epic" 200 total
+(pass) createJiraCli lists 200 Epics across jira-cli pages [188.78ms]
+jira issue list -q type="Epic" --paginate 0:100 -> 100 (152ms)
+jira issue list -q type="Epic" --paginate 100:100 -> 100 (16ms)
+jira issue list -q type="Epic" --paginate 200:100 -> 50 (15ms)
+jira issue list -q type="Epic" 250 total
+(pass) createJiraCli lists 250 Epics across jira-cli pages [183.05ms]
+jira issue list -q type="Epic" --paginate 0:100 -> 100 (148ms)
+jira issue list -q type="Epic" --paginate 100:100 -> 100 (16ms)
+jira issue list -q type="Epic" --paginate 200:100 -> 100 (16ms)
+jira issue list -q type="Epic" --paginate 300:100 -> 0 (13ms)
+jira issue list -q type="Epic" 300 total
+(pass) createJiraCli lists 300 Epics across jira-cli pages [193.47ms]
+jira issue list -> 100 (211ms)
+(pass) createJiraCli list is one jira-cli page [212.35ms]
+jira issue list --paginate 0:50 -> 50 (147ms)
+(pass) createJiraCli list keeps a Scope --paginate [147.79ms]
+jira issue list -q (parent="DEMO-1" OR "Epic Link"="DEMO-1") --paginate 0:100 -> 1 (154ms)
+jira issue list -q (parent="DEMO-1" OR "Epic Link"="DEMO-1") 1 total
+(pass) createJiraCli lists Epic children with parent or Epic Link scoped to project [154.24ms]
+Refresh children 2 epics; concurrency 10
+jira issue list -q (parent in ("DEMO-1", "DEMO-8") OR "Epic Link" i… --paginate 0:100 -> 1 (234ms)
+jira issue list -q (parent in ("DEMO-1", "DEMO-8") OR "Epic Link" i… 1 total
+(pass) createJiraCli lists children of every Epic in one call [234.65ms]
+Refresh children 2 epics; concurrency 10
+jira issue list -q (parent in ("DEMO-1", "DEMO-8") OR "Epic Link" i… --paginate 0:100 -> 1 (151ms)
+jira issue list -q (parent in ("DEMO-1", "DEMO-8") OR "Epic Link" i… 1 total
+(pass) createJiraCli listChildren drops empty or malformed parent keys [152.15ms]
+Refresh children skipped; no valid parent keys
+(pass) createJiraCli listChildren returns empty when all parent keys are invalid [0.36ms]
+Refresh children 110 epics; concurrency 10
+jira issue list -q (parent in ("DEMO-101", "DEMO-102", "DEMO-103", … --paginate 0:100 fail (155ms)
+jira issue list -q (parent in ("DEMO-1", "DEMO-2", "DEMO-3", "DEMO-… --paginate 0:100 fail (156ms)
+jira issue list -q (parent in ("DEMO-51", "DEMO-52", "DEMO-53", "DE… --paginate 0:100 fail (156ms)
+jira issue list -q "Epic Link" in ("DEMO-101", "DEMO-102", "DEMO-10… --paginate 0:100 -> 10 (19ms)
+jira issue list -q "Epic Link" in ("DEMO-101", "DEMO-102", "DEMO-10… 10 total
+jira issue list -q "Epic Link" in ("DEMO-51", "DEMO-52", "DEMO-53",… --paginate 0:100 -> 50 (19ms)
+jira issue list -q "Epic Link" in ("DEMO-51", "DEMO-52", "DEMO-53",… 50 total
+jira issue list -q "Epic Link" in ("DEMO-1", "DEMO-2", "DEMO-3", "D… --paginate 0:100 -> 50 (19ms)
+jira issue list -q "Epic Link" in ("DEMO-1", "DEMO-2", "DEMO-3", "D… 50 total
+(pass) createJiraCli batches children into groups, falls back, and learns the working field strategy [175.54ms]
+Refresh children 250 epics; concurrency 10
+jira issue list -q (parent in ("DEMO-51", "DEMO-52", "DEMO-53", "DE… --paginate 0:100 -> 100 (230ms)
+jira issue list -q (parent in ("DEMO-1", "DEMO-2", "DEMO-3", "DEMO-… --paginate 0:100 -> 100 (230ms)
+jira issue list -q (parent in ("DEMO-201", "DEMO-202", "DEMO-203", … --paginate 0:100 -> 100 (230ms)
+jira issue list -q (parent in ("DEMO-151", "DEMO-152", "DEMO-153", … --paginate 0:100 -> 100 (230ms)
+jira issue list -q (parent in ("DEMO-101", "DEMO-102", "DEMO-103", … --paginate 0:100 -> 100 (231ms)
+jira issue list -q (parent in ("DEMO-1", "DEMO-2", "DEMO-3", "DEMO-… --paginate 100:100 -> 100 (22ms)
+jira issue list -q (parent in ("DEMO-1", "DEMO-2", "DEMO-3", "DEMO-… 100 total
+jira issue list -q (parent in ("DEMO-51", "DEMO-52", "DEMO-53", "DE… --paginate 100:100 -> 100 (22ms)
+jira issue list -q (parent in ("DEMO-51", "DEMO-52", "DEMO-53", "DE… 100 total
+jira issue list -q (parent in ("DEMO-151", "DEMO-152", "DEMO-153", … --paginate 100:100 -> 100 (22ms)
+jira issue list -q (parent in ("DEMO-151", "DEMO-152", "DEMO-153", … 100 total
+jira issue list -q (parent in ("DEMO-101", "DEMO-102", "DEMO-103", … --paginate 100:100 -> 100 (22ms)
+jira issue list -q (parent in ("DEMO-101", "DEMO-102", "DEMO-103", … 100 total
+jira issue list -q (parent in ("DEMO-201", "DEMO-202", "DEMO-203", … --paginate 100:100 -> 100 (22ms)
+jira issue list -q (parent in ("DEMO-201", "DEMO-202", "DEMO-203", … 100 total
+(pass) createJiraCli lists children of 250 Epics without dropping keys [253.81ms]
+jira issue list -q project in ("PROJ1", "PROJ2") AND type="Epic" --paginate 0:100 -> 1 (147ms)
+jira issue list -q project in ("PROJ1", "PROJ2") AND type="Epic" 1 total
+(pass) createJiraCli scopes epics to multiple projects via --projects [147.19ms]
+jira issue list -q project in ("SQLDATABAS") AND type="Epic" --paginate 0:100 -> 1 (154ms)
+jira issue list -q project in ("SQLDATABAS") AND type="Epic" 1 total
+(pass) createJiraCli passes JQL after -q as a single argv token [154.42ms]
+jira issue list -q project in ("PROJ1", "PROJ2") AND (parent="DEMO-… --paginate 0:100 -> 1 (188ms)
+jira issue list -q project in ("PROJ1", "PROJ2") AND (parent="DEMO-… 1 total
+(pass) createJiraCli scopes epic children to multiple projects via --projects [187.83ms]
+(pass) createJiraCli children concurrency can be overridden via env [186.46ms]
+jira issue list -q project in ("SQLDATABAS") AND type="Epic" --paginate 0:100 -> 1 (149ms)
+jira issue list -q project in ("SQLDATABAS") AND type="Epic" 1 total
+(pass) createJiraCli issues a single -q token that real jira-cli accepts [149.02ms]
+jira issue list -> 1 (179ms)
+(pass) createJiraCli does not force Fake Jira config or token [179.66ms]
+jira issue list -> 1 (150ms)
+(pass) createJiraCli passes config and token when given [150.18ms]
+(pass) createJiraCli move and open shell jira-cli [211.63ms]
+(pass) createdKeyFromOutput takes the last valid key [0.06ms]
+(pass) createJiraCli create shells jira-cli with --no-input and moves when status is set [187.91ms]
+(pass) createJiraCli create returns error without moving [151.83ms]
+(pass) createJiraCli edit shells jira-cli [177.21ms]
+(pass) boot without jira uses the store [1.76ms]
+Refresh
+jira issue list -> 1 (162ms)
+jira issue list -q type="Epic" --paginate 0:100 -> 1 (14ms)
+jira issue list -q type="Epic" 1 total
+Refresh listed 1 issues, 0 epics
+Refresh children skipped; no valid parent keys
+Refresh children 0
+(pass) boot with jira first-paints from the store then Refresh shells jira [177.96ms]
+Refresh
+jira issue list -> 1 (144ms)
+jira issue list -q type="Epic" --paginate 0:100 -> 1 (16ms)
+jira issue list -q type="Epic" 1 total
+Refresh listed 1 issues, 0 epics
+Refresh children skipped; no valid parent keys
+Refresh children 0
+(pass) boot with Pipe and jira keeps the Pipe Board until Refresh [160.66ms]
+
+src/server/agent/models.test.ts:
+(pass) modelsFromConfigOptions reads a flat model selector [0.12ms]
+(pass) modelsFromConfigOptions flattens grouped options [0.03ms]
+(pass) resolveRequestedModel maps swe-1-6 to Devin's swe-1-6-slow id [0.07ms]
+(pass) parseAvailableModelsFromError reads Devin's set_config_option payload [0.07ms]
+
+src/server/agent/skills.test.ts:
+(pass) skill registry lists bundled skills [0.97ms]
+(pass) skill registry loads bundled skill body [0.19ms]
+(pass) skillContextBlock converts skill to resource block [0.14ms]
+
+src/server/agent/tools.test.ts:
+(pass) tool registry exposes all definitions [0.04ms]
+(pass) tool registry parses JSON tool call block [0.10ms]
+(pass) tool registry ignores unknown tool names [0.01ms]
+(pass) tool system block lists available tools [0.02ms]
+(pass) board_state executes against app board [0.10ms]
+(pass) move_card executes app.move [0.07ms]
+(pass) execute returns error for unknown tool [0.02ms]
+(pass) isMutating returns false for read-only tools and true for mutating tools [0.04ms]
+(pass) apply_preset returns a UI directive [0.03ms]
+(pass) set_filter returns a UI directive [0.04ms]
+(pass) run_skill returns skill resource [0.06ms]
+(pass) read_repo_file rejects traversal and reads existing file [0.09ms]
+(pass) create_issue executes app.create [0.10ms]
+(pass) create_issue requires a summary [0.02ms]
+(pass) edit_issue executes app.edit [0.08ms]
+(pass) create_issue parses from agent JSON and stays mutating [0.03ms]
+(pass) edit_issue requires a key [0.02ms]
+
+src/server/agent/session.test.ts:
+(pass) ACP backend connects and echoes prompt [23.58ms]
+(pass) ACP backend emits permission request and resolves it [14.46ms]
+(pass) ACP backend detects tool call in streamed text [14.49ms]
+(pass) ACP backend auto-executes read-only tools and emits tool_result [15.62ms]
+(pass) ACP session exposes live models and applies a requested model [13.63ms]
+(pass) ACP session maps swe-1-6 to swe-1-6-slow and stays connected [12.99ms]
+(pass) ACP session stays connected when requested model is unknown [12.85ms]
+(pass) unsubscribed listener does not swallow later events [12.75ms]
+(pass) closing an ACP session during connect fails fast instead of waiting for timeout [53.02ms]
+(pass) ACP session includes attached board context in the prompt [15.52ms]
+
+src/server/agent/config.test.ts:
+(pass) commandOnPath finds a binary on PATH [0.21ms]
+(pass) saveAgentConfig persists default agent and model [0.31ms]
+(pass) Devin fallback models include SWE-1.6 slow [0.01ms]
+(pass) default agent is Devin with SWE-1.6
+
+src/server/agent/api.test.ts:
+(pass) /api/agent/config returns default agent, skill, and model options [3.59ms]
+(pass) POST /api/agent/config saves default agent and model [2.99ms]
+(pass) /api/agent/skills lists bundled skills [2.49ms]
+(pass) unknown /api/agent route returns false [2.03ms]
+(pass) POST /api/agent/session uses the requested agent and returns live models [19.64ms]
+(pass) POST /api/agent/session replaces an in-flight start instead of waiting for its timeout [180.68ms]
+(pass) POST /api/agent/prompt without a session returns JSON 404 [1.86ms]
+(pass) POST /api/agent/prompt forwards attached board context to the agent [22.76ms]
+(pass) POST /api/agent/prompt uses the piped board when no board view is attached [19.25ms]
+
+ 315 pass
+ 0 fail
+ 779 expect() calls
+Ran 315 tests across 25 files. [6.12s]
