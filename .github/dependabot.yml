@@ -1,9 +1,10 @@
 version: 2
 updates:
-  - package-ecosystem: bun
-    directory: /
-    schedule:
-      interval: weekly
+  # bun is omitted until GitHub-hosted Dependabot supports bun.lock
+  # lockfileVersion 2. This repo is on 2; the updater still only supports 1,
+  # so weekly bun runs fail with Dependabot::DependencyFileNotSupported and
+  # leave a failing check on main. Restore the ecosystem after
+  # https://github.com/dependabot/dependabot-core/issues/16026 is deployed.
   - package-ecosystem: github-actions
     directory: /
     schedule:
