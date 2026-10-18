@@ -33,7 +33,7 @@
   --muted: #efeff0;
   --muted-foreground: #b0b5c0;
 
-  --accent: #e8e8ea;
+  --accent: #e4e4e6;
   --accent-foreground: #23252a;
 
   --destructive: #eb5757;
@@ -52,8 +52,16 @@
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
 
-  --radius: 0.5rem;
+  --radius: 8px;
   --header-height: calc(var(--spacing) * 11);
+
+  --bg-border-color: #e2e2e2;
+  --content-color: #b0b5c0;
+  --content-highlight-color: #23252a;
+  --focus-color: #7180ff;
+  --shadow-color: rgba(0, 0, 0, 0.05);
+  --scrollbar-color: rgba(0, 0, 0, 0.15);
+  --scrollbar-color-hover: rgba(0, 0, 0, 0.25);
 
   --sidebar: #efeff0;
   --sidebar-foreground: #23252a;
@@ -86,7 +94,7 @@
   --card: #18191a;
   --card-foreground: #ffffff;
 
-  --popover: #18191a;
+  --popover: #171718;
   --popover-foreground: #ffffff;
 
   --primary: #6d78d5;
@@ -98,7 +106,7 @@
   --muted: #19191c;
   --muted-foreground: #6b6f76;
 
-  --accent: #1c1c1d;
+  --accent: #ffffff08;
   --accent-foreground: #ffffff;
 
   --destructive: #eb5757;
@@ -117,11 +125,19 @@
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
 
+  --bg-border-color: #212224;
+  --content-color: #6b6f76;
+  --content-highlight-color: #ffffff;
+  --focus-color: #7180ff;
+  --shadow-color: rgba(0, 0, 0, 0.2);
+  --scrollbar-color: rgba(255, 255, 255, 0.12);
+  --scrollbar-color-hover: rgba(255, 255, 255, 0.2);
+
   --sidebar: #09090a;
   --sidebar-foreground: #ffffff;
   --sidebar-primary: #6d78d5;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #18191a;
+  --sidebar-accent: #ffffff08;
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: #212224;
   --sidebar-ring: #7180ff;
@@ -170,6 +186,8 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --radius-card: 9px;
+  --radius-pane: 12px;
 
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
@@ -232,7 +250,23 @@
   * {
     @apply border-border outline-ring/50;
     scrollbar-width: thin;
-    scrollbar-color: color-mix(in oklab, var(--foreground) 20%, transparent) transparent;
+    scrollbar-color: var(--scrollbar-color) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-color);
+    border-radius: 12px;
+    background-clip: content-box;
+    border: 3px solid transparent;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: var(--scrollbar-color-hover);
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
   }
   html,
   body {
@@ -269,13 +303,17 @@
 }
 
 .pk-calendar .fc-button {
-  padding: 0.15rem 0.5rem;
+  height: 1.75rem;
+  padding: 0 0.5rem;
   font-size: 12px;
+  border-radius: 8px;
   box-shadow: none;
 }
 
 .pk-calendar .fc-event {
   cursor: pointer;
+  border-radius: 6px;
+  font-size: 11px;
 }
 
 .pk-calendar .fc-event-key {
@@ -287,6 +325,7 @@
   white-space: nowrap;
   cursor: pointer;
   font: inherit;
+  font-size: 12px;
 }
 
 .pk-calendar .fc-event-created {
