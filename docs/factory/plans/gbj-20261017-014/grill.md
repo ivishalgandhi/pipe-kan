@@ -59,3 +59,18 @@ The Calendar tab (`src/components/board-calendar.tsx`) uses FullCalendar with cu
 Linear's command palette (`Cmd/Ctrl K`) is a centered overlay with a search input, grouped results, and keyboard navigation. Pipe-kan's `CommandOverlay` is already close in structure.
 Should it be restyled in the first slice to match Linear's exact chrome (28px pills, muted hover `#ffffff08`, indigo accent for selected row)?
 - Recommendation: Yes, low effort, high visual impact.
+
+## Maker decisions (2026-10-18)
+
+Conservative choices. No new data model fields.
+
+- Q1. Board stays the default. No list view in this slice.
+- Q2. Restyle the existing Open pane. No separate peek overlay.
+- Q3. The rail shows status, assignee, labels, priority, due date, and target end. Epic children stay off the rail.
+- Q4. Tokens were tightened. Dark `--sidebar-accent` and `--accent` are `#ffffff08` (ticket T4). The spec color table's solid dark accent `#1c1c1d` was not used.
+- Q5. No Taskwarrior backend.
+- Q6. `fixtures/issues.json` was extended. No Plane fixture file.
+- Q7. No REA clone. `docs/research/linear-ui.md` was enough.
+- Q8. Agent panel is unchanged.
+- Q9. Calendar keeps FullCalendar. Wrapper, toolbar, and event type use the surface tokens.
+- Q10. Command overlay was restyled. Keyboard behavior is unchanged.

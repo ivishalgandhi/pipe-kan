@@ -1,5 +1,7 @@
 # tickets.md — gbj-20261017-014 pipecan linear ui
 
+Slice 1 (T1–T8) is implemented on `feat/pipecan-linear-ui-maker-20261018`. Grill choices are in `grill.md`. Smoke output is in `smoke-log.md`.
+
 ## Slice 1: Board, Sidebar, Open pane, Command overlay, Dark theme
 
 ---

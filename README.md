@@ -24,6 +24,7 @@ The published CLI is on npm. From a clone: `bun run build && bun dist/pipe-kan.j
 - Same-Column drop does not write back to Jira.
 - Collapse the left pane to hide Epics; the Board header expands it again.
 - Theme is stored in `localStorage`.
+- The board pane floats on the sidebar canvas with an 8px inset and a 12px radius. Header controls are 28px. Cards use a 9px radius and a hairline border. Open is a 320px properties rail (status, assignee, labels, priority, dates, and the Jira URL under the key). Command (Cmd+K or Ctrl+K) is a 12px overlay with 40px rows.
 
 LAN: `HOST=0.0.0.0 bunx pipe-kan`.
 
