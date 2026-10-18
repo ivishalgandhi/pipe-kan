@@ -5,3 +5,4 @@ dist
 fixtures/jira.config.yml
 graphify-out
 docs/factory/outbox/*.json
+linear-refs-local/
