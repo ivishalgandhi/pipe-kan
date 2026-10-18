@@ -87,6 +87,7 @@ export const SYNTHETIC_PLANE: PlaneFixture = {
       mod("mod-00000000000000000000000000000004", "On track objective", "in_progress", { priority: "urgent", start_date: "2026-03-01", target_date: "2026-11-15" }),
       mod("mod-00000000000000000000000000000005", "Shipped objective", "done", { priority: "medium", start_date: "2025-11-01", target_date: "2026-01-20" }),
       mod("mod-00000000000000000000000000000006", "Dropped objective", "cancelled", { priority: "low", target_date: "2025-03-01" }),
+      mod("mod-00000000000000000000000000000007", "Undated objective", "in_progress", { priority: "low", start_date: "2026-05-01" }),
     ],
     "personal-pulse": [
       mod("mod-00000000000000000000000000000011", "Home objective", "in_progress", { priority: "medium", start_date: "2026-02-01", target_date: "2026-08-01" }),

@@ -159,7 +159,7 @@ bun run build
 bun run smoke
 ```
 
-Contributors still `bun install` and `bun run dev` (Vite). `bun run build` writes the published CLI to `dist/pipe-kan.js`. `bun run smoke` boots that flow with `PLANE_FIXTURE=synthetic` (and `dist/pipe-kan.js` when it exists) and writes `docs/factory/plans/gbj-20261018-019-pipekan-linear-parity/smoke-logs/smoke.log`.
+Contributors still `bun install` and `bun run dev` (Vite). `bun run build` writes the published CLI to `dist/pipe-kan.js`. `bun run smoke` boots that flow with `PLANE_FIXTURE=synthetic` (and `dist/pipe-kan.js` when it exists) and writes `docs/factory/plans/gbj-20261018-019-pipekan-linear-parity/smoke-log.md` plus `smoke-logs/smoke.log`.
 
 ## Version
 

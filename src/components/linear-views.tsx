@@ -648,7 +648,7 @@ export function DisplayOptionItems({
   onChange: (next: DisplayOptions) => void;
 }) {
   const [listOpen, setListOpen] = useState(false);
-  const properties = display.properties ?? ["Status", "Priority", "Assignee", "Labels"];
+  const properties = display.properties ?? [...DISPLAY_PROPERTIES];
   function toggleProperty(name: string) {
     const next = properties.includes(name) ? properties.filter((item) => item !== name) : [...properties, name];
     onChange({ ...display, properties: next });

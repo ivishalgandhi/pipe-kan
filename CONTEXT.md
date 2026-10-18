@@ -23,6 +23,10 @@ _Avoid_: dashboard, Jira board (that is Atlassian's saved board), view (Linear's
 The left-pane opener for the Board whose Cards are non-Epic Issues.
 _Avoid_: inbox, home, all issues
 
+**My issues**:
+A lens on All stories. It shows only Cards assigned to the viewer name stored in the browser. When that name is empty, opening the lens stores the assignee that appears most often on the current Board. Selecting an Epic leaves the lens. Not Scope and not Filter.
+_Avoid_: inbox, mine
+
 **All epics**:
 The left-pane opener for the Board whose Cards are Epics. Sibling of All stories. Last opener persists locally. Not Favourite, Preset, Scope, or selecting an Epic.
 _Avoid_: epic view, epic board (Atlassian's), toggle

@@ -30,6 +30,7 @@ import {
   EMPTY_VIEW_FILTER,
   clearViewChip,
   defaultView,
+  dominantAssignee,
   includeCompleted,
   matchViewFilter,
   projectIdentifier,
@@ -190,6 +191,7 @@ const OPENER_KEY = "board-opener";
 const FAV_KEY = "favourite-epics";
 const PRESET_KEY = "board-presets";
 const SIDEBAR_OPEN_KEY = "board-sidebar-open";
+const VIEWER_KEY = "pipe-kan-viewer";
 const COLUMN_ORDER_KEY = "board-column-order";
 const DEFAULT_COLLAPSED_EPIC_STATUS = [
   "In Progress",
@@ -208,6 +210,41 @@ const ALL_CARD_DISPLAY_KEYS: CardDisplayKey[] = [
   "assignee",
   "dueDate",
 ];
+
+const PROPERTY_CARD_KEYS: [string, CardDisplayKey][] = [
+  ["Priority", "priority"],
+  ["Assignee", "assignee"],
+  ["Labels", "labels"],
+  ["Due date", "dueDate"],
+  ["Target date", "targetEnd"],
+];
+
+function shownForProperties(properties: string[] | undefined, current: CardDisplayKey[]): CardDisplayKey[] {
+  if (!properties) return current;
+  const next = new Set(current);
+  for (const [label, key] of PROPERTY_CARD_KEYS) {
+    if (properties.includes(label)) next.add(key);
+    else next.delete(key);
+  }
+  return ALL_CARD_DISPLAY_KEYS.filter((key) => next.has(key));
+}
+
+function propertiesForShown(shown: CardDisplayKey[], current: string[] | undefined): string[] {
+  const next = new Set(current ?? ["Status", "Priority", "Assignee", "Labels", "Project", "Due date", "Health", "Target date"]);
+  for (const [label, key] of PROPERTY_CARD_KEYS) {
+    if (shown.includes(key)) next.add(label);
+    else next.delete(label);
+  }
+  return [...next];
+}
+
+function readViewer(): string {
+  try {
+    return localStorage.getItem(VIEWER_KEY)?.trim() ?? "";
+  } catch {
+    return "";
+  }
+}
 
 type Chrome = {
   filter: BoardFilter;
@@ -1294,6 +1331,8 @@ export function App() {
   const [activeSource, setActiveSource] = useState<SourceId>("jira");
   const [filterOpen, setFilterOpen] = useState(false);
   const [displayOpen, setDisplayOpen] = useState(false);
+  const [issueLens, setIssueLens] = useState<"all" | "mine">("all");
+  const [viewer, setViewer] = useState(readViewer);
   const [viewName, setViewName] = useState("");
   const [rowMenu, setRowMenu] = useState<{ x: number; y: number; key: string; kind: "issue" | "initiative" | "project" } | null>(null);
   const scopeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1337,13 +1376,15 @@ export function App() {
               project: projectIdentifier(card.key),
             },
             viewFilter,
-          ) && includeCompleted(title, card.updated ?? card.targetEnd ?? card.created, display.completed),
+          ) &&
+          includeCompleted(title, card.updated ?? card.targetEnd ?? card.created, display.completed) &&
+          (issueLens !== "mine" || !viewer || (card.assignee ?? "") === viewer),
       );
       if (!display.showEmptyGroups && kept.length === 0) continue;
       next[title] = kept;
     }
     return next;
-  }, [visible, viewFilter, display.completed, display.showEmptyGroups]);
+  }, [visible, viewFilter, display.completed, display.showEmptyGroups, issueLens, viewer]);
   const layout = effectiveLayout(boardKind, display, layoutTouched);
   const roadmap = boardKind === "initiatives" || boardKind === "projects";
   const allCards = useMemo(() => Object.values(columns).flat(), [columns]);
@@ -1400,6 +1441,10 @@ export function App() {
   function persistChrome(next: Chrome) {
     setChrome(next);
     writeChrome(next);
+    const properties = propertiesForShown(next.shown, display.properties);
+    const nextDisplay = { ...display, properties };
+    setDisplay(nextDisplay);
+    writeJson(DISPLAY_KEY, nextDisplay);
   }
 
   function persistFavourites(next: FavouriteState, workspace = committedWorkspace) {
@@ -1928,10 +1973,21 @@ export function App() {
 
   function openStories() {
     setSidebarPage("board");
+    setIssueLens("all");
     writeOpener("stories");
     setBoardKind("stories");
     setSelectedEpic(null);
     if (lastBoard.current) paintBoard(lastBoard.current, "stories");
+  }
+
+  function openMine() {
+    openStories();
+    const name = viewer || dominantAssignee(allCards.map((card) => card.assignee));
+    if (name && name !== viewer) {
+      setViewer(name);
+      localStorage.setItem(VIEWER_KEY, name);
+    }
+    setIssueLens("mine");
   }
 
   function openEpics() {
@@ -1981,6 +2037,12 @@ export function App() {
     if (touch) setLayoutTouched(true);
     setDisplay(next);
     writeJson(DISPLAY_KEY, next);
+    if (next.properties) {
+      const shown = shownForProperties(next.properties, chrome.shown);
+      const nextChrome = { ...chrome, shown };
+      setChrome(nextChrome);
+      writeChrome(nextChrome);
+    }
   }
 
   function persistViewFilter(next: ViewFilter) {
@@ -2118,6 +2180,7 @@ export function App() {
   }
 
   async function selectEpic(key: string | null) {
+    if (key) setIssueLens("all");
     const fromEpics = boardKind === "epics" || boardKind === "combined";
     if (fromEpics) openStories();
     setSelectedEpic(key);
@@ -2337,15 +2400,16 @@ export function App() {
             <nav className="flex flex-1 flex-col gap-0.5 overflow-auto px-2 pb-2">
               <button
                 type="button"
-                className={navButtonClass(sidebarPage === "board" && boardKind === "stories" && selectedEpic === null)}
+                className={navButtonClass(sidebarPage === "board" && boardKind === "stories" && selectedEpic === null && issueLens !== "mine")}
                 onClick={openStories}
               >
-                Inbox
+                All stories
               </button>
               <button
                 type="button"
-                className={navButtonClass(sidebarPage === "board" && boardKind === "stories" && selectedEpic !== null)}
-                onClick={openStories}
+                className={navButtonClass(sidebarPage === "board" && issueLens === "mine" && selectedEpic === null)}
+                onClick={openMine}
+                title={viewer ? `Assigned to ${viewer}` : "Assigned to you"}
               >
                 My issues
               </button>

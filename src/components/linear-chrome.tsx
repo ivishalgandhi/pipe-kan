@@ -4,8 +4,10 @@ import { CheckIcon, StarIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
 import {
   HEALTH_COLOR,
+  classifyHealth,
   groupRows,
   healthLabel,
+  healthTone,
   initiativeGroup,
   orderRows,
   projectGroup,
@@ -32,13 +34,40 @@ function statusTab(status: string): Exclude<RoadTab, "all"> {
   return "planned";
 }
 
-function HealthMark({ health }: { health: Health }) {
+function HealthMark({ health, status, target }: { health: Health; status?: string; target?: string }) {
+  const label = status ? classifyHealth(status, target) : healthLabel(health);
+  const tone = status ? healthTone(classifyHealth(status, target)) : health;
   return (
     <span className="inline-flex items-center gap-1.5 text-[12px]">
-      <span className="inline-block size-2.5 shrink-0 rounded-full" style={{ backgroundColor: HEALTH_COLOR[health] }} />
-      <span>{healthLabel(health)}</span>
+      <span className="inline-block size-2.5 shrink-0 rounded-full" style={{ backgroundColor: HEALTH_COLOR[tone] }} />
+      <span>{label}</span>
     </span>
   );
+}
+
+function roadColumns(properties: string[] | undefined) {
+  const shown = (name: string) => !properties || properties.includes(name);
+  return {
+    owner: shown("Assignee"),
+    target: shown("Target date"),
+    health: shown("Health"),
+    projects: shown("Project"),
+    active: shown("Project"),
+  };
+}
+
+function roadTemplate(columns: ReturnType<typeof roadColumns>) {
+  return [
+    "minmax(0,1.5fr)",
+    columns.owner ? "64px" : "",
+    columns.target ? "88px" : "",
+    columns.health ? "132px" : "",
+    columns.projects ? "88px" : "",
+    columns.active ? "120px" : "",
+    "28px",
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function targetLabel(value?: string) {
@@ -100,15 +129,15 @@ function RoadTabs({ tab, onTab, noun }: { tab: RoadTab; onTab: (tab: RoadTab) =>
   );
 }
 
-function ColumnHead() {
+function ColumnHead({ columns, template }: { columns: ReturnType<typeof roadColumns>; template: string }) {
   return (
-    <div className="text-muted-foreground grid grid-cols-[minmax(0,1.5fr)_64px_88px_132px_88px_120px_28px] items-center gap-2 px-2 py-1 text-[11px] font-medium">
+    <div className="text-muted-foreground grid items-center gap-2 px-2 py-1 text-[11px] font-medium" style={{ gridTemplateColumns: template }}>
       <span>Name</span>
-      <span>Owner</span>
-      <span>Target</span>
-      <span>Health</span>
-      <span>Projects</span>
-      <span>Active projects</span>
+      {columns.owner ? <span>Owner</span> : null}
+      {columns.target ? <span>Target</span> : null}
+      {columns.health ? <span>Health</span> : null}
+      {columns.projects ? <span>Projects</span> : null}
+      {columns.active ? <span>Active projects</span> : null}
       <span />
     </div>
   );
@@ -153,6 +182,8 @@ export function RoadmapTable({
   const [inspected, setInspected] = useState<string | null>(null);
   const [schedule, setSchedule] = useState(false);
   const initiativeName = new Map(initiatives.map((row) => [`${row.workspace}/${row.project}`, row.name]));
+  const columns = roadColumns(display.properties);
+  const template = roadTemplate(columns);
 
   if (schedule) {
     return <UpdateSchedule onClose={() => setSchedule(false)} />;
@@ -209,11 +240,13 @@ export function RoadmapTable({
                 {group.rows.map((row) => (
                   <TableRowButton
                     key={`${row.workspace}/${row.id}`}
+                    template={template}
                     onClick={() => setInspected(`${row.workspace}/${row.identifier}`)}
                     onContext={(event) => onContext(event, `${row.workspace}/${row.identifier}`, "project")}
                   >
                     <ProjectCells
                       row={row}
+                      columns={columns}
                       favorite={favorites.some((item) => item.kind === "project" && item.id === `${row.workspace}/${row.identifier}`)}
                       onToggleFavorite={() =>
                         onToggleFavorite({ kind: "project", id: `${row.workspace}/${row.identifier}`, label: row.name })
@@ -230,15 +263,17 @@ export function RoadmapTable({
     return (
       <div data-smoke="projects">
         <RoadTabs tab={tab} onTab={setTab} noun="project" />
-        <ColumnHead />
+        <ColumnHead columns={columns} template={template} />
         {rows.map((row) => (
           <TableRowButton
             key={`${row.workspace}/${row.id}`}
+            template={template}
             onClick={() => setInspected(`${row.workspace}/${row.identifier}`)}
             onContext={(event) => onContext(event, `${row.workspace}/${row.identifier}`, "project")}
           >
             <ProjectCells
               row={row}
+              columns={columns}
               favorite={favorites.some((item) => item.kind === "project" && item.id === `${row.workspace}/${row.identifier}`)}
               onToggleFavorite={() =>
                 onToggleFavorite({ kind: "project", id: `${row.workspace}/${row.identifier}`, label: row.name })
@@ -272,11 +307,13 @@ export function RoadmapTable({
             {group.rows.map((row) => (
               <TableRowButton
                 key={row.key}
+                template={template}
                 onClick={() => setInspected(row.key)}
                 onContext={(event) => onContext(event, row.key, "initiative")}
               >
                 <InitiativeCells
                   row={row}
+                  columns={columns}
                   favorite={favorites.some((item) => item.kind === "initiative" && item.id === row.key)}
                   onToggleFavorite={() => onToggleFavorite({ kind: "initiative", id: row.key, label: row.name })}
                 />
@@ -288,9 +325,10 @@ export function RoadmapTable({
     );
   }
 
+  const nested = display.showSubIssues !== false;
   const byProject = new Map<string, ParityInitiative[]>();
   for (const row of rows) {
-    const key = `${row.workspace}/${row.project}`;
+    const key = nested ? `${row.workspace}/${row.project}` : row.key;
     const list = byProject.get(key) ?? [];
     list.push(row);
     byProject.set(key, list);
@@ -299,21 +337,23 @@ export function RoadmapTable({
   return (
     <div data-smoke="initiatives">
       <RoadTabs tab={tab} onTab={setTab} noun="initiative" />
-      <ColumnHead />
+      <ColumnHead columns={columns} template={template} />
       {[...byProject.entries()].map(([projectKey, list]) => (
         <div key={projectKey}>
-          {list.length > 1 ? (
+          {nested && list.length > 1 ? (
             <div className="text-muted-foreground px-2 pt-2 text-[12px] font-medium">{list[0]?.project}</div>
           ) : null}
           {list.map((row, index) => (
             <TableRowButton
               key={row.key}
-              className={list.length > 1 && index > 0 ? "pl-6" : undefined}
+              template={template}
+              className={nested && list.length > 1 && index > 0 ? "pl-6" : undefined}
               onClick={() => setInspected(row.key)}
               onContext={(event) => onContext(event, row.key, "initiative")}
             >
               <InitiativeCells
                 row={row}
+                columns={columns}
                 favorite={favorites.some((item) => item.kind === "initiative" && item.id === row.key)}
                 onToggleFavorite={() => onToggleFavorite({ kind: "initiative", id: row.key, label: row.name })}
               />
@@ -328,11 +368,13 @@ export function RoadmapTable({
 function TableRowButton({
   children,
   className,
+  template,
   onClick,
   onContext,
 }: {
   children: ReactNode;
   className?: string;
+  template: string;
   onClick: () => void;
   onContext: (event: { clientX: number; clientY: number; preventDefault: () => void }) => void;
 }) {
@@ -340,9 +382,10 @@ function TableRowButton({
     <button
       type="button"
       className={cn(
-        "hover:bg-muted grid w-full grid-cols-[minmax(0,1.5fr)_64px_88px_132px_88px_120px_28px] items-center gap-2 rounded-md px-2 py-2 text-left text-[13px]",
+        "hover:bg-muted grid w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[13px]",
         className,
       )}
+      style={{ gridTemplateColumns: template }}
       onClick={onClick}
       onContextMenu={(event) => onContext(event)}
     >
@@ -354,10 +397,12 @@ function TableRowButton({
 function InitiativeCells({
   row,
   favorite,
+  columns,
   onToggleFavorite,
 }: {
   row: ParityInitiative;
   favorite: boolean;
+  columns: ReturnType<typeof roadColumns>;
   onToggleFavorite: () => void;
 }) {
   return (
@@ -366,11 +411,11 @@ function InitiativeCells({
         <span className="block truncate font-medium">{row.name}</span>
         <span className="text-muted-foreground block truncate text-[11px]">{row.project}</span>
       </span>
-      <OwnerCell />
-      <span className="text-muted-foreground truncate text-[12px]">{targetLabel(row.targetDate)}</span>
-      <HealthMark health={row.health} />
-      <span className="text-muted-foreground tabular-nums">{row.activeProjects ? "1/1" : "0/1"}</span>
-      <ActiveMarks count={row.activeProjects} />
+      {columns.owner ? <OwnerCell /> : null}
+      {columns.target ? <span className="text-muted-foreground truncate text-[12px]">{targetLabel(row.targetDate)}</span> : null}
+      {columns.health ? <HealthMark health={row.health} status={row.status} target={row.targetDate} /> : null}
+      {columns.projects ? <span className="text-muted-foreground tabular-nums">{row.activeProjects ? "1/1" : "0/1"}</span> : null}
+      {columns.active ? <ActiveMarks count={row.activeProjects} /> : null}
       <Star on={favorite} label={`Favorite ${row.name}`} onToggle={onToggleFavorite} />
     </>
   );
@@ -379,10 +424,12 @@ function InitiativeCells({
 function ProjectCells({
   row,
   favorite,
+  columns,
   onToggleFavorite,
 }: {
   row: ParityProject;
   favorite: boolean;
+  columns: ReturnType<typeof roadColumns>;
   onToggleFavorite: () => void;
 }) {
   return (
@@ -391,13 +438,15 @@ function ProjectCells({
         <span className="block truncate font-medium">{row.name}</span>
         <span className="text-muted-foreground block truncate text-[11px]">{row.identifier}</span>
       </span>
-      <OwnerCell />
-      <span className="text-muted-foreground truncate text-[12px]">{targetLabel(row.targetDate)}</span>
-      <HealthMark health={row.health} />
-      <span className="text-muted-foreground tabular-nums">
-        {row.completed}/{row.total}
-      </span>
-      <ActiveMarks count={row.total - row.completed} />
+      {columns.owner ? <OwnerCell /> : null}
+      {columns.target ? <span className="text-muted-foreground truncate text-[12px]">{targetLabel(row.targetDate)}</span> : null}
+      {columns.health ? <HealthMark health={row.health} status={row.status} target={row.targetDate} /> : null}
+      {columns.projects ? (
+        <span className="text-muted-foreground tabular-nums">
+          {row.completed}/{row.total}
+        </span>
+      ) : null}
+      {columns.active ? <ActiveMarks count={row.total - row.completed} /> : null}
       <Star on={favorite} label={`Favorite ${row.name}`} onToggle={onToggleFavorite} />
     </>
   );
@@ -515,7 +564,7 @@ export function InitiativeOverview({
       <div className="flex flex-wrap gap-6 py-3 text-[13px]">
         <div>
           <div className="text-muted-foreground text-[11px]">Initiative health</div>
-          <HealthMark health={row.health} />
+          <HealthMark health={row.health} status={row.status} target={row.targetDate} />
         </div>
         <div>
           <div className="text-muted-foreground text-[11px]">Projects</div>
@@ -566,7 +615,7 @@ export function ProjectOverview({
       </p>
       <div className="flex flex-wrap gap-4 py-3 text-[13px]">
         <span className="bg-muted rounded-lg px-2 py-1">{row.status}</span>
-        <HealthMark health={row.health} />
+        <HealthMark health={row.health} status={row.status} target={row.targetDate} />
         <span>{targetLabel(row.startDate)} – {targetLabel(row.targetDate)}</span>
         <button type="button" className="text-muted-foreground underline" onClick={onSchedule}>
           Update schedule

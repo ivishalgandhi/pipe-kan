@@ -8,6 +8,7 @@ import { effectiveLayout, layoutTimeline, matchViewFilter, sourceOptions, viewFi
 import { rowMenuModel } from "../src/row-menu.ts";
 
 const LOG = "docs/factory/plans/gbj-20261018-019-pipekan-linear-parity/smoke-logs/smoke.log";
+const SUMMARY = "docs/factory/plans/gbj-20261018-019-pipekan-linear-parity/smoke-log.md";
 const FLAGS = ["--plane", "--workspaces", "work,personal", "--scopes", "work/PULSE,personal/PULSE"];
 const lines: string[] = [];
 
@@ -195,13 +196,36 @@ async function main() {
     }
   }
   note("smoke ok");
+  writeLogs();
+}
+
+function writeLogs() {
   mkdirSync(dirname(LOG), { recursive: true });
-  writeFileSync(LOG, `${lines.join("\n")}\n`);
+  const body = `${lines.join("\n")}\n`;
+  writeFileSync(LOG, body);
+  writeFileSync(
+    SUMMARY,
+    [
+      "# Smoke log — gbj-20261018-019",
+      "",
+      "Synthetic Plane fixture only (`PLANE_FIXTURE=synthetic`). No live credentials.",
+      "",
+      "Screenshot references live in `linear-refs/`. This run does not open a browser, so there is no browser console export.",
+      "",
+      "`bun test` and `bun run typecheck` are recorded below when this file is refreshed after those commands. The script section is the HTTP and helper smoke.",
+      "",
+      "## Smoke script",
+      "",
+      "```",
+      body.trimEnd(),
+      "```",
+      "",
+    ].join("\n"),
+  );
 }
 
 main().catch((err) => {
   note(`FAIL ${err instanceof Error ? err.message : String(err)}`);
-  mkdirSync(dirname(LOG), { recursive: true });
-  writeFileSync(LOG, `${lines.join("\n")}\n`);
+  writeLogs();
   process.exit(1);
 });

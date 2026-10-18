@@ -4,7 +4,9 @@ import { commandCatalog } from "./command.ts";
 import { applyScopeSelection, parseFlags } from "./flags.ts";
 import {
   clearViewChip,
+  classifyHealth,
   computeHealth,
+  dominantAssignee,
   effectiveLayout,
   isWorkspaceChord,
   layoutTimeline,
@@ -32,6 +34,16 @@ describe("linear parity", () => {
     expect(computeHealth("paused", undefined, NOW)).toBe("yellow");
     expect(computeHealth("todo", undefined, NOW)).toBe("gray");
     expect(computeHealth("backlog", undefined, NOW)).toBe("gray");
+    expect(computeHealth("in progress", undefined, NOW)).toBe("green");
+    expect(classifyHealth("in progress", undefined, NOW)).toBe("Update missing");
+    expect(classifyHealth("in progress", "2020-01-01", NOW)).toBe("At risk");
+    expect(classifyHealth("in progress", "2026-12-01", NOW)).toBe("On track");
+    expect(classifyHealth("todo", undefined, NOW)).toBe("No update expected");
+    expect(classifyHealth("cancelled", undefined, NOW)).toBe("Off track");
+    expect(dominantAssignee(["Ada", "Grace", "Ada"])).toBe("Ada");
+    expect(matchViewFilter({ status: "In Progress", due: "2026-12-01", health: "green" }, { ...EMPTY_VIEW_FILTER, health: ["Update missing"] })).toBe(false);
+    expect(matchViewFilter({ status: "In Progress", health: "green" }, { ...EMPTY_VIEW_FILTER, health: ["Update missing"] })).toBe(true);
+    expect(matchViewFilter({ status: "Todo", health: "gray" }, { ...EMPTY_VIEW_FILTER, health: ["No update expected"] })).toBe(true);
   });
 
   test("multi-select scopes keep both workspaces and sync projects", () => {

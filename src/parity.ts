@@ -16,15 +16,60 @@ export function healthLabel(health: Health): string {
 
 export const HEALTH_FILTERS = ["On track", "At risk", "Off track", "Update missing", "No update expected"] as const;
 
-export function healthMatches(health: Health, selected: string[] | undefined): boolean {
+export function classifyHealth(
+  status: string,
+  targetDate?: string,
+  now = new Date(),
+): (typeof HEALTH_FILTERS)[number] {
+  const key = normalizeStatus(status);
+  if (key === "cancelled" || key === "canceled") return "Off track";
+  if (key === "done" || key === "completed" || key === "complete") return "On track";
+  if (key === "paused") return "At risk";
+  if (key === "in progress" || key === "started" || key === "active") {
+    const target = parseDay(targetDate);
+    if (!target) return "Update missing";
+    if (target.getTime() < startOfToday(now).getTime()) return "At risk";
+    return "On track";
+  }
+  return "No update expected";
+}
+
+export function healthTone(name: (typeof HEALTH_FILTERS)[number]): Health {
+  if (name === "On track") return "green";
+  if (name === "At risk") return "yellow";
+  if (name === "Off track") return "red";
+  return "gray";
+}
+
+export function healthMatches(health: Health, selected: string[] | undefined, status?: string, targetDate?: string): boolean {
   if (!selected?.length) return true;
+  if (status) return selected.includes(classifyHealth(status, targetDate));
   return selected.some((label) => {
     const key = label.toLowerCase();
     if (key === "on track") return health === "green";
     if (key === "at risk") return health === "yellow";
     if (key === "off track") return health === "red";
+    if (key === "update missing") return false;
     return health === "gray";
   });
+}
+
+export function dominantAssignee(names: Array<string | undefined>): string {
+  const counts = new Map<string, number>();
+  for (const name of names) {
+    const trimmed = name?.trim();
+    if (!trimmed) continue;
+    counts.set(trimmed, (counts.get(trimmed) ?? 0) + 1);
+  }
+  let best = "";
+  let count = 0;
+  for (const [name, seen] of counts) {
+    if (seen > count) {
+      best = name;
+      count = seen;
+    }
+  }
+  return best;
 }
 
 export type Opener = "stories" | "epics" | "combined" | "initiatives" | "projects";
@@ -461,7 +506,7 @@ export function matchViewFilter(item: Filterable, filter: ViewFilter): boolean {
   if (filter.project.length && !filter.project.some((project) => project.toUpperCase() === (item.project ?? "").toUpperCase())) {
     return false;
   }
-  if (item.health && !healthMatches(item.health, filter.health)) return false;
+  if (filter.health?.length && !healthMatches(item.health ?? "gray", filter.health, item.status, item.due)) return false;
   return true;
 }
 
