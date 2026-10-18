@@ -72,11 +72,30 @@ test("default Board is the Project", async () => {
     board.columns.flatMap((c: { cards: { key: string }[] }) =>
       c.cards.map((card) => card.key),
     ),
-  ).toEqual(["DEMO-2", "DEMO-4", "DEMO-6", "DEMO-3", "DEMO-5"]);
+  ).toEqual([
+    "DEMO-2",
+    "DEMO-4",
+    "DEMO-6",
+    "DEMO-10",
+    "DEMO-13",
+    "DEMO-16",
+    "DEMO-18",
+    "DEMO-21",
+    "DEMO-3",
+    "DEMO-11",
+    "DEMO-14",
+    "DEMO-17",
+    "DEMO-5",
+    "DEMO-12",
+    "DEMO-15",
+    "DEMO-19",
+  ]);
   expect(board.epics.map((epic: { key: string }) => epic.key)).toEqual([
     "DEMO-1",
     "DEMO-7",
     "DEMO-8",
+    "DEMO-9",
+    "DEMO-20",
   ]);
 });
 
@@ -93,7 +112,24 @@ test("successful Move Refresh-es and keeps Done", async () => {
     body.board.columns.flatMap((c: { cards: { key: string }[] }) =>
       c.cards.map((card) => card.key),
     ),
-  ).toEqual(["DEMO-2", "DEMO-4", "DEMO-6", "DEMO-3", "DEMO-5"]);
+  ).toEqual([
+    "DEMO-2",
+    "DEMO-4",
+    "DEMO-6",
+    "DEMO-10",
+    "DEMO-13",
+    "DEMO-16",
+    "DEMO-18",
+    "DEMO-21",
+    "DEMO-3",
+    "DEMO-5",
+    "DEMO-12",
+    "DEMO-15",
+    "DEMO-19",
+    "DEMO-11",
+    "DEMO-14",
+    "DEMO-17",
+  ]);
 });
 
 test("illegal Move snaps back with jira-cli stderr", async () => {
@@ -231,11 +267,13 @@ test("omitted Refresh scope is all", async () => {
     "DEMO-1",
     "DEMO-7",
     "DEMO-8",
+    "DEMO-9",
+    "DEMO-20",
   ]);
   expect(calls.filter((call) => call[0] === "list")).toHaveLength(1);
   expect(calls.filter((call) => call[0] === "listEpics")).toHaveLength(1);
   expect(calls.filter((call) => call[0] === "listChildren")).toEqual([
-    ["listChildren", "DEMO-1", "DEMO-7", "DEMO-8"],
+    ["listChildren", "DEMO-1", "DEMO-7", "DEMO-8", "DEMO-9", "DEMO-20"],
   ]);
 });
 
@@ -252,7 +290,7 @@ test("scope all Refresh lists every Epic", async () => {
   expect(res.status).toBe(200);
   expect(calls.filter((call) => call[0] === "list")).toHaveLength(1);
   expect(calls.filter((call) => call[0] === "listChildren")).toEqual([
-    ["listChildren", "DEMO-1", "DEMO-7", "DEMO-8"],
+    ["listChildren", "DEMO-1", "DEMO-7", "DEMO-8", "DEMO-9", "DEMO-20"],
   ]);
 });
 
@@ -324,7 +362,23 @@ test("selected Refresh merges that Epic's works without rewriting Scope", async 
     view: (key) => inner.view(key),
   };
   const { base, app } = await listen(store, cli);
-  expect(childKeys(app.board())).toEqual(["DEMO-2", "DEMO-3", "DEMO-4", "DEMO-5", "DEMO-70"]);
+  expect(childKeys(app.board())).toEqual([
+    "DEMO-10",
+    "DEMO-11",
+    "DEMO-12",
+    "DEMO-13",
+    "DEMO-14",
+    "DEMO-15",
+    "DEMO-16",
+    "DEMO-17",
+    "DEMO-19",
+    "DEMO-2",
+    "DEMO-21",
+    "DEMO-3",
+    "DEMO-4",
+    "DEMO-5",
+    "DEMO-70",
+  ]);
   selected = true;
   calls.length = 0;
   const res = await fetch(`${base}/api/refresh`, {
@@ -341,10 +395,40 @@ test("selected Refresh merges that Epic's works without rewriting Scope", async 
   expect(calls.filter((call) => call[0] === "list")).toEqual([]);
   expect(calls.filter((call) => call[0] === "listEpics")).toEqual([]);
   expect(calls.filter((call) => call[0] === "listChildren")).toEqual([["listChildren", "DEMO-1"]]);
-  expect(childKeys(body)).toEqual(["DEMO-2", "DEMO-70"]);
+  expect(childKeys(body)).toEqual([
+    "DEMO-10",
+    "DEMO-11",
+    "DEMO-12",
+    "DEMO-13",
+    "DEMO-14",
+    "DEMO-15",
+    "DEMO-16",
+    "DEMO-17",
+    "DEMO-19",
+    "DEMO-2",
+    "DEMO-21",
+    "DEMO-70",
+  ]);
   expect(
     body.columns.flatMap((c: { cards: { key: string }[] }) => c.cards.map((card) => card.key)),
-  ).toEqual(["DEMO-2", "DEMO-4", "DEMO-6", "DEMO-3", "DEMO-5"]);
+  ).toEqual([
+    "DEMO-2",
+    "DEMO-4",
+    "DEMO-6",
+    "DEMO-10",
+    "DEMO-13",
+    "DEMO-16",
+    "DEMO-18",
+    "DEMO-21",
+    "DEMO-3",
+    "DEMO-11",
+    "DEMO-14",
+    "DEMO-17",
+    "DEMO-5",
+    "DEMO-12",
+    "DEMO-15",
+    "DEMO-19",
+  ]);
   expect(app.flags).toBe("");
 });
 
@@ -795,8 +879,29 @@ test("Refresh keeps the last Board until children land", async () => {
   const pending = app.refresh();
   await new Promise((resolve) => setTimeout(resolve, 0));
   const mid = app.board();
-  expect(mid.epics.map((epic) => epic.key)).toEqual(["DEMO-1", "DEMO-7", "DEMO-8"]);
-  expect(childKeys(mid)).toEqual(["DEMO-2", "DEMO-3", "DEMO-4", "DEMO-5"]);
+  expect(mid.epics.map((epic) => epic.key)).toEqual([
+    "DEMO-1",
+    "DEMO-7",
+    "DEMO-8",
+    "DEMO-9",
+    "DEMO-20",
+  ]);
+  expect(childKeys(mid)).toEqual([
+    "DEMO-10",
+    "DEMO-11",
+    "DEMO-12",
+    "DEMO-13",
+    "DEMO-14",
+    "DEMO-15",
+    "DEMO-16",
+    "DEMO-17",
+    "DEMO-19",
+    "DEMO-2",
+    "DEMO-21",
+    "DEMO-3",
+    "DEMO-4",
+    "DEMO-5",
+  ]);
   release();
   const done = await pending;
   expect(done.epics.map((epic) => epic.key)).toEqual(["WORK-1"]);
@@ -1332,7 +1437,24 @@ test("Epic Move Refreshes and leaves children on the Board", async () => {
   expect(body.board.epics.find((epic: { key: string }) => epic.key === "DEMO-1")?.status).toBe("Done");
   expect(
     body.board.columns.flatMap((c: { cards: { key: string }[] }) => c.cards.map((card) => card.key)),
-  ).toEqual(["DEMO-2", "DEMO-4", "DEMO-6", "DEMO-3", "DEMO-5"]);
+  ).toEqual([
+    "DEMO-2",
+    "DEMO-4",
+    "DEMO-6",
+    "DEMO-10",
+    "DEMO-13",
+    "DEMO-16",
+    "DEMO-18",
+    "DEMO-21",
+    "DEMO-3",
+    "DEMO-11",
+    "DEMO-14",
+    "DEMO-17",
+    "DEMO-5",
+    "DEMO-12",
+    "DEMO-15",
+    "DEMO-19",
+  ]);
 });
 
 test("Fixture lists Epics in To Do, In Progress, and Done", async () => {
@@ -1344,6 +1466,8 @@ test("Fixture lists Epics in To Do, In Progress, and Done", async () => {
     ["DEMO-1", "In Progress"],
     ["DEMO-7", "To Do"],
     ["DEMO-8", "Done"],
+    ["DEMO-9", "In Progress"],
+    ["DEMO-20", "To Do"],
   ]);
 });
 
@@ -1439,12 +1563,12 @@ test("successful create Refresh-es and returns the new key", async () => {
   const body = await res.json();
   expect(res.status).toBe(200);
   expect(body.ok).toBe(true);
-  expect(body.key).toBe("DEMO-9");
+  expect(body.key).toBe("DEMO-22");
   expect(
     body.board.columns
       .find((c: { title: string }) => c.title === "To Do")
       .cards.map((card: { key: string }) => card.key),
-  ).toContain("DEMO-9");
+  ).toContain("DEMO-22");
 });
 
 test("empty summary create is a 409", async () => {
@@ -1526,10 +1650,10 @@ test("create with parent and status lands on the Board under that Epic", async (
   const body = await res.json();
   expect(res.status).toBe(200);
   expect(body.ok).toBe(true);
-  expect(body.key).toBe("DEMO-9");
+  expect(body.key).toBe("DEMO-22");
   const created = body.board.columns
     .find((c: { title: string }) => c.title === "To Do")
-    .cards.find((card: { key: string }) => card.key === "DEMO-9");
+    .cards.find((card: { key: string }) => card.key === "DEMO-22");
   expect(created.epic).toBe("DEMO-1");
 });
 

@@ -26,14 +26,35 @@ test("groups Issues into Columns by first-seen status", () => {
     "In Progress",
     "Done",
   ]);
-  expect(board.epics.map((epic) => epic.key)).toEqual(["DEMO-1", "DEMO-7", "DEMO-8"]);
+  expect(board.epics.map((epic) => epic.key)).toEqual([
+    "DEMO-1",
+    "DEMO-7",
+    "DEMO-8",
+    "DEMO-9",
+    "DEMO-20",
+  ]);
   expect(board.columns[0].cards.map((card) => card.key)).toEqual([
     "DEMO-2",
     "DEMO-4",
     "DEMO-6",
+    "DEMO-10",
+    "DEMO-13",
+    "DEMO-16",
+    "DEMO-18",
+    "DEMO-21",
   ]);
-  expect(board.columns[1].cards.map((card) => card.key)).toEqual(["DEMO-3"]);
-  expect(board.columns[2].cards.map((card) => card.key)).toEqual(["DEMO-5"]);
+  expect(board.columns[1].cards.map((card) => card.key)).toEqual([
+    "DEMO-3",
+    "DEMO-11",
+    "DEMO-14",
+    "DEMO-17",
+  ]);
+  expect(board.columns[2].cards.map((card) => card.key)).toEqual([
+    "DEMO-5",
+    "DEMO-12",
+    "DEMO-15",
+    "DEMO-19",
+  ]);
 });
 
 test("Epics leave the Board and children keep the Epic key", () => {

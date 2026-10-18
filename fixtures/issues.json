@@ -279,5 +279,275 @@
       "customfield_10099": "2026-08-30",
       "Target End Date": "2026-08-30"
     }
+  },
+  {
+    "key": "DEMO-9",
+    "fields": {
+      "summary": "Needs a design pass",
+      "description": "Epic blocked on design input.",
+      "labels": ["needs-input", "design"],
+      "issueType": { "name": "Epic" },
+      "issuetype": { "name": "Epic" },
+      "status": { "name": "In Progress" },
+      "priority": { "name": "High" },
+      "assignee": { "displayName": "Alice", "emailAddress": "alice@test.com" },
+      "reporter": { "displayName": "Alice" },
+      "duedate": "2026-10-20",
+      "created": "2026-10-01T09:00:00.000+0000",
+      "updated": "2026-10-10T09:00:00.000+0000",
+      "customfield_10099": "2026-12-01",
+      "Target End Date": "2026-12-01"
+    }
+  },
+  {
+    "key": "DEMO-10",
+    "fields": {
+      "summary": "Fix the blocked badge",
+      "description": "Highest priority bug under the design epic.",
+      "labels": ["bug"],
+      "issueType": { "name": "Story" },
+      "issuetype": { "name": "Story" },
+      "status": { "name": "To Do" },
+      "priority": { "name": "Highest" },
+      "parent": { "key": "DEMO-9" },
+      "customfield_10014": "DEMO-9",
+      "assignee": { "displayName": "Alice", "emailAddress": "alice@test.com" },
+      "reporter": { "displayName": "Alice" },
+      "duedate": "2026-09-30",
+      "created": "2026-10-02T09:00:00.000+0000",
+      "updated": "2026-10-02T09:00:00.000+0000",
+      "customfield_10099": "2026-09-15",
+      "Target End Date": "2026-09-15"
+    }
+  },
+  {
+    "key": "DEMO-11",
+    "fields": {
+      "summary": "Sketch the properties rail",
+      "description": "Feature work in progress.",
+      "labels": ["feature"],
+      "issueType": { "name": "Story" },
+      "issuetype": { "name": "Story" },
+      "status": { "name": "In Progress" },
+      "priority": { "name": "Medium" },
+      "parent": { "key": "DEMO-9" },
+      "customfield_10014": "DEMO-9",
+      "assignee": { "displayName": "Bob", "emailAddress": "bob@test.com" },
+      "reporter": { "displayName": "Bob" },
+      "duedate": "2026-10-19",
+      "created": "2026-10-03T09:00:00.000+0000",
+      "updated": "2026-10-12T09:00:00.000+0000",
+      "customfield_10099": "2026-11-20",
+      "Target End Date": "2026-11-20"
+    }
+  },
+  {
+    "key": "DEMO-12",
+    "fields": {
+      "summary": "Ship the first palette pass",
+      "description": "Done design task.",
+      "labels": ["design"],
+      "issueType": { "name": "Story" },
+      "issuetype": { "name": "Story" },
+      "status": { "name": "Done" },
+      "priority": { "name": "Low" },
+      "parent": { "key": "DEMO-9" },
+      "customfield_10014": "DEMO-9",
+      "assignee": { "displayName": "Carol", "emailAddress": "carol@test.com" },
+      "reporter": { "displayName": "Carol" },
+      "duedate": "2026-11-20",
+      "resolution": { "name": "Done" },
+      "created": "2026-09-20T09:00:00.000+0000",
+      "updated": "2026-10-01T09:00:00.000+0000",
+      "customfield_10099": "2026-08-01",
+      "Target End Date": "2026-08-01"
+    }
+  },
+  {
+    "key": "DEMO-13",
+    "fields": {
+      "summary": "Ask for missing scope",
+      "description": "Child of the not-started epic.",
+      "labels": ["needs-input", "bug"],
+      "issueType": { "name": "Story" },
+      "issuetype": { "name": "Story" },
+      "status": { "name": "To Do" },
+      "priority": { "name": "High" },
+      "parent": { "key": "DEMO-7" },
+      "customfield_10014": "DEMO-7",
+      "assignee": { "displayName": "Alice", "emailAddress": "alice@test.com" },
+      "reporter": { "displayName": "Alice" },
+      "duedate": "2026-10-18",
+      "created": "2026-10-04T09:00:00.000+0000",
+      "updated": "2026-10-04T09:00:00.000+0000",
+      "customfield_10099": "2026-10-21",
+      "Target End Date": "2026-10-21"
+    }
+  },
+  {
+    "key": "DEMO-14",
+    "fields": {
+      "summary": "Label chips wrap on narrow cards",
+      "description": "Bug in progress.",
+      "labels": ["feature"],
+      "issueType": { "name": "Bug" },
+      "issuetype": { "name": "Bug" },
+      "status": { "name": "In Progress" },
+      "priority": { "name": "Low" },
+      "parent": { "key": "DEMO-7" },
+      "customfield_10014": "DEMO-7",
+      "assignee": { "displayName": "Bob", "emailAddress": "bob@test.com" },
+      "reporter": { "displayName": "Bob" },
+      "duedate": "2026-09-01",
+      "created": "2026-10-05T09:00:00.000+0000",
+      "updated": "2026-10-11T09:00:00.000+0000",
+      "customfield_10099": "2026-10-02",
+      "Target End Date": "2026-10-02"
+    }
+  },
+  {
+    "key": "DEMO-15",
+    "fields": {
+      "summary": "Archive the finished epic notes",
+      "description": "Done task under the finished epic.",
+      "labels": ["design"],
+      "issueType": { "name": "Task" },
+      "issuetype": { "name": "Task" },
+      "status": { "name": "Done" },
+      "priority": { "name": "Medium" },
+      "parent": { "key": "DEMO-8" },
+      "customfield_10014": "DEMO-8",
+      "assignee": { "displayName": "Carol", "emailAddress": "carol@test.com" },
+      "reporter": { "displayName": "Carol" },
+      "duedate": "2026-12-15",
+      "resolution": { "name": "Done" },
+      "created": "2026-08-10T09:00:00.000+0000",
+      "updated": "2026-09-01T09:00:00.000+0000",
+      "customfield_10099": "2026-07-01",
+      "Target End Date": "2026-07-01"
+    }
+  },
+  {
+    "key": "DEMO-16",
+    "fields": {
+      "summary": "Highest leftover on a finished epic",
+      "description": "Still open under a Done epic.",
+      "labels": ["bug", "design"],
+      "issueType": { "name": "Story" },
+      "issuetype": { "name": "Story" },
+      "status": { "name": "To Do" },
+      "priority": { "name": "Highest" },
+      "parent": { "key": "DEMO-8" },
+      "customfield_10014": "DEMO-8",
+      "assignee": { "displayName": "Bob", "emailAddress": "bob@test.com" },
+      "reporter": { "displayName": "Bob" },
+      "duedate": "2026-10-21",
+      "created": "2026-10-06T09:00:00.000+0000",
+      "updated": "2026-10-06T09:00:00.000+0000",
+      "customfield_10099": "2026-11-01",
+      "Target End Date": "2026-11-01"
+    }
+  },
+  {
+    "key": "DEMO-17",
+    "fields": {
+      "summary": "Compare hover wash on cards",
+      "description": "Feature still in progress.",
+      "labels": ["feature"],
+      "issueType": { "name": "Story" },
+      "issuetype": { "name": "Story" },
+      "status": { "name": "In Progress" },
+      "priority": { "name": "High" },
+      "parent": { "key": "DEMO-9" },
+      "customfield_10014": "DEMO-9",
+      "assignee": { "displayName": "Carol", "emailAddress": "carol@test.com" },
+      "reporter": { "displayName": "Carol" },
+      "duedate": "2026-10-01",
+      "created": "2026-10-07T09:00:00.000+0000",
+      "updated": "2026-10-14T09:00:00.000+0000",
+      "customfield_10099": "2026-12-20",
+      "Target End Date": "2026-12-20"
+    }
+  },
+  {
+    "key": "DEMO-18",
+    "fields": {
+      "summary": "Unparented design note",
+      "description": "Story with no epic so the board still shows it on All stories.",
+      "labels": ["design"],
+      "issueType": { "name": "Story" },
+      "issuetype": { "name": "Story" },
+      "status": { "name": "To Do" },
+      "priority": { "name": "Medium" },
+      "assignee": { "displayName": "Alice", "emailAddress": "alice@test.com" },
+      "reporter": { "displayName": "Alice" },
+      "duedate": "2026-11-05",
+      "created": "2026-10-08T09:00:00.000+0000",
+      "updated": "2026-10-08T09:00:00.000+0000",
+      "customfield_10099": "2026-09-20",
+      "Target End Date": "2026-09-20"
+    }
+  },
+  {
+    "key": "DEMO-19",
+    "fields": {
+      "summary": "Closed bug on the waiting epic",
+      "description": "Done child.",
+      "labels": ["bug"],
+      "issueType": { "name": "Story" },
+      "issuetype": { "name": "Story" },
+      "status": { "name": "Done" },
+      "priority": { "name": "Low" },
+      "parent": { "key": "DEMO-7" },
+      "customfield_10014": "DEMO-7",
+      "assignee": { "displayName": "Bob", "emailAddress": "bob@test.com" },
+      "reporter": { "displayName": "Bob" },
+      "duedate": "2026-08-15",
+      "resolution": { "name": "Done" },
+      "created": "2026-08-12T09:00:00.000+0000",
+      "updated": "2026-08-20T09:00:00.000+0000",
+      "customfield_10099": "2026-08-20",
+      "Target End Date": "2026-08-20"
+    }
+  },
+  {
+    "key": "DEMO-20",
+    "fields": {
+      "summary": "Follow-up epic",
+      "description": "Third-plus epic with one child.",
+      "labels": ["feature"],
+      "issueType": { "name": "Epic" },
+      "issuetype": { "name": "Epic" },
+      "status": { "name": "To Do" },
+      "priority": { "name": "Medium" },
+      "assignee": { "displayName": "Carol", "emailAddress": "carol@test.com" },
+      "reporter": { "displayName": "Carol" },
+      "duedate": "2026-11-30",
+      "created": "2026-10-09T09:00:00.000+0000",
+      "updated": "2026-10-09T09:00:00.000+0000",
+      "customfield_10099": "2026-12-31",
+      "Target End Date": "2026-12-31"
+    }
+  },
+  {
+    "key": "DEMO-21",
+    "fields": {
+      "summary": "Child of the follow-up epic",
+      "description": "Linked by parent and epic link.",
+      "labels": ["bug", "feature"],
+      "issueType": { "name": "Story" },
+      "issuetype": { "name": "Story" },
+      "status": { "name": "To Do" },
+      "priority": { "name": "High" },
+      "parent": { "key": "DEMO-20" },
+      "customfield_10014": "DEMO-20",
+      "assignee": { "displayName": "Alice", "emailAddress": "alice@test.com" },
+      "reporter": { "displayName": "Alice" },
+      "duedate": "2026-10-20",
+      "created": "2026-10-10T09:00:00.000+0000",
+      "updated": "2026-10-10T09:00:00.000+0000",
+      "customfield_10099": "2026-11-11",
+      "Target End Date": "2026-11-11"
+    }
   }
 ]
