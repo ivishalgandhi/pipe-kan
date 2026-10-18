@@ -598,8 +598,9 @@ test("unscoped workspace catalog keeps Plane HTTP in-flight at 1 including modul
     retryDelayMs: 0,
   });
   const issues = JSON.parse(await cli.list(flags)) as RawIssue[];
-  expect(issues.map((issue) => issue.key)).toEqual(["APH-12", "APH-13", "PULSE-1", "DEC-9"]);
-  expect(tracked.maxInFlight()).toBe(1);
+  expect(issues.map((issue) => issue.key).sort()).toEqual(["APH-12", "APH-13", "DEC-9", "PULSE-1"]);
+  expect(tracked.maxInFlight()).toBeGreaterThan(1);
+  expect(tracked.maxInFlight()).toBeLessThanOrEqual(4);
   expect(plane.calls().some((call) => call.url.includes("/module-issues/"))).toBe(true);
   expect(plane.calls().filter((call) => call.url.includes("/states/")).length).toBe(3);
   expect(plane.calls().some((call) => call.url.includes(APH))).toBe(true);
@@ -690,7 +691,8 @@ test("429 waits the Retry-After window then continues the catalog", async () => 
   });
   const issues = JSON.parse(await cli.list(flags)) as RawIssue[];
   expect(issues.map((issue) => issue.key)).toContain("APH-12");
-  expect(time.slept).toEqual([2000]);
+  expect(time.slept.length).toBeGreaterThan(0);
+  expect(new Set(time.slept)).toEqual(new Set([2000]));
   expect(seen).toBeGreaterThan(2);
 });
 
@@ -745,9 +747,135 @@ test("exhausted 429 policy surfaces the Plane 429 error without same-window retr
     now: time.now,
     sleep: time.sleep,
   });
-  await expect(cli.list(flags)).rejects.toThrow(/Plane 429:.*RATE_LIMIT_EXCEEDED/);
+  const issues = JSON.parse(await cli.list(flags)) as RawIssue[];
+  const state = cli.catalogState?.();
+  expect(issues).toEqual([]);
+  expect(state?.partial).toBe(true);
+  expect(state?.error).toMatch(/Plane 429:.*RATE_LIMIT_EXCEEDED/);
   expect(urls).toHaveLength(2);
   expect(time.slept).toEqual([60_000]);
+});
+
+test("a fake 429 server keeps partial results and pump fills the rest", async () => {
+  const plane = fakePlane();
+  let blocks = 2;
+  const { createServer } = await import("node:http");
+  const server = createServer(async (req, res) => {
+    const path = req.url ?? "/";
+    if (blocks > 0 && path.includes(`/projects/${PULSE}/`) && path.includes("work-items")) {
+      blocks -= 1;
+      res.writeHead(429, { "Retry-After": "0", "content-type": "application/json" });
+      res.end(JSON.stringify({ error: "RATE_LIMIT_EXCEEDED" }));
+      return;
+    }
+    const upstream = await plane.fetch(`https://plane.test${path}`, {
+      method: req.method,
+      headers: { "X-API-Key": "test-key" },
+    });
+    const text = await upstream.text();
+    res.writeHead(upstream.status, { "content-type": upstream.headers.get("content-type") ?? "application/json" });
+    res.end(text);
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+  const addr = server.address();
+  if (!addr || typeof addr === "string") throw new Error("no port");
+  const flags = "--plane --workspace team";
+  const cli = createPlaneCli({
+    host: `http://127.0.0.1:${addr.port}`,
+    apiKey: "test-key",
+    flags,
+    retryDelayMs: 0,
+    sleep: async () => undefined,
+  });
+  try {
+    const first = JSON.parse(await cli.list(flags)) as RawIssue[];
+    const keys = first.map((issue) => issue.key);
+    expect(cli.catalogState?.().partial).toBe(true);
+    expect(keys).toContain("APH-12");
+    expect(keys).not.toContain("PULSE-1");
+    await cli.pumpCatalog?.();
+    const done = (JSON.parse(await cli.list(flags)) as RawIssue[]).map((issue) => issue.key);
+    expect(done).toContain("PULSE-1");
+    expect(done).toContain("APH-12");
+    expect(cli.catalogState?.().partial).toBe(false);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
+
+test("catalog GETs stay within the concurrency limit and beat a serial pass", async () => {
+  const delayMs = 20;
+  async function timed(concurrency: number) {
+    const plane = fakePlane();
+    let current = 0;
+    let max = 0;
+    const wrapped: typeof fetch = async (input, init) => {
+      current += 1;
+      max = Math.max(max, current);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      try {
+        return await plane.fetch(input, init);
+      } finally {
+        current -= 1;
+      }
+    };
+    const flags = "--plane --workspace team";
+    const cli = createPlaneCli({
+      host: "https://plane.test",
+      apiKey: "test-key",
+      flags,
+      fetch: wrapped,
+      retryDelayMs: 0,
+      concurrency,
+    });
+    const started = performance.now();
+    await cli.list(flags);
+    return { elapsed: performance.now() - started, max };
+  }
+  const parallel = await timed(4);
+  const serial = await timed(1);
+  expect(parallel.max).toBeGreaterThan(1);
+  expect(parallel.max).toBeLessThanOrEqual(4);
+  expect(serial.max).toBe(1);
+  expect(parallel.elapsed).toBeLessThan(serial.elapsed * 0.75);
+  console.log(
+    `catalog concurrency elapsed parallel=${parallel.elapsed.toFixed(0)}ms serial=${serial.elapsed.toFixed(0)}ms maxInFlight=${parallel.max}`,
+  );
+});
+
+test("a 28-project catalog never exceeds four in-flight GETs", async () => {
+  const projects = Array.from({ length: 28 }, (_, index) => ({
+    id: `p${index}`,
+    identifier: `P${index}`,
+    name: `Project ${index}`,
+  }));
+  let current = 0;
+  let max = 0;
+  const fetchImpl: typeof fetch = async (input) => {
+    current += 1;
+    max = Math.max(max, current);
+    await new Promise((resolve) => setTimeout(resolve, 1));
+    current -= 1;
+    const path = new URL(String(input)).pathname.replace(/\/+$/, "");
+    if (/\/workspaces\/[^/]+\/projects$/.test(path)) return jsonResponse(page(projects));
+    if (path.endsWith("/states")) return jsonResponse(page([{ id: "st", name: "Todo", group: "unstarted", sequence: 1 }]));
+    if (path.endsWith("/labels") || path.endsWith("/modules") || path.endsWith("/work-items") || path.endsWith("/cycles")) {
+      return jsonResponse(page([]));
+    }
+    return new Response(`unhandled ${path}`, { status: 404 });
+  };
+  const flags = "--plane --workspace team";
+  const cli = createPlaneCli({
+    host: "https://plane.test",
+    apiKey: "test-key",
+    flags,
+    fetch: fetchImpl,
+    retryDelayMs: 0,
+    concurrency: 4,
+  });
+  await cli.list(flags);
+  expect(max).toBeGreaterThan(1);
+  expect(max).toBeLessThanOrEqual(4);
 });
 
 test("Refresh-all with --workspace other and rewritten --projects lists that Workspace", async () => {

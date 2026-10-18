@@ -153,13 +153,20 @@ import {
   inboxBadgeCount,
   inboxNotifications,
   issueProjectId,
+  cardMatchesLens,
+  cyclePhase,
+  goTarget,
   sidebarSelection,
   switchKind,
   triageCount,
+  type GoTarget,
+  type NavLens,
   type SidebarNavIntent,
+  type SidebarPage,
   type ViewDraft,
 } from "~/linear-look.ts";
-import { TeamHome, TeamsPage, UpdateSchedule } from "~/components/linear-chrome.tsx";
+import type { PlaneCycle } from "./plane.ts";
+import { CycleList, HomeOverview, PulseFeed, SettingsPage, TeamHome, TeamsPage, UpdateSchedule } from "~/components/linear-chrome.tsx";
 import { IssueComposer } from "~/components/issue-composer.tsx";
 import { Toaster } from "~/components/ui/sonner.tsx";
 import { Badge } from "~/components/ui/badge.tsx";
@@ -1378,7 +1385,7 @@ export function App() {
   const [hoveredIssue, setHoveredIssue] = useState<string | null>(null);
   const [projectPicker, setProjectPicker] = useState<{ key: string } | null>(null);
   const [switcherOpen, setSwitcherOpen] = useState(false);
-  const [sidebarPage, setSidebarPage] = useState<"board" | "teams" | "team" | "schedule" | "inbox" | "views">("board");
+  const [sidebarPage, setSidebarPage] = useState<SidebarPage>("board");
   const [teamKey, setTeamKey] = useState<string | null>(null);
   const [sourceList, setSourceList] = useState(() => sourceOptions({ planeKey: false, jiraBin: false }));
   const [activeSource, setActiveSource] = useState<SourceId>("jira");
@@ -1393,11 +1400,15 @@ export function App() {
   });
   const [issueLens, setIssueLens] = useState<"all" | "mine">("all");
   const [navIntent, setNavIntent] = useState<SidebarNavIntent>(null);
+  const [navLens, setNavLens] = useState<NavLens>(null);
+  const [catalogPartial, setCatalogPartial] = useState(false);
+  const [planeCycles, setPlaneCycles] = useState<PlaneCycle[]>([]);
   const [viewer, setViewer] = useState(readViewer);
   const [viewName, setViewName] = useState("");
   const [rowMenu, setRowMenu] = useState<{ x: number; y: number; key: string; kind: "issue" | "initiative" | "project" } | null>(null);
   const scopeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chordRef = useRef<{ key: string; at: number } | null>(null);
+  const goRef = useRef<(target: GoTarget) => void>(() => undefined);
   const [workspaceSwitch, setWorkspaceSwitch] = useState<{ previousFlags: string; previousSlug: string } | null>(null);
   const workspaceSwitchRef = useRef(workspaceSwitch);
   workspaceSwitchRef.current = workspaceSwitch;
@@ -1450,13 +1461,14 @@ export function App() {
             viewFilter,
           ) &&
           includeCompleted(title, card.updated ?? card.targetEnd ?? card.created, display.completed) &&
-          (issueLens !== "mine" || !viewer || (card.assignee ?? "") === viewer),
+          (issueLens !== "mine" || !viewer || (card.assignee ?? "") === viewer) &&
+          cardMatchesLens(card, title, navLens),
       );
       if (!display.showEmptyGroups && kept.length === 0) continue;
       next[title] = kept;
     }
     return next;
-  }, [visible, viewFilter, display.completed, display.showEmptyGroups, issueLens, viewer]);
+  }, [visible, viewFilter, display.completed, display.showEmptyGroups, issueLens, viewer, navLens]);
   const layout = effectiveLayout(boardKind, display, layoutTouched);
   const roadmap = boardKind === "initiatives" || boardKind === "projects";
   const allCards = useMemo(() => Object.values(columns).flat(), [columns]);
@@ -1574,6 +1586,7 @@ export function App() {
         : null,
     );
     setError(next.error ?? "");
+    setCatalogPartial(Boolean(next.partial));
   }
 
   async function load() {
@@ -1582,8 +1595,15 @@ export function App() {
     if (data.flags) setFlags(data.flags);
     setProcessKind(data.kind ?? "store");
     setActiveSource(data.kind === "plane" ? "plane" : "jira");
-    if (data.kind === "plane") void loadPlaneChrome(data.flags ?? "", data.workspace);
-    else if (boardKind === "initiatives" || boardKind === "projects") openStories();
+    if (data.kind === "plane") {
+      void loadPlaneChrome(data.flags ?? "", data.workspace);
+      void api<{ cycles?: PlaneCycle[] }>("/api/cycles")
+        .then((listed) => setPlaneCycles(listed.cycles ?? []))
+        .catch(() => setPlaneCycles([]));
+    } else {
+      setPlaneCycles([]);
+      if (boardKind === "initiatives" || boardKind === "projects") openStories();
+    }
     void api<{ source: SourceId; sources: typeof sourceList }>("/api/sources")
       .then((listed) => {
         setSourceList(listed.sources);
@@ -1611,6 +1631,14 @@ export function App() {
   useEffect(() => {
     void load();
   }, []);
+
+  useEffect(() => {
+    if (!catalogPartial) return;
+    const id = setInterval(() => {
+      void load();
+    }, 1500);
+    return () => clearInterval(id);
+  }, [catalogPartial]);
 
   useEffect(() => {
     if (!sidebarOpen) epicsPanelRef.current?.collapse();
@@ -1675,20 +1703,29 @@ export function App() {
           setDisplayOpen(true);
           return;
         }
-        if (event.key.toLowerCase() === "o") {
-          chordRef.current = { key: "o", at: Date.now() };
-        } else if (
-          event.key.toLowerCase() === "w" &&
-          chordRef.current?.key === "o" &&
-          Date.now() - chordRef.current.at < 1000
-        ) {
-          event.preventDefault();
+        const key = event.key.toLowerCase();
+        const chord = chordRef.current;
+        if (chord && Date.now() - chord.at < 1200 && key !== chord.key) {
           chordRef.current = null;
-          setSwitcherOpen(true);
-          return;
-        } else if (event.key.toLowerCase() !== "o") {
-          chordRef.current = null;
+          if (chord.key === "o" && key === "w") {
+            event.preventDefault();
+            setSwitcherOpen(true);
+            return;
+          }
+          if (chord.key === "g") {
+            const target = goTarget(key);
+            if (target) {
+              event.preventDefault();
+              goRef.current(target);
+            }
+            return;
+          }
         }
+        if (key === "g" || key === "o") {
+          chordRef.current = { key, at: Date.now() };
+          return;
+        }
+        chordRef.current = null;
       }
       if (event.key === "Escape" && (addFilterRef.current || pickerRef.current || composerRef.current)) {
         event.preventDefault();
@@ -2072,13 +2109,100 @@ export function App() {
   }
 
   function openStories() {
+    setNavLens(null);
     setNavIntent("all-stories");
     setSidebarPage("board");
+    persistCanvasTab("board");
     setIssueLens("all");
     writeOpener("stories");
     setBoardKind("stories");
     setSelectedEpic(null);
     if (lastBoard.current) paintBoard(lastBoard.current, "stories");
+  }
+
+  function openHome() {
+    openStories();
+    setNavIntent("home");
+  }
+
+  function openTriage() {
+    openStories();
+    setNavIntent("triage");
+    setNavLens({ kind: "triage" });
+  }
+
+  function openActive() {
+    openStories();
+    setNavIntent("active");
+    setNavLens({ kind: "active" });
+  }
+
+  function openBacklog() {
+    openStories();
+    setNavIntent("backlog");
+    setNavLens({ kind: "backlog" });
+  }
+
+  function openInbox() {
+    setNavLens(null);
+    setNavIntent(null);
+    setSidebarPage("inbox");
+  }
+
+  function openSettings() {
+    setNavLens(null);
+    setNavIntent("settings");
+    setSidebarPage("settings");
+  }
+
+  function openCycle(phase: "current" | "upcoming") {
+    if (processKind !== "plane") return;
+    setNavLens(null);
+    setNavIntent(phase);
+    setSidebarPage("cycles");
+  }
+
+  function goBack() {
+    setNavLens(null);
+    if (sidebarPage === "schedule") {
+      setSidebarPage(teamKey ? "team" : "board");
+      return;
+    }
+    if (sidebarPage === "team") {
+      setSidebarPage("teams");
+      return;
+    }
+    if (sidebarPage !== "board") {
+      setSidebarPage("board");
+      setNavIntent("all-stories");
+    }
+  }
+
+  goRef.current = (target) => {
+    if (target === "inbox") openInbox();
+    else if (target === "mine") openMine();
+    else if (target === "active") openActive();
+    else if (target === "backlog") openBacklog();
+    else if (target === "all" || target === "board") openStories();
+    else if (target === "triage") openTriage();
+    else if (target === "home") openHome();
+    else if (target === "cycles" || target === "current") openCycle("current");
+    else if (target === "upcoming") openCycle("upcoming");
+    else if (target === "projects") {
+      if (processKind === "plane") openProjects();
+    } else if (target === "views") {
+      setNavLens(null);
+      setNavIntent(null);
+      setSidebarPage("views");
+    } else if (target === "settings") openSettings();
+  };
+
+  function toggleSection(key: string) {
+    setSectionsOpen((current) => {
+      const next = { ...current, [key]: current[key] === false };
+      writeJson(SIDEBAR_SECTIONS_KEY, next);
+      return next;
+    });
   }
 
   function openMine() {
@@ -2092,8 +2216,10 @@ export function App() {
   }
 
   function openEpics() {
+    setNavLens(null);
     setNavIntent("all-epics");
     setSidebarPage("board");
+    persistCanvasTab("board");
     writeOpener("epics");
     setBoardKind("epics");
     setSelectedEpic(null);
@@ -2101,8 +2227,10 @@ export function App() {
   }
 
   function openCombined() {
+    setNavLens(null);
     setNavIntent("combined");
     setSidebarPage("board");
+    persistCanvasTab("board");
     writeOpener("combined");
     setBoardKind("combined");
     setSelectedEpic(null);
@@ -2115,6 +2243,7 @@ export function App() {
   }
 
   function openCalendarTab() {
+    setNavLens(null);
     setNavIntent("calendar");
     setSidebarPage("board");
     selectCalendarTab();
@@ -2122,6 +2251,7 @@ export function App() {
   }
 
   function openInitiatives() {
+    setNavLens(null);
     setNavIntent("initiatives");
     setSidebarPage("board");
     writeOpener("initiatives");
@@ -2131,6 +2261,7 @@ export function App() {
   }
 
   function openProjects() {
+    setNavLens(null);
     setNavIntent("workspace-projects");
     setSidebarPage("board");
     writeOpener("projects");
@@ -2429,16 +2560,21 @@ export function App() {
     persistPresets(result.presets);
   }
 
-  const sidebarScopes: ScopePair[] = (() => {
+  const sidebarScopes: (ScopePair & { label?: string })[] = (() => {
     const parsed = parseFlags(flags);
-    if (parsed.scopes.length) return parsed.scopes;
-    if (parsed.projects.length) {
-      return parsed.projects.map((project) => ({
-        workspace: processKind === "plane" ? workspaceSlug || "personal" : "jira",
-        project,
+    if (parsed.scopes.length) {
+      return parsed.scopes.map((scope) => ({ ...scope, label: `${scope.workspace}/${scope.project}` }));
+    }
+    if (processKind === "plane") {
+      const slugs = parsed.workspaces.length ? parsed.workspaces : workspaceSlug ? [workspaceSlug] : ["personal"];
+      return slugs.map((workspace) => ({
+        workspace,
+        project: "",
+        label: workspaces?.find((item) => item.slug === workspace)?.name || workspace,
       }));
     }
-    return [{ workspace: processKind === "plane" ? workspaceSlug || "personal" : "jira", project: "DEMO" }];
+    const task = activeSource === "taskwarrior";
+    return [{ workspace: task ? "tasks" : "jira", project: "", label: task ? "Tasks" : "Jira" }];
   })();
   const sidebarPick = sidebarSelection({
     sidebarPage,
@@ -2449,7 +2585,41 @@ export function App() {
     plane: processKind === "plane",
     intent: navIntent,
   });
-  const teamScopeId = sidebarScopes[0] ? `${sidebarScopes[0].workspace}/${sidebarScopes[0].project}` : undefined;
+  const teamScopeId = sidebarScopes[0]
+    ? sidebarScopes[0].project
+      ? `${sidebarScopes[0].workspace}/${sidebarScopes[0].project}`
+      : sidebarScopes[0].workspace
+    : undefined;
+  const scopeChip = activeProjects.length ? activeProjects.join(", ") : "All projects";
+  const scopeCrumb =
+    processKind === "plane"
+      ? parseFlags(flags).workspaces.join(", ") || workspaceSlug || "Workspace"
+      : activeSource === "taskwarrior"
+        ? "Tasks"
+        : "Jira";
+  const viewCrumb =
+    navIntent === "active"
+      ? "Active"
+      : navIntent === "backlog"
+        ? "Backlog"
+        : navIntent === "home"
+          ? "Home"
+          : navIntent === "pulse"
+            ? "Pulse"
+            : sidebarPick.kind === "inbox"
+              ? "Inbox"
+              : sidebarPick.kind === "pulse"
+                ? "Pulse"
+                : sidebarPick.kind === "epic"
+                  ? selectedEpic ?? "Issue"
+                  : sidebarPick.kind === "workspace"
+                    ? sidebarPick.item[0]?.toUpperCase() + sidebarPick.item.slice(1)
+                    : sidebarPick.kind === "team"
+                      ? sidebarPick.item
+                      : "All stories";
+  const phasedCycles = planeCycles
+    .map((cycle) => ({ ...cycle, phase: cyclePhase(cycle) }))
+    .filter((cycle) => cycle.phase !== "past");
 
   return (
     <div className="bg-sidebar flex h-screen">
@@ -2542,26 +2712,26 @@ export function App() {
               </div>
             </div>
             <nav className="flex flex-1 flex-col gap-0.5 overflow-auto px-2 pb-2" aria-label="Sidebar">
-              <NavRow icon="Inbox" label="Inbox" badge={inboxBadgeCount(allCards, inboxRead)} active={sidebarPick.kind === "inbox"} onClick={() => { setNavIntent(null); setSidebarPage("inbox"); }} />
+              <NavRow icon="Inbox" label="Inbox" badge={inboxBadgeCount(allCards, inboxRead)} active={sidebarPick.kind === "inbox"} onClick={openInbox} />
               <NavRow icon="Activity" label="Pulse" badge={allCards.length ? String(Math.min(allCards.length, 99)) : undefined} active={sidebarPick.kind === "pulse"} onClick={() => { openStories(); setNavIntent("pulse"); }} />
               <NavRow icon="Bot" label="Agent" onClick={() => setAgentOpen(true)} />
-              <SidebarSection title="Workspace" open={sectionsOpen.workspace !== false} onToggle={() => setSectionsOpen((current) => ({ ...current, workspace: current.workspace === false }))}>
+              <SidebarSection title="Workspace" open={sectionsOpen.workspace !== false} onToggle={() => toggleSection("workspace")}>
                 {processKind === "plane" ? (
                   <NavRow icon="Box" label="Projects" active={sidebarPick.kind === "workspace" && sidebarPick.item === "projects"} onClick={openProjects} />
                 ) : null}
-                <NavRow icon="LayoutGrid" label="Views" active={sidebarPick.kind === "workspace" && sidebarPick.item === "views"} onClick={() => { setNavIntent(null); setSidebarPage("views"); }} />
+                <NavRow icon="LayoutGrid" label="Views" active={sidebarPick.kind === "workspace" && sidebarPick.item === "views"} onClick={() => { setNavLens(null); setNavIntent(null); setSidebarPage("views"); }} />
                 {processKind === "plane" ? (
                   <NavRow icon="Target" label="Initiatives" active={sidebarPick.kind === "workspace" && sidebarPick.item === "initiatives"} onClick={openInitiatives} />
                 ) : null}
-                <NavRow icon="MoreHorizontal" label="More" onClick={() => setSectionsOpen((current) => ({ ...current, more: current.more !== true }))} />
+                <NavRow icon="MoreHorizontal" label="More" expanded={sectionsOpen.more === true} onClick={() => toggleSection("more")} onToggle={() => toggleSection("more")} />
                 {sectionsOpen.more ? (
                   <>
-                    <NavRow icon="Users" label="Teams" indent active={sidebarPick.kind === "workspace" && sidebarPick.item === "teams"} onClick={() => { setNavIntent(null); setSidebarPage("teams"); }} />
-                    <NavRow icon="Settings" label="Settings" indent disabled title="Coming soon" />
+                    <NavRow icon="Users" label="Teams" level={1} active={sidebarPick.kind === "workspace" && sidebarPick.item === "teams"} onClick={() => { setNavLens(null); setNavIntent(null); setSidebarPage("teams"); }} />
+                    <NavRow icon="Settings" label="Settings" level={1} active={sidebarPick.kind === "workspace" && sidebarPick.item === "settings"} onClick={openSettings} />
                   </>
                 ) : null}
               </SidebarSection>
-              <SidebarSection title="Favorites" open={sectionsOpen.favorites !== false} onToggle={() => setSectionsOpen((current) => ({ ...current, favorites: current.favorites === false }))}>
+              <SidebarSection title="Favorites" open={sectionsOpen.favorites !== false} onToggle={() => toggleSection("favorites")}>
                 <FavoriteFolderList
                   favorites={linearFavorites}
                   folders={favoriteFolders}
@@ -2593,11 +2763,26 @@ export function App() {
                   }}
                 />
               </SidebarSection>
-              <SidebarSection title="Your teams" open={sectionsOpen.teams !== false} onToggle={() => setSectionsOpen((current) => ({ ...current, teams: current.teams === false }))}>
+              <SidebarSection title="Your teams" open={sectionsOpen.teams !== false} onToggle={() => toggleSection("teams")}>
                 <TeamNav
                   scopes={sidebarScopes}
                   triage={triageCount(allCards.filter((card) => card.labels?.some((label) => isNeedsInputLabel(label))).length)}
                   current={sidebarPick.kind === "team" ? { item: sidebarPick.item, scope: teamScopeId } : undefined}
+                  showCycles={processKind === "plane"}
+                  showProjects={processKind === "plane"}
+                  openTeams={Object.fromEntries(
+                    sidebarScopes.map((scope) => {
+                      const id = scope.project ? `${scope.workspace}/${scope.project}` : scope.workspace;
+                      return [id, sectionsOpen[`team:${id}`] !== false];
+                    }),
+                  )}
+                  onToggleTeam={(id, next) => {
+                    setSectionsOpen((current) => {
+                      const stored = { ...current, [`team:${id}`]: next };
+                      writeJson(SIDEBAR_SECTIONS_KEY, stored);
+                      return stored;
+                    });
+                  }}
                   mineTitle={viewer ? `Assigned to ${viewer}` : "Assigned to you"}
                   preset={
                     <PresetGroup
@@ -2613,32 +2798,36 @@ export function App() {
                     />
                   }
                   onOpenScope={(scope) => {
-                    queueScope(applyScopeSelection(flags, { workspaces: [scope.workspace], scopes: [scope] }));
+                    if (processKind === "plane" && scope.workspace) {
+                      const parsed = parseFlags(flags);
+                      if (parsed.scopes.length || parsed.projects.length) {
+                        const workspaces = parsed.workspaces.length ? parsed.workspaces : [scope.workspace];
+                        queueScope(applyScopeSelection(flags, { workspaces, scopes: [] }));
+                      }
+                    }
                     openStories();
                   }}
                   onNav={(_scope, item) => {
-                    if (item === "Home") {
-                      openStories();
-                      setNavIntent("home");
-                    } else if (item === "Projects" && processKind === "plane") {
+                    if (item === "Home") openHome();
+                    else if (item === "Projects" && processKind === "plane") {
                       openProjects();
                       setNavIntent("team-projects");
                     } else if (item === "Views") {
+                      setNavLens(null);
                       setNavIntent("team-views");
                       setSidebarPage("views");
-                    } else if (item === "Triage") {
-                      openStories();
-                      setNavIntent("triage");
-                      if (!viewFilter.labels.includes("needs-input")) persistViewFilter({ ...viewFilter, labels: [...viewFilter.labels, "needs-input"] });
-                    } else if (item === "My issues") openMine();
+                    } else if (item === "Triage") openTriage();
+                    else if (item === "My issues") openMine();
                     else if (item === "All epics") openEpics();
                     else if (item === "Combined") openCombined();
                     else if (item === "Calendar") openCalendarTab();
+                    else if (item === "Current") openCycle("current");
+                    else if (item === "Upcoming") openCycle("upcoming");
                     else openStories();
                   }}
                 />
               </SidebarSection>
-              <SidebarSection title="Board" open={sectionsOpen.board !== false} onToggle={() => setSectionsOpen((current) => ({ ...current, board: current.board === false }))}>
+              <SidebarSection title="Board" open={sectionsOpen.board !== false} onToggle={() => toggleSection("board")}>
               {showFavourites ? (
                 <FavouriteGroup
                   pane={favouritePane}
@@ -2780,25 +2969,45 @@ export function App() {
                         ? "bg-muted text-foreground"
                         : "text-muted-foreground hover:text-foreground",
                     )}
-                    onClick={() => {
+                      onClick={() => {
                       persistCanvasTab("calendar");
+                      setNavLens(null);
                       setNavIntent("calendar");
                     }}
                   >
                     Calendar
                   </button>
                 </div>
+                {sidebarPage !== "board" || navIntent === "home" || navIntent === "pulse" ? (
+                  <Button variant="ghost" size="sm" className={HEADER_CONTROL} data-smoke="back" onClick={goBack} aria-label="Back">
+                    <ChevronLeftIcon />
+                    Back
+                  </Button>
+                ) : null}
+                <div className="flex min-w-0 items-center gap-1 text-[13px]" data-smoke="breadcrumb" aria-label="Breadcrumb">
+                  <span className="text-muted-foreground truncate">{scopeCrumb}</span>
+                  <span className="text-muted-foreground">/</span>
+                  <span className="truncate font-medium">{viewCrumb}</span>
+                </div>
                 <button
                   type="button"
-                  className="bg-primary/10 text-primary inline-flex h-7 items-center rounded-lg px-2 text-[11px] font-medium"
+                  className="bg-primary/10 text-primary inline-flex h-7 max-w-48 items-center truncate rounded-lg px-2 text-[11px] font-medium"
                   onClick={() => setSwitcherOpen(true)}
-                  aria-label="Projects"
+                  aria-label="Scope"
+                  data-smoke="scope-chip"
                 >
-                  {(() => {
-                    const { projects } = parseFlags(flags);
-                    return projects.length > 0 ? projects.join(", ") : "DEMO";
-                  })()}
+                  {scopeChip}
                 </button>
+                {navLens ? (
+                  <span className="bg-muted text-muted-foreground inline-flex h-7 items-center rounded-lg px-2 text-[11px]" data-smoke="ephemeral-filter">
+                    {navLens.kind === "triage" ? "Needs input" : navLens.kind === "active" ? "Active" : "Backlog"}
+                  </span>
+                ) : null}
+                {catalogPartial ? (
+                  <span className="bg-muted text-muted-foreground inline-flex h-7 items-center rounded-lg px-2 text-[11px]" data-smoke="catalog-partial">
+                    partial
+                  </span>
+                ) : null}
                 <InputGroup className="h-7 max-w-72 min-w-40 flex-1 border-transparent bg-muted shadow-none">
                   <InputGroupAddon>
                     <SearchIcon className="size-3.5" />
@@ -3071,6 +3280,53 @@ export function App() {
                       })()
                     ) : sidebarPage === "schedule" ? (
                       <UpdateSchedule onClose={() => setSidebarPage(teamKey ? "team" : "board")} />
+                    ) : sidebarPage === "settings" ? (
+                      <SettingsPage
+                        scope={scopeChip}
+                        theme={theme}
+                        viewer={viewer}
+                        onTheme={toggleTheme}
+                        onViewer={(name) => {
+                          setViewer(name);
+                          localStorage.setItem(VIEWER_KEY, name);
+                        }}
+                      />
+                    ) : sidebarPage === "cycles" ? (
+                      <CycleList
+                        phase={navIntent === "upcoming" ? "upcoming" : "current"}
+                        cycles={phasedCycles.filter((cycle) => cycle.phase === (navIntent === "upcoming" ? "upcoming" : "current"))}
+                        onOpen={() => undefined}
+                      />
+                    ) : sidebarPage === "board" && navIntent === "home" ? (
+                      <HomeOverview
+                        scope={scopeCrumb}
+                        issues={allCards.length}
+                        epics={epics.length}
+                        needsInput={allCards.filter((card) => card.labels?.some((label) => isNeedsInputLabel(label))).length}
+                        recent={[...allCards]
+                          .sort((a, b) => (b.updated ?? "").localeCompare(a.updated ?? ""))
+                          .slice(0, 8)
+                          .map((card) => ({ key: card.key, summary: card.summary }))}
+                        onOpen={(key) => {
+                          openStories();
+                          void open(key);
+                        }}
+                      />
+                    ) : sidebarPage === "board" && navIntent === "pulse" ? (
+                      <PulseFeed
+                        rows={[...allCards]
+                          .sort((a, b) => (b.updated ?? b.created ?? "").localeCompare(a.updated ?? a.created ?? ""))
+                          .slice(0, 20)
+                          .map((card) => ({
+                            key: card.key,
+                            summary: card.summary,
+                            detail: card.updated ?? card.created ?? "",
+                          }))}
+                        onOpen={(key) => {
+                          openStories();
+                          void open(key);
+                        }}
+                      />
                     ) : (
                     <>
                     {error ? null : (
@@ -3148,6 +3404,7 @@ export function App() {
                       />
                     ) : (
                     <Kanban
+                      data-smoke="issue-board"
                       className="h-full min-h-0"
                       value={presented}
                       onValueChange={(next) =>

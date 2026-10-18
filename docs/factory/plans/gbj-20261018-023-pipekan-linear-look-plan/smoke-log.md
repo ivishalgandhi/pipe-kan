@@ -34,8 +34,8 @@ PASS read inbox is empty
 PASS sidebar sections render
 PASS empty favorite folder renders
 PASS team row exposes its scope
-PASS cycles stay disabled
-PASS footer rows render
+PASS cycles are enabled
+PASS dead footer rows are hidden
 PASS inbox badge renders
 PASS view browser groups personal and team
 PASS view composer renders

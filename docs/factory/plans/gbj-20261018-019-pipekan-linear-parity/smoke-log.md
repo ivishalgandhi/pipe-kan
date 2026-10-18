@@ -56,15 +56,3 @@ PASS built artifact merged view returns after source switch
 PASS built artifact taskwarrior switch is refused
 smoke ok
 ```
-
-## bun test
-
-`bun test`: 468 passed, 0 failed (31 files).
-
-## bun run typecheck
-
-`tsc --noEmit`: clean.
-
-## bun run build
-
-`vite build` and `bun build` completed. Smoke then exercised `dist/pipe-kan.js`.

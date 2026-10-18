@@ -36,6 +36,8 @@ export type Board = {
   epics: Epic[];
   children?: Record<string, Card[]>;
   error?: string;
+  /** Catalog throttling returned a subset; more rows may arrive in the background. */
+  partial?: boolean;
 };
 
 export type RawIssue = {

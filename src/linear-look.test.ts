@@ -163,6 +163,7 @@ test("team nav is a vertical list with one current row", () => {
       triage: 3,
       current: { item: "All stories", scope: "acme/DEMO" },
       mineTitle: "Assigned to you",
+      showCycles: true,
       onOpenScope: () => undefined,
       onNav: () => undefined,
     }),
@@ -174,10 +175,10 @@ test("team nav is a vertical list with one current row", () => {
   for (const label of ["Home", "Triage", "Issues", "All stories", "My issues", "All epics", "Cycles", "Current", "Upcoming", "Projects", "Views", "Combined", "Calendar"]) {
     expect(html).toContain(label);
   }
-  expect(html).toContain('data-smoke="cycle-guide"');
+  expect(html).not.toContain('data-smoke="cycle-guide"');
   expect(html).toContain('data-depth="2"');
   expect(html).toContain('data-depth="3"');
-  expect(html).toContain('title="Coming soon"');
+  expect(html).not.toContain('title="Coming soon"');
   expect(html).toContain("Team menu acme/DEMO");
   expect(html).toContain(">3<");
   expect(html.match(/aria-current="page"/g)).toHaveLength(1);

@@ -111,6 +111,7 @@ async function main() {
         createElement(TeamNav, {
           scopes: [{ workspace: "acme", project: "DEMO" }],
           triage: 1,
+          showCycles: true,
           onOpenScope: noop,
           onNav: noop,
         }),
@@ -121,8 +122,8 @@ async function main() {
   assert(sidebar.includes("Workspace") && sidebar.includes("Favorites") && sidebar.includes("Your teams"), "sidebar sections render");
   assert(sidebar.includes("Empty folder"), "empty favorite folder renders");
   assert(sidebar.includes('data-team="acme/DEMO"'), "team row exposes its scope");
-  assert(sidebar.includes("Current") && sidebar.includes("Upcoming") && sidebar.includes('title="Coming soon"'), "cycles stay disabled");
-  assert(sidebar.includes("Connect GitHub") && sidebar.includes("+ Invite people"), "footer rows render");
+  assert(sidebar.includes("Current") && sidebar.includes("Upcoming") && !sidebar.includes('title="Coming soon"'), "cycles are enabled");
+  assert(!sidebar.includes("Connect GitHub") && !sidebar.includes("+ Invite people"), "dead footer rows are hidden");
   assert(sidebar.includes('data-smoke="inbox-badge"') && sidebar.includes("9+"), "inbox badge renders");
 
   const views = renderToStaticMarkup(

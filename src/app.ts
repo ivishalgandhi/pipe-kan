@@ -42,6 +42,8 @@ export type App = {
   listProjectIdentifiers?(workspace: string): Promise<string[]>;
   listProjects?(workspace: string): Promise<{ id: string; identifier: string; name: string }[]>;
   parity?(): Promise<ParitySnapshot>;
+  cycles?(): ReturnType<NonNullable<Cli["cycles"]>>;
+  pumpCatalog?(): Promise<Board>;
 };
 
 function columnsOf(raw: unknown, fieldId?: string): Record<string, Card[]> {
@@ -129,6 +131,8 @@ export function createApp(opts: {
   let hasChildrenCache = false;
   let childrenError: string | undefined;
   let refreshError: string | undefined;
+  let catalogPartial = false;
+  let pumping = false;
   let live = false;
   let targetEndFieldId =
     readTargetEndFieldMap(fieldMapPath).targetEnd ??
@@ -275,6 +279,7 @@ export function createApp(opts: {
           columns: empty.columns,
           epics: [],
           ...(error ? { error } : {}),
+          ...(catalogPartial ? { partial: true } : {}),
         };
       }
       const board = toBoard(payload);
@@ -283,6 +288,7 @@ export function createApp(opts: {
         epics: mergeEpics(toBoard(epicsPayload).epics, board.epics),
         ...(hasChildrenCache ? { children: columnsOf(childrenRaw, targetEndFieldId) } : {}),
         ...(error ? { error } : {}),
+        ...(catalogPartial ? { partial: true } : {}),
       };
     },
     hydrate(raw, hydrateOpts) {
@@ -306,7 +312,8 @@ export function createApp(opts: {
       try {
         if (cli.states) {
           try {
-            workflowStates = await cli.states(flags);
+            const nextStates = await cli.states(flags);
+            if (nextStates.length || !cli.catalogState?.().partial) workflowStates = nextStates;
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             console.log(`Refresh states failed; ${message}`);
@@ -316,8 +323,15 @@ export function createApp(opts: {
         const epics = await cli.listEpics(flags);
         const listedPayload = JSON.parse(issues);
         const listedEpics = JSON.parse(epics);
-        const keys = toBoard(listedEpics).epics.map((epic) => epic.key);
+        const state = cli.catalogState?.();
         const issueCount = Array.isArray(listedPayload) ? listedPayload.length : 0;
+        const emptyPartial = Boolean(state?.partial) && issueCount === 0;
+        if (emptyPartial && live && payload.length > 0) {
+          catalogPartial = true;
+          refreshError = state?.error ?? "partial";
+          return app.board();
+        }
+        const keys = toBoard(listedEpics).epics.map((epic) => epic.key);
         console.log(`Refresh listed ${issueCount} issues, ${keys.length} epics`);
         let nextChildren: unknown[] = [];
         let nextHasCache = false;
@@ -344,7 +358,8 @@ export function createApp(opts: {
         childrenRaw = nextHasCache ? await hydrateRaw(nextChildren) : nextChildren;
         hasChildrenCache = nextHasCache;
         childrenError = nextError;
-        refreshError = undefined;
+        catalogPartial = Boolean(state?.partial);
+        refreshError = emptyPartial ? (state?.error ?? "partial") : undefined;
         live = true;
         return app.board();
       } catch (err) {
@@ -432,6 +447,20 @@ export function createApp(opts: {
     },
     async listProjects(workspace: string) {
       return cli.listProjects?.(workspace) ?? [];
+    },
+    async cycles() {
+      return cli.cycles?.() ?? [];
+    },
+    async pumpCatalog() {
+      if (pumping || !cli.pumpCatalog) return app.board();
+      if (cli.catalogState && !cli.catalogState().pending) return app.board();
+      pumping = true;
+      try {
+        await cli.pumpCatalog();
+        return await app.refresh(flags);
+      } finally {
+        pumping = false;
+      }
     },
     async parity() {
       return cli.parity?.() ?? { initiatives: [], projects: [], workspaces: [] };

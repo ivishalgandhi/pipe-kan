@@ -25,7 +25,7 @@
     "build": "vite build && bun build src/bin.ts --outfile dist/pipe-kan.js --target node --banner '#!/usr/bin/env node'",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "smoke": "bun scripts/smoke-linear-parity.ts && bun scripts/smoke-linear-look.ts && bun scripts/smoke-sidebar-vertical.ts"
+    "smoke": "bun scripts/smoke-linear-parity.ts && bun scripts/smoke-linear-look.ts && bun scripts/smoke-sidebar-vertical.ts && bun scripts/smoke-sidebar-clicks.ts"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
@@ -33,6 +33,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
+    "playwright": "^1.64.1",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "vite": "^8.2.2",

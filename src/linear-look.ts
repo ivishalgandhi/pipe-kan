@@ -1,5 +1,6 @@
 import { isNeedsInputLabel } from "./board.ts";
 import {
+  parseDay,
   projectIdentifier,
   saveView,
   statusTypeOf,
@@ -286,7 +287,7 @@ export function switchKind(previousWorkspaces: string[], nextWorkspaces: string[
   return left === right ? "project" : "workspace";
 }
 
-export type SidebarPage = "board" | "teams" | "team" | "schedule" | "inbox" | "views";
+export type SidebarPage = "board" | "teams" | "team" | "schedule" | "inbox" | "views" | "settings" | "cycles";
 export type SidebarBoardKind = "stories" | "epics" | "combined" | "initiatives" | "projects";
 export type SidebarNavIntent =
   | "all-stories"
@@ -300,14 +301,91 @@ export type SidebarNavIntent =
   | "home"
   | "triage"
   | "calendar"
+  | "active"
+  | "backlog"
+  | "current"
+  | "upcoming"
+  | "settings"
   | null;
+
+export type NavLens = { kind: "triage" } | { kind: "active" } | { kind: "backlog" } | null;
+
+export type GoTarget =
+  | "inbox"
+  | "mine"
+  | "active"
+  | "backlog"
+  | "all"
+  | "triage"
+  | "cycles"
+  | "current"
+  | "upcoming"
+  | "projects"
+  | "views"
+  | "settings"
+  | "board"
+  | "home";
+
+const GO_TARGETS: Record<string, GoTarget> = {
+  i: "inbox",
+  m: "mine",
+  a: "active",
+  b: "backlog",
+  e: "all",
+  t: "triage",
+  c: "cycles",
+  v: "current",
+  w: "upcoming",
+  p: "projects",
+  u: "views",
+  s: "settings",
+  d: "board",
+  h: "home",
+};
+
+/** Second key of the G chord. Public go-to shortcuts only. */
+export function goTarget(key: string): GoTarget | null {
+  return GO_TARGETS[key.toLowerCase()] ?? null;
+}
+
+export function cardMatchesLens(card: { labels?: string[] }, status: string, lens: NavLens): boolean {
+  if (!lens) return true;
+  if (lens.kind === "triage") return (card.labels ?? []).some((label) => isNeedsInputLabel(label));
+  if (lens.kind === "active") return statusTypeOf(status) === "Started";
+  if (lens.kind === "backlog") return statusTypeOf(status) === "Backlog";
+  return true;
+}
+
+export function cyclePhase(
+  cycle: { start_date?: string; end_date?: string },
+  now = new Date(),
+): "current" | "upcoming" | "past" {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const start = parseDay(cycle.start_date);
+  const end = parseDay(cycle.end_date);
+  if (start && today < start) return "upcoming";
+  if (end && today > end) return "past";
+  if (start || end) return "current";
+  return "current";
+}
 
 export type SidebarSelection =
   | { kind: "inbox" | "pulse" | "epic" }
-  | { kind: "workspace"; item: "views" | "projects" | "initiatives" | "teams" }
+  | { kind: "workspace"; item: "views" | "projects" | "initiatives" | "teams" | "settings" }
   | {
       kind: "team";
-      item: "Home" | "Triage" | "All stories" | "My issues" | "All epics" | "Projects" | "Views" | "Combined" | "Calendar";
+      item:
+        | "Home"
+        | "Triage"
+        | "All stories"
+        | "My issues"
+        | "All epics"
+        | "Projects"
+        | "Views"
+        | "Combined"
+        | "Calendar"
+        | "Current"
+        | "Upcoming";
     };
 
 const STORY_INTENTS = new Set<SidebarNavIntent>(["all-stories", "pulse", "home", "triage"]);
@@ -323,6 +401,10 @@ export function sidebarSelection(input: {
   intent: SidebarNavIntent;
 }): SidebarSelection {
   if (input.sidebarPage === "inbox") return { kind: "inbox" };
+  if (input.sidebarPage === "settings") return { kind: "workspace", item: "settings" };
+  if (input.sidebarPage === "cycles") {
+    return { kind: "team", item: input.intent === "upcoming" ? "Upcoming" : "Current" };
+  }
   if (input.sidebarPage === "views") {
     return input.intent === "team-views" ? { kind: "team", item: "Views" } : { kind: "workspace", item: "views" };
   }

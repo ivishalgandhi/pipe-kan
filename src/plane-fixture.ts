@@ -10,6 +10,7 @@ export type PlaneFixture = {
   members: { id: string; display_name: string }[];
   modules: Record<string, FixtureModule[]>;
   issues: Record<string, FixtureIssue[]>;
+  cycles?: Record<string, { id: string; name: string; start_date?: string; end_date?: string }[]>;
 };
 
 type FixtureModule = {
@@ -108,6 +109,15 @@ export const SYNTHETIC_PLANE: PlaneFixture = {
     "work-aph": [issue("wi-aph-1", "Aphrodite story", 4, "st-backlog", { priority: "medium" })],
     "personal-pkan": [issue("wi-pkan-1", "Pipe kan story", 3, "st-todo", { priority: "low", assignee: "Grace" })],
   },
+  cycles: {
+    "work-pulse": [
+      { id: "cy-current", name: "Current cycle", start_date: "2026-10-01", end_date: "2026-10-31" },
+      { id: "cy-next", name: "Upcoming cycle", start_date: "2026-11-01", end_date: "2026-11-14" },
+    ],
+    "personal-pulse": [
+      { id: "cy-home", name: "Personal cycle", start_date: "2026-10-05", end_date: "2026-10-25" },
+    ],
+  },
 };
 
 function page(results: unknown[]) {
@@ -146,6 +156,9 @@ export function planeFixtureFetch(fixture: PlaneFixture = SYNTHETIC_PLANE): Plan
 
     if (method === "GET" && collection === "states") return Response.json(page(data.states));
     if (method === "GET" && collection === "labels") return Response.json(page(data.labels));
+    if (method === "GET" && collection === "cycles" && !itemId) {
+      return Response.json(page(data.cycles?.[projectId] ?? []));
+    }
     if (method === "GET" && collection === "modules" && !itemId) return Response.json(page(projectModules));
     if (method === "GET" && collection === "modules" && parts[8] === "module-issues") {
       const ids = projectIssues.filter((row) => row.module_ids?.includes(itemId ?? "")).map((row) => row.id);
