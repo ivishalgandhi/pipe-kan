@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, test } from "vitest";
@@ -35,7 +35,9 @@ function fakeUi() {
 }
 
 test("package root is the install directory", () => {
-  expect(packageRoot()).toMatch(/pipe-kan$/);
+  const root = packageRoot();
+  const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { name: string };
+  expect(pkg.name).toBe("pipe-kan");
 });
 
 test("built Board is served from dist/ui", async () => {
