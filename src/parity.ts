@@ -7,6 +7,26 @@ export const HEALTH_COLOR: Record<Health, string> = {
   gray: "#9ca3af",
 };
 
+export function healthLabel(health: Health): string {
+  if (health === "green") return "On track";
+  if (health === "yellow") return "At risk";
+  if (health === "red") return "Off track";
+  return "No updates";
+}
+
+export const HEALTH_FILTERS = ["On track", "At risk", "Off track", "Update missing", "No update expected"] as const;
+
+export function healthMatches(health: Health, selected: string[] | undefined): boolean {
+  if (!selected?.length) return true;
+  return selected.some((label) => {
+    const key = label.toLowerCase();
+    if (key === "on track") return health === "green";
+    if (key === "at risk") return health === "yellow";
+    if (key === "off track") return health === "red";
+    return health === "gray";
+  });
+}
+
 export type Opener = "stories" | "epics" | "combined" | "initiatives" | "projects";
 
 export type Layout = "list" | "board" | "timeline";
@@ -30,6 +50,8 @@ export type DisplayOptions = {
   zoom: Zoom;
   showEmptyGroups: boolean;
   completed: CompletedWindow;
+  showSubIssues?: boolean;
+  properties?: string[];
 };
 
 export const DEFAULT_DISPLAY: DisplayOptions = {
@@ -52,6 +74,7 @@ export type ViewFilter = {
   priority: string[];
   labels: string[];
   project: string[];
+  health?: string[];
 };
 
 export const EMPTY_VIEW_FILTER: ViewFilter = {
@@ -415,6 +438,7 @@ export type Filterable = {
   priority?: string;
   labels?: string[];
   project?: string;
+  health?: Health;
 };
 
 export function matchViewFilter(item: Filterable, filter: ViewFilter): boolean {
@@ -437,6 +461,7 @@ export function matchViewFilter(item: Filterable, filter: ViewFilter): boolean {
   if (filter.project.length && !filter.project.some((project) => project.toUpperCase() === (item.project ?? "").toUpperCase())) {
     return false;
   }
+  if (item.health && !healthMatches(item.health, filter.health)) return false;
   return true;
 }
 
@@ -444,13 +469,14 @@ export function viewFilterChips(filter: ViewFilter): { id: string; label: string
   const chips: { id: string; label: string }[] = [];
   const dateChip = (id: string, title: string, range?: DateRange) => {
     if (!range || (!range.from && !range.to)) return;
-    const from = range.from ?? "…";
-    const to = range.to ?? "…";
-    chips.push({ id, label: `${title} ${from} – ${to}` });
+    if (range.from && !range.to) chips.push({ id, label: `${title} after ${range.from}` });
+    else if (!range.from && range.to) chips.push({ id, label: `${title} before ${range.to}` });
+    else chips.push({ id, label: `${title} ${range.from} – ${range.to}` });
   };
   dateChip("created", "Created", filter.created);
-  dateChip("updated", "Updated", filter.updated);
+  dateChip("updated", "Latest update date", filter.updated);
   dateChip("due", "Due", filter.due);
+  for (const health of filter.health ?? []) chips.push({ id: `health:${health}`, label: `Health is ${health}` });
   for (const status of filter.status) chips.push({ id: `status:${status}`, label: `Status ${status}` });
   for (const assignee of filter.assignee) chips.push({ id: `assignee:${assignee}`, label: `Assignee ${assignee}` });
   for (const priority of filter.priority) chips.push({ id: `priority:${priority}`, label: `Priority ${priority}` });
@@ -467,6 +493,7 @@ export function clearViewChip(filter: ViewFilter, id: string): ViewFilter {
     priority: [...filter.priority],
     labels: [...filter.labels],
     project: [...filter.project],
+    ...(filter.health ? { health: [...filter.health] } : {}),
     ...(filter.created ? { created: { ...filter.created } } : {}),
     ...(filter.updated ? { updated: { ...filter.updated } } : {}),
     ...(filter.due ? { due: { ...filter.due } } : {}),
@@ -479,6 +506,10 @@ export function clearViewChip(filter: ViewFilter, id: string): ViewFilter {
   else if (id.startsWith("priority:")) next.priority = next.priority.filter((item) => `priority:${item}` !== id);
   else if (id.startsWith("label:")) next.labels = next.labels.filter((item) => `label:${item}` !== id);
   else if (id.startsWith("project:")) next.project = next.project.filter((item) => `project:${item}` !== id);
+  else if (id.startsWith("health:")) {
+    next.health = (next.health ?? []).filter((item) => `health:${item}` !== id);
+    if (!next.health.length) delete next.health;
+  }
   return next;
 }
 

@@ -350,7 +350,7 @@ New concepts (Initiatives, Projects, Timeline, Health) need definitions in CONTE
 ### T11 — TODO: Linear screenshot reference integration
 
 **What**
-Vishal will send Linear screenshots later. They should be placed in `docs/factory/plans/gbj-20261018-019-pipekan-linear-parity/linear-refs/` and referenced in spec.md/tickets.md to validate visual parity.
+Linear screenshots are in `docs/factory/plans/gbj-20261018-019-pipekan-linear-parity/linear-refs/` and are the visual source for the workspace menu, initiative table, display popover, teams page, and update schedule.
 
 **Acceptance**
 1. `linear-refs/` directory exists with a `.gitkeep` (already created).

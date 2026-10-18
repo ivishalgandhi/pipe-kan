@@ -123,6 +123,7 @@ import {
   writeJson,
   type CatalogProject,
 } from "~/components/linear-views.tsx";
+import { TeamHome, TeamsPage, UpdateSchedule } from "~/components/linear-chrome.tsx";
 import { IssueComposer } from "~/components/issue-composer.tsx";
 import { Toaster } from "~/components/ui/sonner.tsx";
 import { Badge } from "~/components/ui/badge.tsx";
@@ -1287,6 +1288,8 @@ export function App() {
   const [savedViews, setSavedViews] = useState(() => readJson<Array<{ name: string; filter: ViewFilter; default?: boolean }>>(SAVED_VIEWS_KEY, []));
   const [linearFavorites, setLinearFavorites] = useState<LinearFavorite[]>(() => readJson(LINEAR_FAVORITES_KEY, []));
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [sidebarPage, setSidebarPage] = useState<"board" | "teams" | "team" | "schedule">("board");
+  const [teamKey, setTeamKey] = useState<string | null>(null);
   const [sourceList, setSourceList] = useState(() => sourceOptions({ planeKey: false, jiraBin: false }));
   const [activeSource, setActiveSource] = useState<SourceId>("jira");
   const [filterOpen, setFilterOpen] = useState(false);
@@ -1924,6 +1927,7 @@ export function App() {
   }
 
   function openStories() {
+    setSidebarPage("board");
     writeOpener("stories");
     setBoardKind("stories");
     setSelectedEpic(null);
@@ -1931,6 +1935,7 @@ export function App() {
   }
 
   function openEpics() {
+    setSidebarPage("board");
     writeOpener("epics");
     setBoardKind("epics");
     setSelectedEpic(null);
@@ -1938,6 +1943,7 @@ export function App() {
   }
 
   function openCombined() {
+    setSidebarPage("board");
     writeOpener("combined");
     setBoardKind("combined");
     setSelectedEpic(null);
@@ -1950,11 +1956,13 @@ export function App() {
   }
 
   function openCalendarTab() {
+    setSidebarPage("board");
     selectCalendarTab();
     setCanvasTab("calendar");
   }
 
   function openInitiatives() {
+    setSidebarPage("board");
     writeOpener("initiatives");
     setBoardKind("initiatives");
     setSelectedEpic(null);
@@ -1962,6 +1970,7 @@ export function App() {
   }
 
   function openProjects() {
+    setSidebarPage("board");
     writeOpener("projects");
     setBoardKind("projects");
     setSelectedEpic(null);
@@ -2294,6 +2303,14 @@ export function App() {
                       onSource={(id) => void switchSource(id)}
                       onToggleWorkspace={toggleWorkspaceScope}
                       onToggleProject={toggleProjectScope}
+                      onPreferences={() => {
+                        setSwitcherOpen(false);
+                        setDisplayOpen(true);
+                      }}
+                      onWorkspaceSettings={() => {
+                        setSwitcherOpen(false);
+                        setSidebarPage("schedule");
+                      }}
                     />
                   }
                 />
@@ -2320,10 +2337,17 @@ export function App() {
             <nav className="flex flex-1 flex-col gap-0.5 overflow-auto px-2 pb-2">
               <button
                 type="button"
-                className={navButtonClass(boardKind === "stories" && selectedEpic === null)}
+                className={navButtonClass(sidebarPage === "board" && boardKind === "stories" && selectedEpic === null)}
                 onClick={openStories}
               >
-                All stories
+                Inbox
+              </button>
+              <button
+                type="button"
+                className={navButtonClass(sidebarPage === "board" && boardKind === "stories" && selectedEpic !== null)}
+                onClick={openStories}
+              >
+                My issues
               </button>
               <button
                 type="button"
@@ -2341,10 +2365,24 @@ export function App() {
               </button>
               <button
                 type="button"
-                className={navButtonClass(canvasTab === "calendar")}
+                className={navButtonClass(sidebarPage === "board" && canvasTab === "calendar")}
                 onClick={openCalendarTab}
               >
                 Calendar
+              </button>
+              <button
+                type="button"
+                className={navButtonClass(false)}
+                onClick={() => setFilterOpen(true)}
+              >
+                Views
+              </button>
+              <button
+                type="button"
+                className={navButtonClass(sidebarPage === "teams" || sidebarPage === "team")}
+                onClick={() => setSidebarPage("teams")}
+              >
+                Teams
               </button>
               {processKind === "plane" ? (
                 <>
@@ -2695,7 +2733,7 @@ export function App() {
                       Display
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="max-h-[min(70vh,32rem)] w-52 overflow-auto">
+                  <DropdownMenuContent align="end" className="max-h-[min(70vh,32rem)] w-80 overflow-auto">
                     <DropdownMenuLabel>Card properties</DropdownMenuLabel>
                     {ALL_CARD_DISPLAY_KEYS.map((key) => (
                       <DropdownMenuCheckboxItem
@@ -2767,6 +2805,27 @@ export function App() {
                       canvasTab === "calendar" ? "overflow-hidden" : "overflow-auto",
                     )}
                   >
+                    {sidebarPage === "teams" ? (
+                      <TeamsPage
+                        projects={parity.projects}
+                        onOpen={(row) => {
+                          setTeamKey(`${row.workspace}/${row.identifier}`);
+                          setSidebarPage("team");
+                        }}
+                      />
+                    ) : sidebarPage === "team" ? (
+                      (() => {
+                        const project = parity.projects.find((row) => `${row.workspace}/${row.identifier}` === teamKey) ?? parity.projects[0];
+                        return project ? (
+                          <TeamHome project={project} onBack={() => setSidebarPage("teams")} onSchedule={() => setSidebarPage("schedule")} />
+                        ) : (
+                          <p className="text-muted-foreground px-3 text-[13px]">No teams in this scope.</p>
+                        );
+                      })()
+                    ) : sidebarPage === "schedule" ? (
+                      <UpdateSchedule onClose={() => setSidebarPage(teamKey ? "team" : "board")} />
+                    ) : (
+                    <>
                     {error ? null : <ViewFilterChips filter={viewFilter} onClear={(id) => persistViewFilter(clearViewChip(viewFilter, id))} />}
                     {canvasTab === "calendar" ? (
                       <BoardCalendar
@@ -2778,13 +2837,13 @@ export function App() {
                         kind={boardKind === "projects" ? "projects" : "initiatives"}
                         initiatives={parity.initiatives.filter((row) =>
                           matchViewFilter(
-                            { updated: row.updated, due: row.targetDate, status: row.status, priority: row.priority, project: row.project },
+                            { updated: row.updated, due: row.targetDate, status: row.status, priority: row.priority, project: row.project, health: row.health },
                             viewFilter,
                           ),
                         )}
                         projects={parity.projects.filter((row) =>
                           matchViewFilter(
-                            { updated: row.updated, due: row.targetDate, status: row.status, project: row.identifier },
+                            { updated: row.updated, due: row.targetDate, status: row.status, project: row.identifier, health: row.health },
                             viewFilter,
                           ),
                         )}
@@ -2919,6 +2978,8 @@ export function App() {
                         }}
                       </KanbanOverlay>
                     </Kanban>
+                    )}
+                    </>
                     )}
                   </main>
                 </ResizablePanel>

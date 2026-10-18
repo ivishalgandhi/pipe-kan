@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import { CheckIcon, StarIcon } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { CheckIcon, ChevronDownIcon, ChevronRightIcon, StarIcon } from "lucide-react";
 
 import type { Card } from "~/board.ts";
 import {
@@ -9,9 +9,10 @@ import {
   LINEAR_FAVORITES_KEY,
   SAVED_VIEWS_KEY,
   VIEW_FILTER_KEY,
+  HEALTH_FILTERS,
   effectiveLayout,
   filterParity,
-  groupRows,
+  healthLabel,
   initiativeGroup,
   layoutTimeline,
   orderRows,
@@ -36,11 +37,11 @@ import {
   type ViewFilter,
   type Zoom,
 } from "~/parity.ts";
+import { RoadmapTable } from "~/components/linear-chrome.tsx";
 import { rowMenuModel, type RowMenuAction, type RowMenuSection } from "~/row-menu.ts";
 import { cn } from "~/lib/utils";
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
@@ -61,13 +62,22 @@ export function HealthDot({ health }: { health: Health }) {
     <span
       className="inline-block size-2.5 shrink-0 rounded-full"
       style={{ backgroundColor: HEALTH_COLOR[health] }}
-      title={health}
-      aria-label={health}
+      title={healthLabel(health)}
+      aria-label={healthLabel(health)}
     />
   );
 }
 
 export type CatalogProject = { id: string; identifier: string; name: string; workspace: string };
+
+function MenuRow({ label, shortcut, onClick }: { label: string; shortcut?: string; onClick?: () => void }) {
+  return (
+    <button type="button" className="hover:bg-muted flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px]" onClick={onClick}>
+      <span className="flex-1">{label}</span>
+      {shortcut ? <span className="text-muted-foreground text-[11px]">{shortcut}</span> : null}
+    </button>
+  );
+}
 
 export function ScopeMenuList({
   source,
@@ -79,6 +89,8 @@ export function ScopeMenuList({
   onSource,
   onToggleWorkspace,
   onToggleProject,
+  onPreferences,
+  onWorkspaceSettings,
 }: {
   source: SourceId;
   sources: SourceOption[];
@@ -89,10 +101,49 @@ export function ScopeMenuList({
   onSource: (id: SourceId) => void;
   onToggleWorkspace: (slug: string) => void;
   onToggleProject: (scope: ScopePair) => void;
+  onPreferences?: () => void;
+  onWorkspaceSettings?: () => void;
 }) {
+  const [workspacesOpen, setWorkspacesOpen] = useState(false);
   return (
-    <div className="flex max-h-[min(70vh,28rem)] flex-col gap-1 overflow-auto p-1" data-smoke="scope-menu">
-      <div className="text-muted-foreground px-2 py-1 text-[11px] font-medium">Source</div>
+    <div className="flex max-h-[min(70vh,28rem)] flex-col gap-0.5 overflow-auto p-1" data-smoke="scope-menu">
+      <MenuRow label="Preferences" shortcut="G then S" onClick={onPreferences} />
+      <MenuRow label="Workspace settings" onClick={onWorkspaceSettings} />
+      <MenuRow label="Invite and manage members" />
+      <button
+        type="button"
+        className="hover:bg-muted flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px]"
+        aria-expanded={workspacesOpen}
+        onClick={() => setWorkspacesOpen((open) => !open)}
+      >
+        <span className="flex-1">Switch workspace</span>
+        <span className="text-muted-foreground text-[11px]">O then W</span>
+        <ChevronRightIcon className="text-muted-foreground size-3.5" />
+      </button>
+      {workspacesOpen ? (
+        workspaces.length ? (
+          workspaces.map((workspace) => {
+            const checked = selectedWorkspaces.includes(workspace.slug);
+            return (
+              <button
+                key={workspace.slug}
+                type="button"
+                className="hover:bg-muted flex items-center gap-2 rounded-md px-2 py-1.5 pl-4 text-left text-[13px]"
+                aria-checked={checked}
+                onClick={() => onToggleWorkspace(workspace.slug)}
+              >
+                <CheckIcon className={cn("size-3.5", checked ? "opacity-100" : "opacity-0")} />
+                <span>{workspace.name}</span>
+                <span className="text-muted-foreground ml-auto text-[11px]">{workspace.slug}</span>
+              </button>
+            );
+          })
+        ) : (
+          <p className="text-muted-foreground px-4 py-1 text-[12px]">Jira has no Plane workspaces.</p>
+        )
+      ) : null}
+      <MenuRow label="Log out" />
+      <div className="text-muted-foreground px-2 pt-2 pb-1 text-[11px] font-medium">Source</div>
       {sources.map((option) => (
         <button
           key={option.id}
@@ -107,30 +158,6 @@ export function ScopeMenuList({
           <span>{option.label}</span>
         </button>
       ))}
-      <div className="text-muted-foreground px-2 pt-2 pb-1 text-[11px] font-medium">Switch workspace</div>
-      {workspaces.length ? (
-        workspaces.map((workspace) => {
-          const checked = selectedWorkspaces.includes(workspace.slug);
-          return (
-            <button
-              key={workspace.slug}
-              type="button"
-              className="hover:bg-muted flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px]"
-              aria-checked={checked}
-              onClick={() => onToggleWorkspace(workspace.slug)}
-            >
-              <CheckIcon className={cn("size-3.5", checked ? "opacity-100" : "opacity-0")} />
-              <span>{workspace.name}</span>
-              <span className="text-muted-foreground ml-auto text-[11px]">{workspace.slug}</span>
-            </button>
-          );
-        })
-      ) : (
-        <p className="text-muted-foreground px-2 py-1 text-[12px]">Jira has no Plane workspaces.</p>
-      )}
-      <button type="button" className="hover:bg-muted rounded-md px-2 py-1.5 text-left text-[13px]" onClick={() => undefined}>
-        Settings
-      </button>
       <div className="text-muted-foreground px-2 pt-2 pb-1 text-[11px] font-medium">Projects</div>
       {projects.map((project) => {
         const checked = selectedScopes.some(
@@ -172,6 +199,7 @@ export function ScopeSwitcher(props: {
           title="Switch workspace (O then W)"
         >
           <span className="truncate">{props.label}</span>
+          <ChevronDownIcon className="text-muted-foreground ml-1 size-3.5 shrink-0" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-72">
@@ -191,7 +219,7 @@ export function JoinedProjects({
   if (!scopes.length) return null;
   return (
     <div className="flex flex-col gap-0.5">
-      <div className="text-muted-foreground px-3 pt-3 pb-1 text-[11px] font-medium">Projects</div>
+      <div className="text-muted-foreground px-3 pt-3 pb-1 text-[11px] font-medium">Your teams</div>
       {scopes.map((scope) => (
         <button
           key={`${scope.workspace}/${scope.project}`}
@@ -232,23 +260,6 @@ export function FavoriteRows({
         <p className="text-muted-foreground px-3 py-1 text-[12px]">No favorites yet</p>
       )}
     </div>
-  );
-}
-
-function StarButton({ on, label, onToggle }: { on: boolean; label: string; onToggle: () => void }) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      aria-pressed={on}
-      className="text-muted-foreground hover:text-foreground"
-      onClick={(event) => {
-        event.stopPropagation();
-        onToggle();
-      }}
-    >
-      <StarIcon className={cn("size-3.5", on && "fill-current")} />
-    </button>
   );
 }
 
@@ -305,57 +316,19 @@ export function RoadmapCanvas({
         />
       );
     }
-    const groups = groupRows(
-      filtered,
-      (row) => projectGroup(row, display.grouping, initiativeName.get(`${row.workspace}/${row.identifier}`)),
-      display.showEmptyGroups,
-      display.grouping === "status" ? ["backlog", "in_progress", "done"] : [],
-    );
     return (
-      <div className={cn("flex gap-3", layout === "board" ? "items-start" : "flex-col")} data-smoke="projects">
-        {groups.map((group) => (
-          <section key={group.key} className={cn(layout === "board" && "bg-muted/40 w-72 shrink-0 rounded-lg p-2")}>
-            <h3 className="text-muted-foreground px-2 py-1 text-[11px] font-medium">{group.key}</h3>
-            {group.rows.map((row) => {
-              const fav = favorites.some((item) => item.kind === "project" && item.id === `${row.workspace}/${row.identifier}`);
-              return (
-                <button
-                  key={`${row.workspace}/${row.id}`}
-                  type="button"
-                  className="hover:bg-muted flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[13px]"
-                  onClick={() => onOpenProject(row)}
-                  onContextMenu={(event) => onContext(event, `${row.workspace}/${row.identifier}`, "project")}
-                >
-                  <HealthDot health={row.health} />
-                  <span className="w-16 shrink-0 font-medium">{row.identifier}</span>
-                  <span className="min-w-0 flex-1 truncate">{row.name}</span>
-                  <span className="bg-muted h-1.5 w-16 overflow-hidden rounded">
-                    <span
-                      className="bg-primary block h-full"
-                      style={{ width: `${row.total ? Math.round((row.completed / row.total) * 100) : 0}%` }}
-                    />
-                  </span>
-                  <span className="text-muted-foreground w-10 text-right text-[11px] tabular-nums">
-                    {row.completed}/{row.total}
-                  </span>
-                  <span className="text-muted-foreground w-24 truncate text-[11px]">{row.targetDate ?? "No target"}</span>
-                  <StarButton
-                    on={fav}
-                    label={`Favorite ${row.name}`}
-                    onToggle={() =>
-                      onToggleFavorite({
-                        kind: "project",
-                        id: `${row.workspace}/${row.identifier}`,
-                        label: row.name,
-                      })
-                    }
-                  />
-                </button>
-              );
-            })}
-          </section>
-        ))}
-      </div>
+      <RoadmapTable
+        kind="projects"
+        initiatives={initiatives}
+        projects={filtered}
+        display={display}
+        layout={layout}
+        favorites={favorites}
+        onOpenInitiative={onOpenInitiative}
+        onOpenProject={onOpenProject}
+        onContext={onContext}
+        onToggleFavorite={onToggleFavorite}
+      />
     );
   }
 
@@ -382,44 +355,19 @@ export function RoadmapCanvas({
       />
     );
   }
-  const groups = groupRows(
-    rows,
-    (row) => initiativeGroup(row, display.grouping),
-    display.showEmptyGroups,
-    display.grouping === "status" ? ["Backlog", "Planned", "In Progress", "Done", "Cancelled"] : [],
-  );
   return (
-    <div className={cn("flex gap-3", layout === "board" ? "items-start" : "flex-col")} data-smoke="initiatives">
-      {groups.map((group) => (
-        <section key={group.key} className={cn(layout === "board" && "bg-muted/40 w-72 shrink-0 rounded-lg p-2")}>
-          <h3 className="text-muted-foreground px-2 py-1 text-[11px] font-medium">{group.key}</h3>
-          {group.rows.map((row) => {
-            const fav = favorites.some((item) => item.kind === "initiative" && item.id === row.key);
-            return (
-              <button
-                key={row.key}
-                type="button"
-                className="hover:bg-muted flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[13px]"
-                onClick={() => onOpenInitiative(row.key)}
-                onContextMenu={(event) => onContext(event, row.key, "initiative")}
-              >
-                <HealthDot health={row.health} />
-                <span className="w-28 shrink-0 truncate font-medium">{row.key}</span>
-                <span className="min-w-0 flex-1 truncate">{row.name}</span>
-                <span className="text-muted-foreground w-24 truncate text-[11px]">{row.status}</span>
-                <span className="text-muted-foreground w-16 truncate text-[11px]">{row.priority ?? "None"}</span>
-                <span className="text-muted-foreground w-24 truncate text-[11px]">{row.targetDate ?? "No target"}</span>
-                <StarButton
-                  on={fav}
-                  label={`Favorite ${row.name}`}
-                  onToggle={() => onToggleFavorite({ kind: "initiative", id: row.key, label: row.name })}
-                />
-              </button>
-            );
-          })}
-        </section>
-      ))}
-    </div>
+    <RoadmapTable
+      kind="initiatives"
+      initiatives={rows}
+      projects={projects}
+      display={display}
+      layout={layout}
+      favorites={favorites}
+      onOpenInitiative={onOpenInitiative}
+      onOpenProject={onOpenProject}
+      onContext={onContext}
+      onToggleFavorite={onToggleFavorite}
+    />
   );
 }
 
@@ -577,6 +525,11 @@ export function ViewFilterEditor({
   onApply: (name: string) => void;
   onMakeDefault: (name: string) => void;
 }) {
+  function toggleHealth(value: string) {
+    const current = filter.health ?? [];
+    const health = current.includes(value) ? current.filter((item) => item !== value) : [...current, value];
+    onChange({ ...filter, ...(health.length ? { health } : { health: undefined }) });
+  }
   function toggle(key: "status" | "assignee" | "priority" | "labels" | "project", value: string) {
     const current = filter[key];
     const next = current.includes(value) ? current.filter((item) => item !== value) : [...current, value];
@@ -615,6 +568,21 @@ export function ViewFilterEditor({
           />
         </label>
       ))}
+      <div className="flex flex-col">
+        <span className="text-muted-foreground text-[11px]">Health</span>
+        {HEALTH_FILTERS.map((value) => (
+          <button
+            key={value}
+            type="button"
+            className="hover:bg-muted flex items-center gap-2 rounded px-1 py-0.5 text-left text-[12px]"
+            aria-checked={(filter.health ?? []).includes(value)}
+            onClick={() => toggleHealth(value)}
+          >
+            <CheckIcon className={cn("size-3", (filter.health ?? []).includes(value) ? "opacity-100" : "opacity-0")} />
+            {value}
+          </button>
+        ))}
+      </div>
       {(
         [
           ["status", options.status],
@@ -670,6 +638,8 @@ export function ViewFilterEditor({
   );
 }
 
+const DISPLAY_PROPERTIES = ["Status", "Priority", "Assignee", "Labels", "Project", "Due date", "Health", "Target date"];
+
 export function DisplayOptionItems({
   display,
   onChange,
@@ -677,62 +647,117 @@ export function DisplayOptionItems({
   display: DisplayOptions;
   onChange: (next: DisplayOptions) => void;
 }) {
+  const [listOpen, setListOpen] = useState(false);
+  const properties = display.properties ?? ["Status", "Priority", "Assignee", "Labels"];
+  function toggleProperty(name: string) {
+    const next = properties.includes(name) ? properties.filter((item) => item !== name) : [...properties, name];
+    onChange({ ...display, properties: next });
+  }
   return (
-    <>
-      <DropdownMenuSeparator />
-      <DropdownMenuLabel>Layout</DropdownMenuLabel>
-      <DropdownMenuRadioGroup value={display.layout} onValueChange={(value) => onChange({ ...display, layout: value as Layout })}>
-        <DropdownMenuRadioItem value="list">List</DropdownMenuRadioItem>
-        <DropdownMenuRadioItem value="board">Board</DropdownMenuRadioItem>
-        <DropdownMenuRadioItem value="timeline">Timeline</DropdownMenuRadioItem>
-      </DropdownMenuRadioGroup>
-      <DropdownMenuSeparator />
-      <DropdownMenuLabel>Grouping</DropdownMenuLabel>
-      <DropdownMenuRadioGroup value={display.grouping} onValueChange={(value) => onChange({ ...display, grouping: value as Grouping })}>
-        {["status", "assignee", "project", "priority", "label", "health", "target", "initiative"].map((value) => (
-          <DropdownMenuRadioItem key={value} value={value}>
-            {value}
-          </DropdownMenuRadioItem>
+    <div className="flex flex-col gap-2 p-2" data-smoke="display-options">
+      <div className="bg-muted flex gap-1 rounded-lg p-1">
+        {(["list", "board", "timeline"] as const).map((value) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={display.layout === value}
+            className={cn(
+              "h-7 flex-1 rounded-md text-[12px] capitalize",
+              display.layout === value ? "bg-background text-foreground shadow-sm" : "text-muted-foreground",
+            )}
+            onClick={() => onChange({ ...display, layout: value })}
+          >
+            {value === "list" ? "List" : value === "board" ? "Board" : "Timeline"}
+          </button>
         ))}
-      </DropdownMenuRadioGroup>
-      <DropdownMenuSeparator />
-      <DropdownMenuLabel>Ordering</DropdownMenuLabel>
-      <DropdownMenuRadioGroup value={display.ordering} onValueChange={(value) => onChange({ ...display, ordering: value as Ordering })}>
-        {["manual", "status", "priority", "updated", "created", "target"].map((value) => (
-          <DropdownMenuRadioItem key={value} value={value}>
-            {value}
-          </DropdownMenuRadioItem>
-        ))}
-      </DropdownMenuRadioGroup>
-      <DropdownMenuSeparator />
-      <DropdownMenuLabel>Zoom</DropdownMenuLabel>
-      <DropdownMenuRadioGroup value={display.zoom} onValueChange={(value) => onChange({ ...display, zoom: value as Zoom })}>
-        {["week", "month", "quarter", "year"].map((value) => (
-          <DropdownMenuRadioItem key={value} value={value}>
-            {value}
-          </DropdownMenuRadioItem>
-        ))}
-      </DropdownMenuRadioGroup>
-      <DropdownMenuSeparator />
-      <DropdownMenuCheckboxItem
-        checked={display.showEmptyGroups}
-        onCheckedChange={(checked) => onChange({ ...display, showEmptyGroups: Boolean(checked) })}
+      </div>
+      <button
+        type="button"
+        className="hover:bg-muted flex items-center justify-between rounded-md px-1 py-1 text-left text-[13px]"
+        aria-pressed={display.ordering === "updated"}
+        onClick={() => onChange({ ...display, ordering: display.ordering === "updated" ? "manual" : "updated" })}
       >
-        Show empty groups
-      </DropdownMenuCheckboxItem>
-      <DropdownMenuSeparator />
-      <DropdownMenuLabel>Completed</DropdownMenuLabel>
-      <DropdownMenuRadioGroup
-        value={display.completed}
-        onValueChange={(value) => onChange({ ...display, completed: value as DisplayOptions["completed"] })}
+        <span>Order completed by recency</span>
+        <span className={cn("h-4 w-7 rounded-full", display.ordering === "updated" ? "bg-primary" : "bg-muted")} />
+      </button>
+      <button
+        type="button"
+        className="hover:bg-muted flex items-center justify-between rounded-md px-1 py-1 text-left text-[13px]"
+        aria-pressed={display.showSubIssues !== false}
+        onClick={() => onChange({ ...display, showSubIssues: display.showSubIssues === false })}
       >
-        {["week", "month", "year", "all", "none"].map((value) => (
-          <DropdownMenuRadioItem key={value} value={value}>
-            {value}
-          </DropdownMenuRadioItem>
-        ))}
-      </DropdownMenuRadioGroup>
-    </>
+        <span>Show sub-issues</span>
+        <span className={cn("h-4 w-7 rounded-full", display.showSubIssues === false ? "bg-muted" : "bg-primary")} />
+      </button>
+      <button type="button" className="hover:bg-muted rounded-md px-1 py-1 text-left text-[13px]" onClick={() => setListOpen((open) => !open)}>
+        List options
+      </button>
+      {listOpen ? (
+        <div className="flex flex-col gap-1 pl-1">
+          <DropdownMenuLabel>Grouping</DropdownMenuLabel>
+          <DropdownMenuRadioGroup value={display.grouping} onValueChange={(value) => onChange({ ...display, grouping: value as Grouping })}>
+            {["status", "assignee", "project", "priority", "label", "health", "target", "initiative"].map((value) => (
+              <DropdownMenuRadioItem key={value} value={value}>
+                {value}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+          <DropdownMenuLabel>Ordering</DropdownMenuLabel>
+          <DropdownMenuRadioGroup value={display.ordering} onValueChange={(value) => onChange({ ...display, ordering: value as Ordering })}>
+            {["manual", "status", "priority", "updated", "created", "target"].map((value) => (
+              <DropdownMenuRadioItem key={value} value={value}>
+                {value}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+          <DropdownMenuLabel>Zoom</DropdownMenuLabel>
+          <DropdownMenuRadioGroup value={display.zoom} onValueChange={(value) => onChange({ ...display, zoom: value as Zoom })}>
+            {["week", "month", "quarter", "year"].map((value) => (
+              <DropdownMenuRadioItem key={value} value={value}>
+                {value}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+          <DropdownMenuLabel>Completed</DropdownMenuLabel>
+          <DropdownMenuRadioGroup
+            value={display.completed}
+            onValueChange={(value) => onChange({ ...display, completed: value as DisplayOptions["completed"] })}
+          >
+            {["week", "month", "year", "all", "none"].map((value) => (
+              <DropdownMenuRadioItem key={value} value={value}>
+                {value}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </div>
+      ) : null}
+      <button
+        type="button"
+        className="hover:bg-muted flex items-center justify-between rounded-md px-1 py-1 text-left text-[13px]"
+        aria-pressed={display.showEmptyGroups}
+        onClick={() => onChange({ ...display, showEmptyGroups: !display.showEmptyGroups })}
+      >
+        <span>Show empty groups</span>
+        <span className={cn("h-4 w-7 rounded-full", display.showEmptyGroups ? "bg-primary" : "bg-muted")} />
+      </button>
+      <div className="text-muted-foreground px-1 text-[11px] font-medium">Display properties</div>
+      <div className="flex flex-wrap gap-1 px-1">
+        {DISPLAY_PROPERTIES.map((name) => {
+          const on = properties.includes(name);
+          return (
+            <button
+              key={name}
+              type="button"
+              aria-pressed={on}
+              className={cn("h-6 rounded-full px-2 text-[11px]", on ? "bg-muted text-foreground" : "text-muted-foreground border border-[var(--bg-border-color)]")}
+              onClick={() => toggleProperty(name)}
+            >
+              {name}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
