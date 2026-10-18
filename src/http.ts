@@ -24,6 +24,12 @@ export function handleRequest(
   ) {
     return true;
   }
-  if (ctx.kind === "plane") return false;
-  return handleFakeJira(req, res, ctx.store);
+  if (ctx.kind !== "plane" && handleFakeJira(req, res, ctx.store)) return true;
+  if ((req.url ?? "").split("?")[0].startsWith("/api/")) {
+    res.statusCode = 404;
+    res.setHeader("content-type", "application/json");
+    res.end(JSON.stringify({ error: "unknown API route" }));
+    return true;
+  }
+  return false;
 }

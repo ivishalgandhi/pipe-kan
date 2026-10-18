@@ -13,6 +13,7 @@ export type SourceSwitchResult = {
   source: string;
   reason?: string;
   error?: string;
+  refreshing?: boolean;
 };
 
 function json(res: ServerResponse, status: number, body: unknown) {

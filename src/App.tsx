@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { cardAge, epicsToColumns, isNeedsInputLabel, targetEndDistance, type Board, type Card, type Column, type Epic } from "./board.ts";
 import { workspacePickerRows, type CommandJump, type PlaneWorkspace } from "./command.ts";
 import { REFRESH_NO_FOCUS_WARNING, refreshRequestBody, refreshWorkspaceWarning } from "./refresh.ts";
+import { readApiJson } from "./api-json.ts";
 import { applyScopeSelection, commitWorkspaceSlug, parseFlags, setPlaneFlag, setProjectsFlag, setWorkspaceFlag, type ScopePair } from "./flags.ts";
 import { copyText } from "./copy-text.ts";
 import {
@@ -508,7 +509,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { "content-type": "application/json" },
     ...init,
   });
-  return res.json() as Promise<T>;
+  return readApiJson<T>(res);
 }
 
 function toValue(columns: Column[]): Record<string, Card[]> {
@@ -2122,10 +2123,13 @@ export function App() {
   }
 
   async function switchSource(source: SourceId) {
-    const data = await api<{ ok: boolean; kind?: "jira" | "store" | "plane"; reason?: string; error?: string }>(
-      "/api/source",
-      { method: "POST", body: JSON.stringify({ source }) },
-    );
+    let data: { ok: boolean; kind?: "jira" | "store" | "plane"; reason?: string; error?: string; refreshing?: boolean };
+    try {
+      data = await api<typeof data>("/api/source", { method: "POST", body: JSON.stringify({ source }) });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Source switch failed");
+      return;
+    }
     if (!data.ok) {
       toast.error(data.reason || data.error || "Source switch failed");
       return;
@@ -2133,6 +2137,11 @@ export function App() {
     if (data.kind) setProcessKind(data.kind);
     if (source !== "plane" && (boardKind === "initiatives" || boardKind === "projects")) openStories();
     await load();
+    if (data.refreshing) {
+      for (const delay of [4000, 8000, 15000, 30000]) {
+        setTimeout(() => void load().catch(() => undefined), delay);
+      }
+    }
   }
 
   function openRowMenu(event: { clientX: number; clientY: number; preventDefault: () => void }, key: string, kind: "issue" | "initiative" | "project") {

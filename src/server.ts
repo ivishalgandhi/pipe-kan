@@ -58,12 +58,13 @@ export async function runServer(opts: {
       live.store = next.store;
       live.kind = next.kind;
       if (next.kind === "plane" || next.kind === "jira") {
-        try {
-          await refreshFromJira(live.app, next.kind);
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          return { ok: true, kind: live.kind, source, error: message };
-        }
+        // Never block the switch on a slow upstream refresh; the Board fills in as it lands.
+        const app = live.app;
+        const kind = next.kind;
+        void refreshFromJira(app, kind).catch((err) => {
+          console.error(`${kind} Refresh after source switch failed`, err);
+        });
+        return { ok: true, kind: live.kind, source, refreshing: true };
       }
       return { ok: true, kind: live.kind, source };
     } catch (err) {
@@ -84,20 +85,19 @@ export async function runServer(opts: {
     }
   });
 
-  if (live.kind === "plane") {
-    try {
-      await refreshFromJira(live.app, live.kind, { piped: Boolean(piped) });
-    } catch (err) {
-      console.error(`${live.kind} Refresh failed`, err);
-    }
-    const error = live.app.board().error;
-    if (error) console.error(`${live.kind} Refresh failed; keeping last live Board`, error);
-  }
-
   const { host, port } = resolveListen();
   await bindListen(server, host, port);
   const origin = `http://127.0.0.1:${port}`;
   announce(`pipe-kan http://${host}:${port}`);
+  if (live.kind === "plane") {
+    // Listen first; the initial Plane refresh must not delay startup (it can take a minute).
+    void refreshFromJira(live.app, live.kind, { piped: Boolean(piped) })
+      .catch((err) => console.error(`${live.kind} Refresh failed`, err))
+      .then(() => {
+        const error = live.app.board().error;
+        if (error) console.error(`${live.kind} Refresh failed; keeping last live Board`, error);
+      });
+  }
   if (live.kind === "plane") {
     announce(`cli plane ${planeHost()} ${planeWorkspace(flags)}`);
     announce(`Plane host default ${DEFAULT_PLANE_HOST}`);
