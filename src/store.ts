@@ -202,13 +202,17 @@ export class IssueStore {
 
   edit(
     key: string,
-    input: { summary?: string; description?: string; labels?: string[] },
+    input: { summary?: string; description?: string; labels?: string[]; assignee?: string; priority?: string },
   ): { ok: true } | { ok: false; error: string } {
     const issue = this.get(key);
     if (!issue) return { ok: false, error: `Issue ${key} not found` };
     if (input.summary !== undefined) issue.fields.summary = input.summary;
     if (input.description !== undefined) issue.fields.description = input.description;
     if (input.labels !== undefined) issue.fields.labels = input.labels;
+    if (input.priority !== undefined) issue.fields.priority = { name: input.priority };
+    if (input.assignee !== undefined) {
+      issue.fields.assignee = input.assignee ? { displayName: input.assignee } : undefined;
+    }
     return { ok: true };
   }
 }

@@ -80,6 +80,7 @@ test("Epics leave the Board and children keep the Epic key", () => {
     dueDate: "Aug 25, 2026",
     targetEnd: "2026-09-13",
     created: "2026-09-01T11:00:00.000+0000",
+    updated: "2026-09-02T11:00:00.000+0000",
     labels: ["kanban", "write-back"],
   });
 });

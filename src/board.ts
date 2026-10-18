@@ -23,6 +23,7 @@ export type Card = {
   epic?: string;
   labels?: string[];
   created?: string;
+  updated?: string;
 };
 
 export type Column = {
@@ -95,6 +96,10 @@ function createdAt(fields: RawIssue["fields"]): string | undefined {
   return typeof fields?.created === "string" && fields.created
     ? fields.created
     : undefined;
+}
+
+function updatedAt(fields: RawIssue["fields"]): string | undefined {
+  return typeof fields?.updated === "string" && fields.updated ? fields.updated : undefined;
 }
 
 export function cardAge(created: unknown, now = Date.now()): string | undefined {
@@ -251,6 +256,7 @@ function toCard(issue: RawIssue, key: string, fieldId?: string): Card {
   const epic = epicKey(issue.fields);
   const labels = issueLabels(issue.fields);
   const created = createdAt(issue.fields);
+  const updated = updatedAt(issue.fields);
   return {
     key,
     summary,
@@ -262,6 +268,7 @@ function toCard(issue: RawIssue, key: string, fieldId?: string): Card {
     ...(epic ? { epic } : {}),
     ...(labels ? { labels } : {}),
     ...(created ? { created } : {}),
+    ...(updated ? { updated } : {}),
   };
 }
 

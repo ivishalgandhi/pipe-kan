@@ -1,6 +1,7 @@
-import { DEFAULT_FLAGS, parseFlags } from "./flags.ts";
+import { DEFAULT_FLAGS, parseFlags, type ScopePair } from "./flags.ts";
 import type { Cli } from "./cli.ts";
 import type { RawIssue } from "./board.ts";
+import { computeHealth, isCompletedStatus, type ParityInitiative, type ParityProject, type ParitySnapshot } from "./parity.ts";
 
 export const DEFAULT_PLANE_HOST = "https://plane.tail48fe8.ts.net";
 export const DEFAULT_PLANE_WORKSPACE = "personal";
@@ -17,6 +18,8 @@ export type PlaneOpts = {
   retryDelayMs?: number;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
+  /** Skip repeat list-workspaces / list-projects calls inside this window. 0 disables. */
+  cacheTtlMs?: number;
 };
 
 type PlaneState = {
@@ -35,6 +38,7 @@ type PlaneProject = {
   id: string;
   identifier: string;
   name: string;
+  workspace?: string;
 };
 
 type PlaneModule = {
@@ -44,6 +48,8 @@ type PlaneModule = {
   created_at?: string;
   target_date?: string;
   start_date?: string;
+  priority?: string;
+  updated_at?: string;
 };
 
 type PlaneWorkItem = {
@@ -63,6 +69,7 @@ type PlaneWorkItem = {
   modules?: unknown;
   module?: unknown;
   created_at?: string;
+  updated_at?: string;
   target_date?: string;
   start_date?: string;
   archived_at?: string | null;
@@ -273,6 +280,7 @@ export function workItemToIssue(
       ...(opts.moduleKey ? { parent: { key: opts.moduleKey } } : {}),
       ...(labels.length ? { labels } : {}),
       ...(asString(item.created_at) ? { created: item.created_at } : {}),
+      ...(asString(item.updated_at) ? { updated: item.updated_at } : {}),
       ...(description ? { description } : {}),
     },
   };
@@ -280,6 +288,7 @@ export function workItemToIssue(
 
 export function moduleToIssue(module: PlaneModule, project: PlaneProject): RawIssue {
   const target = asString(module.target_date);
+  const priority = titleCasePriority(module.priority);
   return {
     key: planeModuleKey(project.identifier, module.id),
     fields: {
@@ -287,8 +296,10 @@ export function moduleToIssue(module: PlaneModule, project: PlaneProject): RawIs
       status: { name: moduleStatusName(module.status) },
       issuetype: { name: "Epic" },
       issueType: { name: "Epic" },
+      ...(priority ? { priority: { name: priority } } : {}),
       ...(target ? { duedate: target, "Target End Date": target } : {}),
       ...(asString(module.created_at) ? { created: module.created_at } : {}),
+      ...(asString(module.updated_at) ? { updated: module.updated_at } : {}),
     },
   };
 }
@@ -373,6 +384,7 @@ export function createPlaneCli(opts: PlaneOpts): Cli {
     | {
         flags: string;
         workspace: string;
+        cacheKey: string;
         projects: PlaneProject[];
         states: Map<string, Map<string, PlaneState>>;
         labels: Map<string, Map<string, PlaneLabel>>;
@@ -544,31 +556,90 @@ export function createPlaneCli(opts: PlaneOpts): Cli {
       created_at: asString(row?.created_at),
       target_date: asString(row?.target_date),
       start_date: asString(row?.start_date),
+      priority: asString(row?.priority),
+      updated_at: asString(row?.updated_at),
     };
+  }
+
+  function catalogPlan(flags: string): { slugs: string[]; pairs: ScopePair[] | null } {
+    const parsed = parseFlags(flags || defaultFlags);
+    if (parsed.scopes.length) {
+      return {
+        slugs: [...new Set(parsed.scopes.map((scope) => scope.workspace))],
+        pairs: parsed.scopes,
+      };
+    }
+    if (parsed.workspaces.length) return { slugs: parsed.workspaces, pairs: null };
+    return { slugs: [workspaceOf(flags)], pairs: null };
+  }
+
+  function exposeKey(slug: string, key: string, multi: boolean): string {
+    return multi ? `${slug}/${key}` : key;
+  }
+
+  function prefixIssue(issue: RawIssue, slug: string, multi: boolean): RawIssue {
+    if (!multi || typeof issue.key !== "string") return issue;
+    const parent = asRecord(issue.fields?.parent);
+    const parentKey = asString(parent?.key);
+    return {
+      ...issue,
+      key: exposeKey(slug, issue.key, true),
+      fields: {
+        ...issue.fields,
+        ...(parentKey ? { parent: { ...parent, key: exposeKey(slug, parentKey, true) } } : {}),
+      },
+    };
+  }
+
+  const projectCache = new Map<string, { at: number; rows: PlaneProject[] }>();
+  const cacheTtlMs = opts.cacheTtlMs ?? 30_000;
+
+  async function projectsFor(slug: string): Promise<PlaneProject[]> {
+    const hit = projectCache.get(slug);
+    const now = nowFn();
+    if (cacheTtlMs > 0 && hit && now - hit.at < cacheTtlMs) return hit.rows;
+    const rows = (await paginate(`/workspaces/${slug}/projects/`))
+      .map(parseProject)
+      .filter((row): row is PlaneProject => !!row)
+      .map((project) => ({ ...project, workspace: slug }));
+    projectCache.set(slug, { at: now, rows });
+    return rows;
   }
 
   async function loadCatalog(flags: string) {
     lastFlags = flags || defaultFlags;
-    const workspace = workspaceOf(lastFlags);
-    if (catalog && catalog.flags === lastFlags && catalog.workspace === workspace) return catalog;
+    const plan = catalogPlan(lastFlags);
+    const cacheKey = plan.slugs.join(",");
+    if (catalog && catalog.flags === lastFlags && catalog.cacheKey === cacheKey) return catalog;
 
-      const projects = scopedProjects(
-      (await paginate(`/workspaces/${workspace}/projects/`)).map(parseProject).filter((row): row is PlaneProject => !!row),
-      lastFlags,
-    );
+    const multi = plan.slugs.length > 1;
+    const projects: PlaneProject[] = [];
     const states = new Map<string, Map<string, PlaneState>>();
     const labels = new Map<string, Map<string, PlaneLabel>>();
     const works = new Map<string, CachedWork>();
     const modules = new Map<string, CachedModule>();
     const columnStates: PlaneState[] = [];
 
+    for (const slug of plan.slugs) {
+      const listed = await projectsFor(slug);
+      const chosen = plan.pairs
+        ? listed.filter((project) =>
+            plan.pairs!.some(
+              (pair) => pair.workspace === slug && pair.project === project.identifier.toUpperCase(),
+            ),
+          )
+        : scopedProjects(listed, lastFlags);
+      for (const project of chosen) projects.push(project);
+    }
+
     for (const project of projects) {
-      const stateRows = await paginate(`/workspaces/${workspace}/projects/${project.id}/states/`);
-      const labelRows = await paginate(`/workspaces/${workspace}/projects/${project.id}/labels/`);
-      const moduleRows = await paginate(`/workspaces/${workspace}/projects/${project.id}/modules/`);
+      const slug = project.workspace || plan.slugs[0] || workspaceOf(lastFlags);
+      const stateRows = await paginate(`/workspaces/${slug}/projects/${project.id}/states/`);
+      const labelRows = await paginate(`/workspaces/${slug}/projects/${project.id}/labels/`);
+      const moduleRows = await paginate(`/workspaces/${slug}/projects/${project.id}/modules/`);
       const workRows = await withResource((resource) =>
         paginate(
-          queryPath(`/workspaces/${workspace}/projects/${project.id}/${resource}/`, {
+          queryPath(`/workspaces/${slug}/projects/${project.id}/${resource}/`, {
             expand: "assignees,labels,state,module",
           }),
         ),
@@ -589,7 +660,7 @@ export function createPlaneCli(opts: PlaneOpts): Cli {
       for (const row of moduleRows) {
         const module = parseModule(row);
         if (!module) continue;
-        const issue = moduleToIssue(module, project);
+        const issue = prefixIssue(moduleToIssue(module, project), slug, multi);
         const cached = { issue, module, project };
         moduleById.set(module.id, cached);
         modules.set(String(issue.key), cached);
@@ -607,7 +678,7 @@ export function createPlaneCli(opts: PlaneOpts): Cli {
       if (missingModules && moduleById.size) {
         for (const moduleId of moduleById.keys()) {
           const rows = await paginate(
-            `/workspaces/${workspace}/projects/${project.id}/modules/${moduleId}/module-issues/`,
+            `/workspaces/${slug}/projects/${project.id}/modules/${moduleId}/module-issues/`,
           );
           const ids = rows
             .map((row) => asId(asRecord(row)?.issue) ?? asId(row))
@@ -621,26 +692,29 @@ export function createPlaneCli(opts: PlaneOpts): Cli {
         const fromItem = moduleIdsOf(item)[0];
         const fromJoin = [...issueByModule.entries()].find(([, ids]) => ids.includes(item.id))?.[0];
         const moduleId = fromItem ?? fromJoin;
-        const moduleKey = moduleId ? moduleById.get(moduleId)?.issue.key : undefined;
+        const bareModuleKey = moduleId ? planeModuleKey(project.identifier, moduleId) : undefined;
         const issue = workItemToIssue(item, project, {
           states: stateById,
           labels: labelById,
-          moduleKey: typeof moduleKey === "string" ? moduleKey : undefined,
+          ...(bareModuleKey ? { moduleKey: bareModuleKey } : {}),
         });
-        const issueKey = typeof issue?.key === "string" ? issue.key : undefined;
-        if (!issue || !issueKey) continue;
+        const stamped = issue ? prefixIssue(issue, slug, multi) : undefined;
+        const issueKey = typeof stamped?.key === "string" ? stamped.key : undefined;
+        if (!stamped || !issueKey) continue;
+        const linked = bareModuleKey ? exposeKey(slug, bareModuleKey, multi) : undefined;
         works.set(issueKey, {
-          issue,
+          issue: stamped,
           item,
           project,
-          ...(typeof moduleKey === "string" ? { moduleKey } : {}),
+          ...(linked ? { moduleKey: linked } : {}),
         });
       }
     }
 
     catalog = {
-        flags: lastFlags,
-        workspace,
+      flags: lastFlags,
+      workspace: plan.slugs[0] || workspaceOf(lastFlags),
+      cacheKey,
       projects,
       states,
       labels,
@@ -649,6 +723,79 @@ export function createPlaneCli(opts: PlaneOpts): Cli {
       columns: orderStateNames(columnStates),
     };
     return catalog;
+  }
+
+  function projectSlug(project: PlaneProject): string {
+    return project.workspace || workspaceOf(lastFlags);
+  }
+
+  function buildParity(loaded: NonNullable<typeof catalog>): ParitySnapshot {
+    const projects: ParityProject[] = loaded.projects.map((project) => {
+      const issues = [...loaded.works.values()].filter(
+        (row) => row.project.id === project.id && row.project.workspace === project.workspace,
+      );
+      const modules = [...loaded.modules.values()].filter(
+        (row) => row.project.id === project.id && row.project.workspace === project.workspace,
+      );
+      const total = issues.length;
+      const completed = issues.filter((row) => {
+        const name = typeof row.issue.fields?.status?.name === "string" ? row.issue.fields.status.name : "";
+        const key = name.toLowerCase();
+        return key === "done" || key === "completed";
+      }).length;
+      const started = issues.some((row) => {
+        const name = typeof row.issue.fields?.status?.name === "string" ? row.issue.fields.status.name : "";
+        return name.toLowerCase() === "in progress";
+      });
+      const status = total > 0 && completed === total ? "done" : started ? "in_progress" : "backlog";
+      const dates = [
+        ...modules.map((row) => row.module.target_date),
+        ...issues.map((row) => row.item.target_date),
+      ].filter((value): value is string => Boolean(value));
+      const starts = [
+        ...modules.map((row) => row.module.start_date),
+        ...issues.map((row) => row.item.start_date),
+      ].filter((value): value is string => Boolean(value));
+      const targetDate = dates.sort().at(-1);
+      const startDate = starts.sort()[0];
+      return {
+        workspace: project.workspace || loaded.workspace,
+        id: project.id,
+        identifier: project.identifier,
+        name: project.name,
+        total,
+        completed,
+        status,
+        ...(startDate ? { startDate } : {}),
+        ...(targetDate ? { targetDate } : {}),
+        health: computeHealth(status, targetDate),
+      };
+    });
+    const active = new Map(projects.map((project) => [`${project.workspace}/${project.id}`, project.completed < project.total || project.total === 0]));
+    const initiatives: ParityInitiative[] = [...loaded.modules.values()].map((row) => {
+      const raw = row.module.status ?? "backlog";
+      const priority = titleCasePriority(row.module.priority);
+      const open = active.get(`${row.project.workspace}/${row.project.id}`) !== false;
+      return {
+        key: String(row.issue.key),
+        name: row.module.name,
+        workspace: row.project.workspace || loaded.workspace,
+        project: row.project.identifier,
+        status: moduleStatusName(raw),
+        rawStatus: raw,
+        ...(priority ? { priority } : {}),
+        ...(row.module.start_date ? { startDate: row.module.start_date } : {}),
+        ...(row.module.target_date ? { targetDate: row.module.target_date } : {}),
+        ...(row.module.updated_at ? { updated: row.module.updated_at } : {}),
+        health: computeHealth(raw, row.module.target_date),
+        activeProjects: isCompletedStatus(raw) || !open ? 0 : 1,
+      };
+    });
+    return {
+      initiatives,
+      projects,
+      workspaces: [...new Set(loaded.projects.map((project) => project.workspace || loaded.workspace))],
+    };
   }
 
   function filterWorks(flags: string, works: CachedWork[]): CachedWork[] {
@@ -763,10 +910,19 @@ export function createPlaneCli(opts: PlaneOpts): Cli {
     async listProjectIdentifiers(workspace: string) {
       const slug = workspace.trim();
       if (!slug) return [];
-      return (await paginate(`/workspaces/${slug}/projects/`))
-        .map(parseProject)
-        .filter((row): row is PlaneProject => !!row)
-        .map((row) => row.identifier);
+      return (await projectsFor(slug)).map((row) => row.identifier);
+    },
+    async listProjects(workspace: string) {
+      const slug = workspace.trim();
+      if (!slug) return [];
+      return (await projectsFor(slug)).map((row) => ({
+        id: row.id,
+        identifier: row.identifier,
+        name: row.name,
+      }));
+    },
+    async parity(flags?: string) {
+      return buildParity(await loadCatalog(flags || lastFlags));
     },
     async move(key, status) {
       try {
@@ -785,7 +941,7 @@ export function createPlaneCli(opts: PlaneOpts): Cli {
           }).find(([name]) => name === status.toLowerCase())?.[1];
           if (!mapped) return { ok: false, error: `Unknown Plane module status "${status}"` };
           await request(
-            `/workspaces/${workspaceOf(lastFlags)}/projects/${module.project.id}/modules/${module.module.id}/`,
+            `/workspaces/${projectSlug(module.project)}/projects/${module.project.id}/modules/${module.module.id}/`,
             { method: "PATCH", body: JSON.stringify({ status: mapped }) },
           );
           catalog = undefined;
@@ -797,7 +953,7 @@ export function createPlaneCli(opts: PlaneOpts): Cli {
         if (!state) return { ok: false, error: `Unknown Plane state "${status}" for ${key}` };
         await withResource((resource) =>
           request(
-            `/workspaces/${workspaceOf(lastFlags)}/projects/${work.project.id}/${resource}/${work.item.id}/`,
+            `/workspaces/${projectSlug(work.project)}/projects/${work.project.id}/${resource}/${work.item.id}/`,
             { method: "PATCH", body: JSON.stringify({ state }) },
           ),
         );
@@ -823,7 +979,7 @@ export function createPlaneCli(opts: PlaneOpts): Cli {
         if (labels.length) body.labels = labels;
         const created = asRecord(
           await withResource((resource) =>
-            requestJson(`/workspaces/${workspaceOf(lastFlags)}/projects/${project.id}/${resource}/`, {
+            requestJson(`/workspaces/${projectSlug(project)}/projects/${project.id}/${resource}/`, {
               method: "POST",
               body: JSON.stringify(body),
             }),
@@ -836,7 +992,7 @@ export function createPlaneCli(opts: PlaneOpts): Cli {
             : undefined;
         if (parent && created?.id) {
           await request(
-            `/workspaces/${workspaceOf(lastFlags)}/projects/${project.id}/modules/${parent.module.id}/module-issues/`,
+            `/workspaces/${projectSlug(project)}/projects/${project.id}/modules/${parent.module.id}/module-issues/`,
             { method: "POST", body: JSON.stringify({ issues: [created.id] }) },
           );
         }
@@ -848,15 +1004,42 @@ export function createPlaneCli(opts: PlaneOpts): Cli {
     },
     async edit(key, input) {
       try {
+        const loaded = await loadCatalog(lastFlags);
+        const module = loaded.modules.get(key);
+        if (module) {
+          if (input.assignee !== undefined) return { ok: false, error: "Plane modules have no assignee field" };
+          if (input.labels) return { ok: false, error: "Plane modules have no labels field" };
+          const body: Record<string, unknown> = {};
+          if (input.summary !== undefined) body.name = input.summary;
+          if (input.priority !== undefined) body.priority = input.priority.toLowerCase();
+          if (Object.keys(body).length) {
+            await request(
+              `/workspaces/${projectSlug(module.project)}/projects/${module.project.id}/modules/${module.module.id}/`,
+              { method: "PATCH", body: JSON.stringify(body) },
+            );
+          }
+          catalog = undefined;
+          return { ok: true };
+        }
         const work = await lookupByKey(key, lastFlags);
         if (!work) return { ok: false, error: `Work item ${key} not found` };
         const body: Record<string, unknown> = {};
         if (input.summary !== undefined) body.name = input.summary;
         if (input.description !== undefined) body.description_html = htmlParagraph(input.description);
         if (input.labels) body.labels = await resolveLabelIds(work.project, input.labels, lastFlags);
+        if (input.priority !== undefined) body.priority = input.priority.toLowerCase();
+        if (input.assignee !== undefined) {
+          const slug = projectSlug(work.project);
+          const members = (await paginate(`/workspaces/${slug}/members/`)).map((row) => asRecord(row));
+          const wanted = input.assignee.trim().toLowerCase();
+          const member = members.find((row) => asString(row?.display_name)?.toLowerCase() === wanted);
+          const memberId = asString(member?.id);
+          if (wanted && !memberId) return { ok: false, error: `Plane member "${input.assignee}" was not found` };
+          body.assignees = memberId ? [memberId] : [];
+        }
         await withResource((resource) =>
           request(
-            `/workspaces/${workspaceOf(lastFlags)}/projects/${work.project.id}/${resource}/${work.item.id}/`,
+            `/workspaces/${projectSlug(work.project)}/projects/${work.project.id}/${resource}/${work.item.id}/`,
             { method: "PATCH", body: JSON.stringify(body) },
           ),
         );
@@ -867,7 +1050,12 @@ export function createPlaneCli(opts: PlaneOpts): Cli {
       }
     },
     async open(key) {
-      return `${host}/${workspaceOf(lastFlags)}/browse/${key}`;
+      const loaded = await loadCatalog(lastFlags);
+      const module = loaded.modules.get(key);
+      const work = loaded.works.get(key);
+      const slug = module?.project.workspace || work?.project.workspace || workspaceOf(lastFlags);
+      const bare = key.includes("/") ? key.slice(key.indexOf("/") + 1) : key;
+      return `${host}/${slug}/browse/${bare}`;
     },
     async view(key) {
       const loaded = await loadCatalog(lastFlags);

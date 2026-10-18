@@ -53,12 +53,19 @@ bunx pipe-kan --plane --projects APH,PULSE,PKAN,PUI,DEC
 | Flag / env | Default | Role |
 | --- | --- | --- |
 | `--plane` | off | use Plane instead of jira-cli |
-| `--workspace` | `personal` | Plane workspace slug (`--workspace team` or `PLANE_WORKSPACE`) |
-| `--projects APH,PULSE` | all workspace projects | Plane project identifiers |
+| `--workspace` | `personal` | first Plane workspace slug (`--workspace team` or `PLANE_WORKSPACE`) |
+| `--workspaces work,personal` | current slug | checked workspaces |
+| `--scopes work/PULSE,personal/PULSE` | none | checked workspace/project pairs |
+| `--projects APH,PULSE` | all workspace projects | project identifiers, kept in sync with `--scopes` |
 | `PLANE_API_KEY` | (required in Plane mode) | personal access token (`X-API-Key`) |
 | `PLANE_HOST` | `https://plane.tail48fe8.ts.net` | Plane origin; API is `{host}/api/v1` |
+| `PLANE_FIXTURE` | (unset) | `synthetic` uses the built-in fake catalog; otherwise a JSON file path |
 
-Same `--projects` style as Jira: comma-separated, trimmed, uppercased. The header **Scope flags** field accepts the same string, then **Refresh**. In Plane mode a header **Workspace** pill (beside the project-identifier chip) types a slug, writes `--workspace` into Scope flags, and Refresh-confirms all Epics. Jira omits the pill. Next launch still uses argv `--workspace`, else `PLANE_WORKSPACE`, else `personal`.
+Same `--projects` style as Jira: comma-separated, trimmed, uppercased. CLI flags are startup defaults. The sidebar switcher (O then W) checks Sources, Workspaces, and Projects and refreshes the merged Board. The header project chip opens that same menu. Scope flags still round-trip the selection. Next launch uses argv, else `PLANE_WORKSPACE`, else `personal`.
+
+Plane mode adds Initiatives and Projects. Initiatives are modules (health, status, priority, target date) in a list, board, or timeline. Projects show completion, target date, and health. Display is Shift+V. The Filter menu (F) adds view filters, chips, and saved views. Right-click a row for status, assignee, priority, labels, or copy link. Cmd+K jumps to those views; `ow` lists workspaces.
+
+When more than one Workspace is selected, issue keys are `workspace/KEY` so `work/PULSE` and `personal/PULSE` stay distinct. Catalog reads are serialized, cached, and keep trailing slashes.
 
 On Refresh:
 
@@ -134,6 +141,7 @@ Pipe is the first Board. Refresh and Move still go through `jira` when it is on 
 | `PLANE_API_KEY` | (none) | Plane token; required with `--plane` |
 | `PLANE_HOST` | `https://plane.tail48fe8.ts.net` | Plane origin |
 | `PLANE_WORKSPACE` | `personal` | default workspace if `--workspace` is omitted |
+| `PLANE_FIXTURE` | (unset) | `synthetic` or a JSON catalog path; skips the network and uses Fake Jira for the Jira source |
 
 ## Limits
 
@@ -148,9 +156,10 @@ Pipe is the first Board. Refresh and Move still go through `jira` when it is on 
 bun test
 bun run typecheck
 bun run build
+bun run smoke
 ```
 
-Contributors still `bun install` and `bun run dev` (Vite). `bun run build` writes the published CLI to `dist/pipe-kan.js`.
+Contributors still `bun install` and `bun run dev` (Vite). `bun run build` writes the published CLI to `dist/pipe-kan.js`. `bun run smoke` boots that flow with `PLANE_FIXTURE=synthetic` (and `dist/pipe-kan.js` when it exists) and writes `docs/factory/plans/gbj-20261018-019-pipekan-linear-parity/smoke-logs/smoke.log`.
 
 ## Version
 

@@ -4,6 +4,7 @@ import { delimiter, join, resolve } from "node:path";
 import { availableParallelism } from "node:os";
 
 import { DEFAULT_FLAGS, flagsToJql, parseFlags } from "./flags.ts";
+import type { ParitySnapshot } from "./parity.ts";
 import { IssueStore, validIssueKey } from "./store.ts";
 
 export type Cli = {
@@ -22,13 +23,15 @@ export type Cli = {
   }): Promise<{ ok: boolean; key?: string; error?: string }>;
   edit(
     key: string,
-    input: { summary?: string; description?: string; labels?: string[] },
+    input: { summary?: string; description?: string; labels?: string[]; assignee?: string; priority?: string },
   ): Promise<{ ok: boolean; error?: string }>;
   open(key: string): Promise<string>;
   view(key: string): Promise<string>;
   states?(flags?: string): Promise<string[]>;
   listWorkspaces?(): Promise<{ id: string; name: string; slug: string }[]>;
   listProjectIdentifiers?(workspace: string): Promise<string[]>;
+  listProjects?(workspace: string): Promise<{ id: string; identifier: string; name: string }[]>;
+  parity?(flags?: string): Promise<ParitySnapshot>;
 };
 
 export function createdKeyFromOutput(text: string): string | undefined {
@@ -414,6 +417,8 @@ export function createJiraCli(
       if (input.labels?.length) {
         for (const label of input.labels) args.push("-l", label);
       }
+      if (input.assignee !== undefined) args.push("-a", input.assignee);
+      if (input.priority !== undefined) args.push("--priority", input.priority);
       const result = await runRetry(args);
       if (result.code !== 0) {
         return { ok: false, error: (result.stderr || result.stdout).trim() };

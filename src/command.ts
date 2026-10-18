@@ -1,4 +1,5 @@
 import type { Card, Epic } from "./board.ts";
+import { isWorkspaceChord } from "./parity.ts";
 import { cardMatches, epicMatches } from "./visible.ts";
 
 export type CommandJump =
@@ -12,7 +13,13 @@ export type CommandJump =
   | { kind: "preset"; name: string }
   | { kind: "epic"; key: string }
   | { kind: "card"; key: string; epic?: string }
-  | { kind: "workspace"; slug: string };
+  | { kind: "workspace"; slug: string }
+  | { kind: "initiatives" }
+  | { kind: "projects" }
+  | { kind: "source"; source: "plane" | "jira" | "taskwarrior" }
+  | { kind: "display" }
+  | { kind: "set-status"; key: string; status: string }
+  | { kind: "set-assignee"; key: string; assignee: string };
 
 export type CommandRow = {
   label: string;
@@ -35,6 +42,9 @@ export type CommandCatalogInput = {
   favouriteKeys?: string[];
   plane?: boolean;
   workspaces?: PlaneWorkspace[];
+  selectedKey?: string;
+  statuses?: string[];
+  assignees?: string[];
 };
 
 export type PlaneWorkspace = { id: string; name: string; slug: string };
@@ -70,6 +80,10 @@ function workspaceGroup(input: CommandCatalogInput): CommandGroup | null {
 }
 
 export function commandCatalog(input: CommandCatalogInput): CommandGroup[] {
+  if (input.plane && isWorkspaceChord(input.query)) {
+    const group = workspaceGroup({ ...input, query: "" });
+    return group ? [group] : [];
+  }
   const needle = input.query.trim().toLowerCase();
   const actions: CommandRow[] = [
     { label: "All stories", jump: { kind: "all-stories" } },
@@ -79,12 +93,43 @@ export function commandCatalog(input: CommandCatalogInput): CommandGroup[] {
     { label: "Agent", jump: { kind: "agent" } },
     { label: "Create issue", jump: { kind: "create" } },
     { label: "Create with AI", jump: { kind: "create-ai" } },
+    ...(input.plane
+      ? [
+          { label: "Initiatives", jump: { kind: "initiatives" as const } },
+          { label: "Projects", jump: { kind: "projects" as const } },
+        ]
+      : []),
     ...input.presets.map((name) => ({
       label: `Apply ${name}`,
       jump: { kind: "preset" as const, name },
     })),
   ];
   const actionRows = actions.filter((row) => !needle || row.label.toLowerCase().includes(needle));
+  if (needle) {
+    const extras: CommandRow[] = [
+      { label: "Switch to Plane", jump: { kind: "source", source: "plane" } },
+      { label: "Switch to Jira", jump: { kind: "source", source: "jira" } },
+      { label: "Switch to Taskwarrior", jump: { kind: "source", source: "taskwarrior" } },
+      { label: "Display options", jump: { kind: "display" } },
+    ];
+    for (const row of extras) {
+      if (row.label.toLowerCase().includes(needle)) actionRows.push(row);
+    }
+    if (input.selectedKey) {
+      for (const status of input.statuses ?? []) {
+        const label = `Status ${status}`;
+        if (label.toLowerCase().includes(needle)) {
+          actionRows.push({ label, jump: { kind: "set-status", key: input.selectedKey, status } });
+        }
+      }
+      for (const name of input.assignees ?? []) {
+        const label = `Assignee ${name}`;
+        if (label.toLowerCase().includes(needle)) {
+          actionRows.push({ label, jump: { kind: "set-assignee", key: input.selectedKey, assignee: name } });
+        }
+      }
+    }
+  }
   const groups: CommandGroup[] = [];
   if (actionRows.length) groups.push({ id: "actions", title: "Actions", rows: actionRows });
   const workspaces = workspaceGroup(input);

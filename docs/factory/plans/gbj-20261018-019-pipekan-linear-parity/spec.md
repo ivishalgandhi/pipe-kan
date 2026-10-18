@@ -283,3 +283,20 @@ Vishal's requirement: switching must be done in the UI, not by typing flags (`--
 - Jira write-back remains exclusively through jira-cli (ADR 0001/0002); the switcher never writes to Jira directly.
 - Plane workspace slugs are `work` and `personal` (PULSE exists in both).
 - Linear reference captures: if not present in `linear-refs/`, the maker works from the notes in this spec and flags it in the PR.
+
+## Addendum (2026-10-18): multi-select scope
+
+The workspace/project switcher is **multi-select across every backend**. A checkable list lets the operator pick several workspaces and several projects at once. The board, Initiatives, Projects, and Timeline then show one **merged** view of that selection.
+
+- Plane slugs in this slice are `work` and `personal`. `PULSE` exists in both; checking `work/PULSE` and `personal/PULSE` merges those two projects.
+- Selection is stored as `--workspaces` plus `--scopes workspace/PROJECT` (and the existing `--workspace` / `--projects` flags stay in sync for startup defaults and the header chip).
+- CLI `--plane`, `--workspace`, `--projects`, and the Scope flags field remain startup defaults. Later changes happen in the sidebar menu, not by typing flags.
+- Plane catalog loads stay serial, cached, and trailing-slash. About 60 requests per minute.
+
+## Addendum (2026-10-18): stretch T13–T15
+
+- **T13 View filters.** Filter menu, `F` shortcut, chips, and saved views (including a default) for Created date, Updated date, Due date, Status, Assignee, Priority, Labels, and Project.
+- **T14 Row menus.** Right-click an issue, initiative, or project row for status, assignee, priority, labels, and copy link. Jira mutations still go through jira-cli.
+- **T15 Command palette.** Cmd+K searches and jumps to a view, issue, or project; switches workspace or source; changes status or assignee on the selected item; toggles Display. `O` then `W` opens Switch workspace.
+
+Smoke: `bun run smoke` (`scripts/smoke-linear-parity.ts`) uses `PLANE_FIXTURE=synthetic` only. It checks the merged work+personal PULSE view, source switch, filters, the row menu, the command palette, and Initiatives/Projects/Timeline. The log is `smoke-logs/smoke.log`. Reference screenshots live in `linear-refs/`. Sub-initiatives, owners, progress graphs, initiative updates, the teams page, and update reminders are not implemented.
