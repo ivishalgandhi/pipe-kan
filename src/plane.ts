@@ -5,6 +5,7 @@ import { computeHealth, isCompletedStatus, type ParityInitiative, type ParityPro
 
 export const DEFAULT_PLANE_HOST = "https://plane.tail48fe8.ts.net";
 export const DEFAULT_PLANE_WORKSPACE = "personal";
+const COMMON_WORKSPACE_SLUGS = ["personal", "work"];
 
 const STATE_GROUPS = ["backlog", "unstarted", "started", "completed", "cancelled"];
 export type PlaneFetch = typeof fetch;
@@ -14,6 +15,7 @@ export type PlaneOpts = {
   apiKey: string;
   workspace?: string;
   flags?: string;
+  env?: NodeJS.ProcessEnv;
   fetch?: PlaneFetch;
   retryDelayMs?: number;
   now?: () => number;
@@ -518,6 +520,37 @@ export function createPlaneCli(opts: PlaneOpts): Cli {
     return { id: asString(row?.id) ?? slug, name: asString(row?.name) ?? slug, slug };
   }
 
+  const known = new Set<string>();
+
+  /** Plane v1 cannot list workspaces; probe candidate slugs and keep those the key can read. */
+  async function probeWorkspaces(): Promise<{ id: string; name: string; slug: string }[]> {
+    const env = opts.env ?? process.env;
+    const fromFlags = parseFlags(`${defaultFlags} ${lastFlags}`);
+    const candidates = new Set<string>([
+      ...known,
+      ...fromFlags.workspaces,
+      ...(fromFlags.workspace ? [fromFlags.workspace] : []),
+      ...fromFlags.scopes.map((scope) => scope.workspace),
+      ...(env.PLANE_WORKSPACE ? [env.PLANE_WORKSPACE] : []),
+      ...(env.PLANE_WORKSPACES ?? "").split(","),
+      ...(env.PIPE_KAN_WORKSPACES ?? "").split(","),
+      ...COMMON_WORKSPACE_SLUGS,
+    ]);
+    const found: { id: string; name: string; slug: string }[] = [];
+    for (const raw of candidates) {
+      const slug = raw.trim();
+      if (!slug || !/^[A-Za-z0-9_-]+$/.test(slug)) continue;
+      try {
+        await requestJson(queryPath(`/workspaces/${slug}/projects/`, { per_page: "1" }));
+        known.add(slug);
+        found.push({ id: slug, name: slug, slug });
+      } catch {
+        known.delete(slug);
+      }
+    }
+    return found;
+  }
+
   function parseWorkspaceList(raw: unknown): { id: string; name: string; slug: string }[] | undefined {
     const rows = Array.isArray(raw) ? raw : asRecord(raw)?.results;
     if (!Array.isArray(rows)) return undefined;
@@ -898,14 +931,13 @@ export function createPlaneCli(opts: PlaneOpts): Cli {
     async listWorkspaces() {
       for (const path of ["/users/me/workspaces/", "/workspaces/"] as const) {
         try {
-          return parseWorkspaceList(await requestJson(path)) ?? [];
-        } catch (err) {
-          const status = (err as { status?: number }).status;
-          if (status === 404 && path === "/users/me/workspaces/") continue;
-          return [];
+          const listed = parseWorkspaceList(await requestJson(path));
+          if (listed?.length) return listed;
+        } catch {
+          /* Plane's public v1 API has no workspace-list endpoint; fall through to probing */
         }
       }
-      return [];
+      return probeWorkspaces();
     },
     async listProjectIdentifiers(workspace: string) {
       const slug = workspace.trim();

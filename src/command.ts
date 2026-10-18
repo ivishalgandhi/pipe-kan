@@ -170,3 +170,9 @@ export function commandComposerAction(jump: CommandJump): "create" | "create-ai"
   if (jump.kind === "create" || jump.kind === "create-ai") return jump.kind;
   return null;
 }
+
+export function workspacesEmptyMessage(source: string): string {
+  return source === "plane"
+    ? "No Plane workspaces found. Check that your API key can read them."
+    : "Connect the Plane source to see workspaces.";
+}

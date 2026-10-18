@@ -152,3 +152,11 @@ describe("linear parity", () => {
     expect(sources.find((source) => source.id === "jira")?.enabled).toBe(true);
   });
 });
+
+import { workspacesEmptyMessage } from "./command.ts";
+
+test("empty workspace switcher shows a connect state, never the old Jira wording", () => {
+  expect(workspacesEmptyMessage("jira")).toBe("Connect the Plane source to see workspaces.");
+  expect(workspacesEmptyMessage("plane")).toContain("No Plane workspaces found");
+  expect(workspacesEmptyMessage("jira")).not.toContain("Jira has no");
+});
