@@ -37,6 +37,7 @@ export async function createBoardApp(opts: {
         apiKey: env.PLANE_API_KEY ?? "",
         workspace: planeWorkspace(flags, env),
         flags,
+        env,
         fetch: opts.fetch ?? resolvePlaneFetch(env),
       })
     : useJira

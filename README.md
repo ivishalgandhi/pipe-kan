@@ -63,6 +63,8 @@ bunx pipe-kan --plane --projects APH,PULSE,PKAN,PUI,DEC
 
 Same `--projects` style as Jira: comma-separated, trimmed, uppercased. CLI flags are startup defaults. The sidebar switcher (O then W) checks Sources, Workspaces, and Projects and refreshes the merged Board. The header project chip opens that same menu. Scope flags still round-trip the selection. Next launch uses argv, else `PLANE_WORKSPACE`, else `personal`.
 
+Workspace discovery: Plane's public v1 API has no workspace-list endpoint, so the switcher lists every workspace the key can read by probing candidate slugs (startup flags, `PLANE_WORKSPACE`, `PLANE_WORKSPACES`, `PIPE_KAN_WORKSPACES`, plus `personal` and `work`) regardless of the startup scope. The startup flags bar is hidden by default; Display > Show startup flags bar brings it back.
+
 Plane mode adds Initiatives and Projects. Initiatives are modules (health, status, priority, target date) in a list, board, or timeline. Projects show completion, target date, and health. Display is Shift+V. The Filter menu (F) adds view filters, chips, and saved views. Right-click a row for status, assignee, priority, labels, or copy link. Cmd+K jumps to those views; `ow` lists workspaces.
 
 When more than one Workspace is selected, issue keys are `workspace/KEY` so `work/PULSE` and `personal/PULSE` stay distinct. Catalog reads are serialized, cached, and keep trailing slashes.

@@ -780,7 +780,9 @@ function workspaceIndexUrl(url: string) {
 test("list-workspaces probe 404s both paths as an empty list", async () => {
   const plane = fakePlane();
   const cli = planeCli("--plane --projects APH", plane.fetch);
-  expect(await cli.listWorkspaces?.()).toEqual([]);
+  // no list endpoint: falls back to probing candidate slugs the key can read
+  const slugs = ((await cli.listWorkspaces?.()) ?? []).map((w) => w.slug);
+  expect(slugs).toContain("personal");
   const urls = plane.calls().map((call) => call.url);
   expect(urls.some((url) => url.includes("/users/me/workspaces"))).toBe(true);
   expect(urls.some(workspaceIndexUrl)).toBe(true);
@@ -816,7 +818,9 @@ test("list-workspaces probe falls back to /workspaces/ after me 404", async () =
 test("list-workspaces probe treats a non-list body as no list", async () => {
   const plane = fakePlane({ workspaces: { error: "Page not found." } });
   const cli = planeCli("--plane --projects APH", plane.fetch);
-  expect(await cli.listWorkspaces?.()).toEqual([]);
+  // no list endpoint: falls back to probing candidate slugs the key can read
+  const slugs = ((await cli.listWorkspaces?.()) ?? []).map((w) => w.slug);
+  expect(slugs).toContain("personal");
 });
 
 test("project identifiers for a named Workspace are unscoped", async () => {
@@ -826,4 +830,43 @@ test("project identifiers for a named Workspace are unscoped", async () => {
   const urls = plane.calls().map((call) => call.url);
   expect(urls.some((url) => url.includes("/workspaces/other/projects"))).toBe(true);
   expect(urls.some((url) => url.includes("/workspaces/personal/"))).toBe(false);
+});
+
+test("listWorkspaces probes slugs when Plane has no workspace-list endpoint (fake data)", async () => {
+  const seen: string[] = [];
+  const fakeFetch = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    seen.push(url);
+    if (/\/api\/v1\/(users\/me\/)?workspaces\/(\?.*)?$/.test(url)) {
+      return jsonResponse({ error: "Page not found." }, 404);
+    }
+    const m = /\/workspaces\/([^/]+)\/projects\//.exec(url);
+    if (m && (m[1] === "alpha" || m[1] === "beta")) return jsonResponse({ results: [] });
+    return jsonResponse({ error: "nope" }, 404);
+  }) as typeof fetch;
+  const cli = createPlaneCli({
+    host: "https://plane.test",
+    apiKey: "k",
+    flags: "--plane --workspaces alpha --workspace alpha",
+    env: { PIPE_KAN_WORKSPACES: "beta,ghost" },
+    fetch: fakeFetch,
+  });
+  const list = await cli.listWorkspaces!();
+  expect(list.map((w) => w.slug).sort()).toEqual(["alpha", "beta"]);
+  expect(seen.some((u) => u.includes("/workspaces/ghost/"))).toBe(true);
+});
+
+test("listWorkspaces prefers a real list endpoint when Plane serves one", async () => {
+  const fakeFetch = (async (input: RequestInit | URL | string) => {
+    const url = String(input);
+    if (url.includes("/users/me/workspaces/")) {
+      return jsonResponse([
+        { id: "1", name: "Alpha", slug: "alpha" },
+        { id: "2", name: "Beta", slug: "beta" },
+      ]);
+    }
+    return jsonResponse({}, 404);
+  }) as typeof fetch;
+  const cli = createPlaneCli({ host: "https://plane.test", apiKey: "k", flags: "--plane --workspaces alpha", fetch: fakeFetch });
+  expect((await cli.listWorkspaces!()).map((w) => w.slug)).toEqual(["alpha", "beta"]);
 });

@@ -186,6 +186,7 @@ import { useDefaultLayout, usePanelRef } from "react-resizable-panels";
 const COLLAPSED_KEY = "collapsed-columns";
 const COLLAPSED_EPIC_STATUS_KEY = "collapsed-epic-statuses";
 const COLLAPSED_FOLDER_KEY = "collapsed-favourite-folders";
+const SHOW_FLAGS_KEY = "pipe-kan.showFlagsBar";
 const CHROME_KEY = "board-chrome";
 const OPENER_KEY = "board-opener";
 const FAV_KEY = "favourite-epics";
@@ -1331,6 +1332,13 @@ export function App() {
   const [activeSource, setActiveSource] = useState<SourceId>("jira");
   const [filterOpen, setFilterOpen] = useState(false);
   const [displayOpen, setDisplayOpen] = useState(false);
+  const [showFlagsBar, setShowFlagsBar] = useState(() => {
+    try {
+      return localStorage.getItem(SHOW_FLAGS_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
   const [issueLens, setIssueLens] = useState<"all" | "mine">("all");
   const [viewer, setViewer] = useState(readViewer);
   const [viewName, setViewName] = useState("");
@@ -2678,14 +2686,14 @@ export function App() {
                     </InputGroupAddon>
                   ) : null}
                 </InputGroup>
-                <input
+                {showFlagsBar ? <input
                   className="placeholder:text-muted-foreground h-7 min-w-40 flex-1 rounded-md border border-transparent bg-muted px-2 text-[13px] outline-none"
                   value={flags}
                   onChange={(event) => setFlags(event.target.value)}
                   placeholder="Scope flags"
                   spellCheck={false}
                   aria-label="Scope flags"
-                />
+                /> : null}
                 <DropdownMenu open={filterOpen} onOpenChange={setFilterOpen}>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="sm" className={HEADER_CONTROL} title="Filter (F)">
@@ -2818,6 +2826,19 @@ export function App() {
                         {key === "dueDate" && "Due date"}
                       </DropdownMenuCheckboxItem>
                     ))}
+                    <DropdownMenuCheckboxItem
+                      checked={showFlagsBar}
+                      onCheckedChange={(next) => {
+                        setShowFlagsBar(Boolean(next));
+                        try {
+                          localStorage.setItem(SHOW_FLAGS_KEY, next ? "1" : "0");
+                        } catch {
+                          /* ignore */
+                        }
+                      }}
+                    >
+                      Show startup flags bar
+                    </DropdownMenuCheckboxItem>
                     <DisplayOptionItems display={display} onChange={persistDisplay} />
                   </DropdownMenuContent>
                 </DropdownMenu>

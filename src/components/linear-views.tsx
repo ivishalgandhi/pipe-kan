@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { workspacesEmptyMessage } from "~/command.ts";
 import { CheckIcon, ChevronDownIcon, ChevronRightIcon, StarIcon } from "lucide-react";
 
 import type { Card } from "~/board.ts";
@@ -139,7 +140,9 @@ export function ScopeMenuList({
             );
           })
         ) : (
-          <p className="text-muted-foreground px-4 py-1 text-[12px]">Jira has no Plane workspaces.</p>
+          <p className="text-muted-foreground px-4 py-1 text-[12px]" data-smoke="workspaces-empty">
+            {workspacesEmptyMessage(source)}
+          </p>
         )
       ) : null}
       <MenuRow label="Log out" />
