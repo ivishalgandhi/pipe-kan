@@ -20,7 +20,7 @@
 2. **Full Add Filter menu** (`F` shortcut) — AI filter, Advanced filter, Status, Status type, Assignee, Agent, Creator, Priority, Estimate, Labels, Relations, Suggested label, Dates, Project, Project properties, Initiative, Cycle, Added to cycle, Subscribers, Auto-closed, Content, Links, Template.
 3. **"Move to project" picker** (`Shift+P`) — search, checkmark, hover cards.
 4. **Inbox** — unread count badge, notification list.
-5. **Left sidebar** — Workspace (Projects/Views/Initiatives/More); Favorites with folders, nested items, drag, add-folder icon; Your teams (Home/Triage/Issues/Cycles/Projects/Views); Try/Invite/Connect footer.
+5. **Left sidebar** — Workspace (Projects/Views/Initiatives/More); Favorites with folders, nested items, drag, add-folder icon; Your teams (Home/Triage/Issues/Cycles/Projects/Views); Try/Invite/Connect footer. gbj-20261018-024 nests All stories, My issues, All epics, Combined, Calendar, and Presets in that team tree as vertical rows.
 6. **Icon spec** — all small icons with size, stroke, colour tokens, and states.
 
 ## Ticket summary

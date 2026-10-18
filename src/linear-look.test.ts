@@ -1,6 +1,10 @@
 import { describe, expect, test } from "vitest";
 
-import { ADD_FILTER_ROWS, EMPTY_VIEW_DRAFT, ICON_SPEC, addFavoriteFolder, assignIssueProject, createNamedView, fileLinearFavorite, filterPickerProjects, groupLinearFavorites, inboxBadgeCount, inboxNotifications, issueProjectId, projectChip, statusMark, type PickerProject } from "./linear-look.ts";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+
+import { TeamNav } from "./components/linear-look.tsx";
+import { ADD_FILTER_ROWS, EMPTY_VIEW_DRAFT, ICON_SPEC, addFavoriteFolder, assignIssueProject, createNamedView, fileLinearFavorite, filterPickerProjects, groupLinearFavorites, inboxBadgeCount, inboxNotifications, issueProjectId, projectChip, sidebarSelection, statusMark, type PickerProject } from "./linear-look.ts";
 import { EMPTY_VIEW_FILTER, matchViewFilter } from "./parity.ts";
 
 const ROWS = [
@@ -118,4 +122,65 @@ describe("linear look", () => {
     expect(issueProjectId("DEMO-12", { "DEMO-12": "" })).toBe("");
     expect(issueProjectId("DEMO-12", {})).toBe("DEMO");
   });
+
+  test("sidebar selection keeps a single row", () => {
+    const base = {
+      sidebarPage: "board" as const,
+      boardKind: "stories" as const,
+      issueLens: "all" as const,
+      canvasTab: "board" as const,
+      epicSelected: false,
+      plane: false,
+      intent: null,
+    };
+    expect(sidebarSelection(base)).toEqual({ kind: "team", item: "All stories" });
+    expect(sidebarSelection({ ...base, issueLens: "mine" })).toEqual({ kind: "team", item: "My issues" });
+    expect(sidebarSelection({ ...base, boardKind: "epics" })).toEqual({ kind: "team", item: "All epics" });
+    expect(sidebarSelection({ ...base, boardKind: "combined" })).toEqual({ kind: "team", item: "Combined" });
+    expect(sidebarSelection({ ...base, canvasTab: "calendar" })).toEqual({ kind: "team", item: "Calendar" });
+    expect(sidebarSelection({ ...base, canvasTab: "calendar", intent: "all-stories" })).toEqual({ kind: "team", item: "All stories" });
+    expect(sidebarSelection({ ...base, boardKind: "epics", canvasTab: "calendar", intent: "calendar" })).toEqual({ kind: "team", item: "Calendar" });
+    expect(sidebarSelection({ ...base, boardKind: "epics", intent: "all-epics", canvasTab: "calendar" })).toEqual({ kind: "team", item: "All epics" });
+    expect(sidebarSelection({ ...base, sidebarPage: "inbox", boardKind: "epics" })).toEqual({ kind: "inbox" });
+    expect(sidebarSelection({ ...base, sidebarPage: "views", intent: "team-views" })).toEqual({ kind: "team", item: "Views" });
+    expect(sidebarSelection({ ...base, sidebarPage: "views" })).toEqual({ kind: "workspace", item: "views" });
+    expect(sidebarSelection({ ...base, boardKind: "projects", plane: true })).toEqual({ kind: "workspace", item: "projects" });
+    expect(sidebarSelection({ ...base, boardKind: "projects", plane: true, intent: "team-projects" })).toEqual({ kind: "team", item: "Projects" });
+    expect(sidebarSelection({ ...base, boardKind: "projects" })).toEqual({ kind: "team", item: "Projects" });
+    expect(sidebarSelection({ ...base, boardKind: "initiatives", plane: true })).toEqual({ kind: "workspace", item: "initiatives" });
+    expect(sidebarSelection({ ...base, epicSelected: true })).toEqual({ kind: "epic" });
+    expect(sidebarSelection({ ...base, intent: "pulse" })).toEqual({ kind: "pulse" });
+    expect(sidebarSelection({ ...base, intent: "home" })).toEqual({ kind: "team", item: "Home" });
+    expect(sidebarSelection({ ...base, intent: "triage" })).toEqual({ kind: "team", item: "Triage" });
+    expect(sidebarSelection({ ...base, sidebarPage: "teams" })).toEqual({ kind: "workspace", item: "teams" });
+  });
+});
+
+test("team nav is a vertical list with one current row", () => {
+  const html = renderToStaticMarkup(
+    createElement(TeamNav, {
+      scopes: [{ workspace: "acme", project: "DEMO" }],
+      triage: 3,
+      current: { item: "All stories", scope: "acme/DEMO" },
+      mineTitle: "Assigned to you",
+      onOpenScope: () => undefined,
+      onNav: () => undefined,
+    }),
+  );
+  expect(html).toContain('role="tree"');
+  expect(html).toContain('data-orientation="vertical"');
+  expect(html).toContain('data-team="acme/DEMO"');
+  expect(html).not.toContain("flex-wrap");
+  for (const label of ["Home", "Triage", "Issues", "All stories", "My issues", "All epics", "Cycles", "Current", "Upcoming", "Projects", "Views", "Combined", "Calendar"]) {
+    expect(html).toContain(label);
+  }
+  expect(html).toContain('data-smoke="cycle-guide"');
+  expect(html).toContain('data-depth="2"');
+  expect(html).toContain('data-depth="3"');
+  expect(html).toContain('title="Coming soon"');
+  expect(html).toContain("Team menu acme/DEMO");
+  expect(html).toContain(">3<");
+  expect(html.match(/aria-current="page"/g)).toHaveLength(1);
+  expect(html).toContain('data-mode="All stories"');
+  expect(html).toContain("w-full");
 });

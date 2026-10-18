@@ -16,7 +16,7 @@ If `--plane` is set, first paint is live Refresh. A failed live Refresh stays in
 
 The published CLI is on npm. From a clone: `bun run build && bun dist/pipe-kan.js`.
 
-- Left: All stories and All epics (Plane: modules in that left rail). Center: Cards (one Column per status; Plane also keeps empty workflow states). Right: Open URL; remote Jira is a link, not an iframe.
+- Left: a vertical team list. Issues nests All stories, My issues, and All epics (Plane: modules in that list). Center: Cards (one Column per status; Plane also keeps empty workflow states). Right: Open URL; remote Jira is a link, not an iframe.
 - Drop a Card on a Column to Move (`jira issue move`, or Plane `PATCH` work-item state).
 - Column `+` or Cmd+K **Create issue** opens a composer. **Create with AI** seeds the Agent to draft and call `create_issue` after approval.
 - Double-click a Card or Open-pane **Edit** to change summary, description, and labels (`jira issue edit`).
@@ -151,7 +151,7 @@ Views is a browser, not the filter menu. Personal and team groups list saved vie
 
 Inbox sits under the workspace switcher. Its badge counts `needs-input` labels (capped at `9+`). The rows are synthetic. Mark all read shows "You're all caught up". Inbox stays up in Jira mode, using that source's issue keys.
 
-The left rail is Inbox, Pulse, and Agent, then Workspace (Projects and Initiatives on Plane, Views, and More), Favorites (folders you can collapse and drop into), and Your teams (Home, Triage, Issues, Cycles, Projects, Views). The earlier All stories, My issues, All epics, Combined, Calendar, Favourites, and Presets stay under Board. The footer is Try, invite, and Connect GitHub; those rows do nothing yet. Cycles is disabled.
+The left rail is Inbox, Pulse, and Agent, then Workspace (Projects and Initiatives on Plane, Views, and More), Favorites (folders you can collapse and drop into), and Your teams. Each team is a vertical row (icon, name, caret, hover menu). Its children are Home, Triage, Issues (All stories, My issues, All epics), Cycles (Current, Upcoming), Projects, and Views (Combined, Calendar, Presets). One sidebar row is current. Favourites and the Epic list stay under Board. The footer is Try, invite, and Connect GitHub; those rows do nothing yet. Cycles is disabled.
 
 Screenshot placeholders, not committed: views, add filter, move to project, inbox, sidebar.
 

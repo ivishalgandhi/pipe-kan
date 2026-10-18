@@ -285,3 +285,63 @@ export function switchKind(previousWorkspaces: string[], nextWorkspaces: string[
   const right = nextWorkspaces.map((item) => item.toLowerCase()).sort().join(",");
   return left === right ? "project" : "workspace";
 }
+
+export type SidebarPage = "board" | "teams" | "team" | "schedule" | "inbox" | "views";
+export type SidebarBoardKind = "stories" | "epics" | "combined" | "initiatives" | "projects";
+export type SidebarNavIntent =
+  | "all-stories"
+  | "all-epics"
+  | "combined"
+  | "initiatives"
+  | "workspace-projects"
+  | "team-projects"
+  | "team-views"
+  | "pulse"
+  | "home"
+  | "triage"
+  | "calendar"
+  | null;
+
+export type SidebarSelection =
+  | { kind: "inbox" | "pulse" | "epic" }
+  | { kind: "workspace"; item: "views" | "projects" | "initiatives" | "teams" }
+  | {
+      kind: "team";
+      item: "Home" | "Triage" | "All stories" | "My issues" | "All epics" | "Projects" | "Views" | "Combined" | "Calendar";
+    };
+
+const STORY_INTENTS = new Set<SidebarNavIntent>(["all-stories", "pulse", "home", "triage"]);
+
+/** One sidebar row is current. Calendar wins only when that tab was chosen and no later opener replaced it. */
+export function sidebarSelection(input: {
+  sidebarPage: SidebarPage;
+  boardKind: SidebarBoardKind;
+  issueLens: "all" | "mine";
+  canvasTab: "board" | "calendar";
+  epicSelected: boolean;
+  plane: boolean;
+  intent: SidebarNavIntent;
+}): SidebarSelection {
+  if (input.sidebarPage === "inbox") return { kind: "inbox" };
+  if (input.sidebarPage === "views") {
+    return input.intent === "team-views" ? { kind: "team", item: "Views" } : { kind: "workspace", item: "views" };
+  }
+  if (input.sidebarPage === "teams" || input.sidebarPage === "team" || input.sidebarPage === "schedule") {
+    return { kind: "workspace", item: "teams" };
+  }
+  if (input.canvasTab === "calendar" && input.intent === "calendar") return { kind: "team", item: "Calendar" };
+  if (input.boardKind === "projects") {
+    if (!input.plane || input.intent === "team-projects") return { kind: "team", item: "Projects" };
+    return { kind: "workspace", item: "projects" };
+  }
+  if (input.boardKind === "initiatives") return { kind: "workspace", item: "initiatives" };
+  if (input.boardKind === "epics") return { kind: "team", item: "All epics" };
+  if (input.boardKind === "combined") return { kind: "team", item: "Combined" };
+  if (input.epicSelected && input.issueLens !== "mine") return { kind: "epic" };
+  if (input.issueLens === "mine") return { kind: "team", item: "My issues" };
+  if (input.intent === "pulse") return { kind: "pulse" };
+  if (input.intent === "home") return { kind: "team", item: "Home" };
+  if (input.intent === "triage") return { kind: "team", item: "Triage" };
+  if (input.canvasTab === "calendar" && !STORY_INTENTS.has(input.intent)) return { kind: "team", item: "Calendar" };
+  return { kind: "team", item: "All stories" };
+}

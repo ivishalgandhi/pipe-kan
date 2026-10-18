@@ -210,12 +210,18 @@ Your teams ▾
   [team icon] Acme-product ▾
     Home
     Triage          [15]
-    Issues
+    Issues ▾
+      All stories
+      My issues
+      All epics
     Cycles ▾
       Current
       Upcoming
     Projects
-    Views
+    Views ▾
+      Combined
+      Calendar
+      Presets ▾
 
 Try ▾
 + Invite people
@@ -225,6 +231,7 @@ Connect GitHub
 - Each nav item is 28px height, 8px radius, 12px font, 500 weight.
 - Section headers are 11px, muted, uppercase, with ▾/▸ collapse chevron.
 - "Your teams" maps to existing `JoinedProjects` but nests under a team name.
+- Board modes are vertical children of that team tree (gbj-20261018-024). Issues nests All stories, My issues, and All epics. Views nests Combined, Calendar, and Presets. They are not a horizontal pill row. One sidebar row is current.
 - "Favorites" uses existing `linearFavorites` but adds folder grouping with drag-to-file.
 - Footer items are muted, 12px.
 
