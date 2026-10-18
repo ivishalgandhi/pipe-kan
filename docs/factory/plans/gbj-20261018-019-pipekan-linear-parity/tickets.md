@@ -388,3 +388,13 @@ Vishal will send Linear screenshots later. They should be placed in `docs/factor
 - **Rate limit** — Plane API ~60 req/min. The catalog loader already batches; new views should reuse `loadCatalog` or cached data.
 - **Jira mode** — All new Plane-only openers must be conditionally hidden. No regression in Jira mode.
 - **PULSE** — exists in both workspaces; test workspace switching with PULSE present.
+
+### T12 — Backend/source switcher + Linear-style switching in UI (added scope)
+
+Implements the spec addendum: sidebar header menu with source (Plane/Jira/Taskwarrior) → workspace/team/project selection; `O` then `W` opens Switch workspace; checkmark on current; joined teams/projects in sidebar; Favorites (persisted locally); no flags needed to change backend or scope. Flags/env stay as startup defaults. Jira write-back only via jira-cli. Supersedes/extends T4 and T5 (build T12 on top of them, one coherent component).
+
+Acceptance:
+- Switch source Plane↔Jira in UI without restart (fixture/fake data in smoke test).
+- Plane workspaces `work` and `personal` both selectable; PULSE in each.
+- Respect ~60 req/min Plane limit (cache/debounce) and trailing slashes.
+- Tests, typecheck, build green; docs (README, CONTEXT.md, status files) updated.

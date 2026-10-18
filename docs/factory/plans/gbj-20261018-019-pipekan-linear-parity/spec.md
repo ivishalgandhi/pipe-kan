@@ -271,3 +271,15 @@ Replace current "Display" dropdown with full Display options panel:
 - Linear Docs — Workspaces: https://linear.app/docs/workspaces
 - Linear Docs — Initiative and project updates: https://linear.app/docs/initiative-and-project-updates
 - Prior plan: `docs/factory/plans/gbj-20261017-014/`
+
+## Addendum (2026-10-18): Linear-style switching across ALL backends (T12)
+
+Vishal's requirement: switching must be done in the UI, not by typing flags (`--plane`, `--workspace`, `--projects`, Scope flags field).
+- Sidebar header menu (Linear-style): choose **source/backend** (Plane, Jira, Taskwarrior where applicable), then workspace/team/project.
+- "Switch workspace" with keyboard shortcut `O` then `W`; checkmark on the current item.
+- Sidebar lists joined teams/projects for the current workspace, plus a **Favorites** section.
+- Source switch reloads the board for that backend with no restart; unavailable backends are shown disabled with reason.
+- CLI flags and env remain working as **startup defaults** only.
+- Jira write-back remains exclusively through jira-cli (ADR 0001/0002); the switcher never writes to Jira directly.
+- Plane workspace slugs are `work` and `personal` (PULSE exists in both).
+- Linear reference captures: if not present in `linear-refs/`, the maker works from the notes in this spec and flags it in the PR.
