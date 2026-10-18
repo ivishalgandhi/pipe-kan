@@ -20,7 +20,7 @@ export function BoardCalendar({
   }
 
   return (
-    <div className="pk-calendar h-full min-h-0 p-2">
+    <div className="pk-calendar bg-background h-full min-h-0 rounded-xl border border-[var(--bg-border-color)] p-2">
       <FullCalendar
         plugins={[dayGridPlugin]}
         initialView="dayGridMonth"

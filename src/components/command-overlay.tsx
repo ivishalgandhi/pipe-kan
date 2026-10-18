@@ -76,10 +76,10 @@ export function CommandOverlay({
         role="dialog"
         aria-modal="true"
         aria-label="Command"
-        className="bg-popover text-popover-foreground h-fit w-full max-w-lg overflow-hidden rounded-xl border shadow-md"
+        className="bg-popover text-popover-foreground h-fit w-full max-w-lg overflow-hidden rounded-xl border border-[var(--bg-border-color)] shadow-md"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <div className="flex h-11 items-center gap-2 border-b px-3">
+        <div className="flex h-11 items-center gap-2 border-b border-[var(--bg-border-color)] px-3">
           <SearchIcon className="text-muted-foreground size-3.5 shrink-0" />
           <input
             autoFocus
@@ -91,7 +91,7 @@ export function CommandOverlay({
             onKeyDown={onKeyDown}
             aria-label="Command"
             placeholder="Jump to Epic, Card, or Action"
-            className="placeholder:text-muted-foreground h-11 min-w-0 flex-1 bg-transparent text-[13px] outline-none"
+            className="placeholder:text-muted-foreground h-11 min-w-0 flex-1 bg-transparent text-[13px] font-[450] outline-none"
           />
           {query ? null : (
             <kbd className="text-muted-foreground rounded border px-1.5 py-0.5 text-[11px]">⌘K</kbd>
@@ -104,7 +104,7 @@ export function CommandOverlay({
               offset += group.rows.length;
               return (
                 <div key={group.id}>
-                  <div className="text-muted-foreground px-2 py-1.5 text-[11px] font-medium">
+                  <div className="text-muted-foreground px-3 py-1 text-[11px] font-medium">
                     {group.title}
                   </div>
                   {group.rows.map((row, i) => {
@@ -115,10 +115,10 @@ export function CommandOverlay({
                         type="button"
                         aria-label={row.key ? `${row.key} ${row.label}` : row.label}
                         className={cn(
-                          "flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px]",
+                          "flex h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-[13px] transition-colors duration-150",
                           index === highlight
-                            ? "bg-primary/20 text-foreground shadow-[inset_0_0_0_1px_var(--ring)]"
-                            : "hover:bg-foreground/5",
+                            ? "bg-accent text-foreground shadow-[inset_0_0_0_1px_var(--ring)]"
+                            : "hover:bg-accent/50",
                         )}
                         aria-current={index === highlight ? "true" : undefined}
                         onMouseDown={(event) => event.preventDefault()}
