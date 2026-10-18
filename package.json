@@ -1,6 +1,6 @@
 {
   "name": "pipe-kan",
-  "version": "0.34.0",
+  "version": "0.34.1",
   "description": "Local Kanban for jira-cli and Plane",
   "license": "MIT",
   "type": "module",
