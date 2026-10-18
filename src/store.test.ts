@@ -20,9 +20,9 @@ test("create assigns the next DEMO key and stores fields", () => {
     labels: ["kanban"],
     status: "To Do",
   });
-  expect(result).toEqual({ ok: true, key: "DEMO-9" });
+  expect(result).toEqual({ ok: true, key: "DEMO-22" });
   if (!result.ok) return;
-  const issue = store.get("DEMO-9");
+  const issue = store.get("DEMO-22");
   expect(issue?.fields.summary).toBe("New card");
   expect(issue?.fields.description).toBe("Body");
   expect(issue?.fields.labels).toEqual(["kanban"]);
@@ -64,6 +64,6 @@ test("create stores parent Epic and does not write when summary is empty", () =>
   expect(store.create({ summary: "  " }).ok).toBe(false);
   expect(store.all().map((issue) => issue.key)).toEqual(keys);
   const created = store.create({ summary: "Child", parent: "DEMO-1", status: "To Do" });
-  expect(created).toEqual({ ok: true, key: "DEMO-9" });
-  expect(store.get("DEMO-9")?.fields.parent).toEqual({ key: "DEMO-1" });
+  expect(created).toEqual({ ok: true, key: "DEMO-22" });
+  expect(store.get("DEMO-22")?.fields.parent).toEqual({ key: "DEMO-1" });
 });

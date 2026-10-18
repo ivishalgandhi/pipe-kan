@@ -142,8 +142,8 @@ test("Fake Jira creates an Issue", async () => {
   });
   expect(res.status).toBe(201);
   const body = await res.json();
-  expect(body.key).toBe("DEMO-9");
-  expect(store.get("DEMO-9")?.fields.summary).toBe("New card");
+  expect(body.key).toBe("DEMO-22");
+  expect(store.get("DEMO-22")?.fields.summary).toBe("New card");
 });
 
 test("Fake Jira edits an Issue", async () => {
@@ -171,7 +171,7 @@ test("Fake Jira create rejects an empty summary", async () => {
     body: JSON.stringify({ fields: { summary: "  " } }),
   });
   expect(res.status).toBe(400);
-  expect(store.get("DEMO-9")).toBeUndefined();
+  expect(store.get("DEMO-22")).toBeUndefined();
 });
 
 test("Fake Jira edit missing key is 404", async () => {

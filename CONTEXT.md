@@ -92,7 +92,7 @@ Changing an Issue's status. Jira runs `jira issue move`. Plane PATCHes the work 
 _Avoid_: transition, drag (the gesture), update, file (putting a Favourite in a Folder)
 
 **Open**:
-Showing an Issue's details and Jira URL in the side pane. A Card Opens on click, including an Epic Card on All epics. On All stories an Epic Opens from its row menu. A Calendar Issue key Opens the same pane. `jira open KEY` still resolves that URL. Same-origin pages embed; remote Jira is a link because it refuses frames.
+Showing an Issue's properties and Jira URL in the right rail. Properties are status, assignee, labels, priority, due date, and target end when the payload has them. The key is a chip; the Jira URL sits under the key. A Card Opens on click, including an Epic Card on All epics. On All stories an Epic Opens from its row menu. A Calendar Issue key Opens the same pane. `jira open KEY` still resolves that URL. Same-origin pages embed; remote Jira is a link because it refuses frames.
 _Avoid_: view, browse (when meaning this)
 
 **Calendar**:
@@ -128,7 +128,7 @@ A mutation the Agent proposes that requires user approval before pipe-kan execut
 _Avoid_: tool call, command, automation
 
 **Fixture**:
-Checked-in fake `jira issue list --raw` JSON that seeds store-mode first paint and Fake Jira when no Pipe is given. Plane mode does not show it as the live Board. After a failed live Refresh with no successful live payload, it is not kept as the Board.
+Checked-in fake `jira issue list --raw` JSON that seeds store-mode first paint and Fake Jira when no Pipe is given. It includes several statuses, priorities, assignees, labels, and Epics with children so the board chrome has something to paint. Plane mode does not show it as the live Board. After a failed live Refresh with no successful live payload, it is not kept as the Board.
 _Avoid_: mock, stub, sample (when meaning this file)
 
 **Fake Jira**:

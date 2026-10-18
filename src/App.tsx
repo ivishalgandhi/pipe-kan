@@ -395,12 +395,13 @@ function writeColumnOrder(next: Record<string, string[]>) {
   localStorage.setItem(COLUMN_ORDER_KEY, JSON.stringify(next));
 }
 
-function fieldsFromCard(card: Card, url?: string | null): OpenField[] {
+function fieldsFromCard(card: Card, url?: string | null, status?: string): OpenField[] {
   const rows: OpenField[] = [
     { label: "Key", value: card.key },
     { label: "Summary", value: card.summary },
   ];
   if (url) rows.push({ label: "Jira URL", value: url });
+  if (status) rows.push({ label: "Status", value: status });
   if (card.priority) rows.push({ label: "Priority", value: card.priority });
   if (card.assignee) rows.push({ label: "Assignee", value: card.assignee });
   if (card.dueDate) rows.push({ label: "Due date", value: card.dueDate });
@@ -462,6 +463,20 @@ function statusCircle(title?: string) {
   );
   return `var(--kanban-board-circle-${match ? STATUS_CIRCLE[match] : "gray"})`;
 }
+
+function navButtonClass(active: boolean) {
+  return cn(
+    "h-7 rounded-lg px-[7px] text-left text-[13px] font-medium",
+    active
+      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+      : "hover:bg-foreground/[0.05] dark:hover:bg-white/[0.05]",
+  );
+}
+
+const SIDEBAR_GROUP =
+  "text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground dark:hover:bg-white/[0.05] flex h-7 items-center gap-1.5 rounded-lg px-3 text-left text-[11px] font-medium";
+
+const HEADER_CONTROL = "h-7 rounded-lg px-2 text-[13px]";
 
 function priorityClass(priority?: string) {
   const value = (priority ?? "").toLowerCase();
@@ -601,7 +616,7 @@ function IssueCard({
   variant?: "story" | "epic";
   shown?: Set<CardDisplayKey>;
 }) {
-  const isEpic = variant === "epic" || (card.type ?? "").toLowerCase() === "epic";
+  const showEpic = variant === "epic" || (card.type ?? "").toLowerCase() === "epic";
   const isShown = (key: CardDisplayKey) => shown?.has(key) ?? true;
   const age = isShown("created") ? cardAge(card.created) : undefined;
   const targetDistance = isShown("targetEnd") ? targetEndDistance(card.targetEnd) : undefined;
@@ -636,9 +651,8 @@ function IssueCard({
   const body = (
     <div
       className={cn(
-        "bg-card hover:bg-foreground/5 rounded-[9px] border px-3 pt-2 pb-3",
+        "bg-card hover:bg-accent rounded-[9px] border border-[var(--bg-border-color)] pt-2 pr-2.5 pb-3 pl-3 transition-colors duration-150",
         selected && "ring-primary ring-2",
-        isEpic && "bg-muted/40 border-l-4 border-l-primary",
       )}
     >
       <div className="flex h-[22px] items-center justify-between gap-2">
@@ -646,8 +660,8 @@ function IssueCard({
           <span className="text-muted-foreground text-[12px] font-medium tabular-nums">
             {card.key}
           </span>
-          {(card.type ?? "").toLowerCase() === "epic" ? (
-            <span className="text-muted-foreground/60 text-[11px] font-normal">
+          {showEpic ? (
+            <span className="text-muted-foreground inline-flex h-5 items-center rounded-full border px-1.5 text-[11px] font-medium">
               Epic
             </span>
           ) : null}
@@ -822,7 +836,7 @@ function StatusColumn({
           <CollapsibleContent className="min-h-0 flex-1 overflow-hidden">
             <KanbanColumnContent
               value={title}
-              className="flex h-full flex-col gap-2 overflow-auto px-2 pb-2"
+              className="flex h-full flex-col gap-2 overflow-auto px-3 pb-3"
             >
               {cards.map((card) => (
                 <IssueCard
@@ -897,10 +911,10 @@ function EpicButton({
   return (
     <div
       className={cn(
-        "flex h-14 w-full items-center gap-1 rounded-lg pr-1",
+        "flex h-10 w-full items-center gap-1 rounded-lg pr-1",
         selected
           ? "bg-sidebar-accent text-sidebar-accent-foreground"
-          : "hover:bg-foreground/5",
+          : "hover:bg-foreground/[0.05] dark:hover:bg-white/[0.05]",
       )}
     >
       <button
@@ -1027,7 +1041,7 @@ function EpicStatusGroup({
       <CollapsibleTrigger asChild>
         <button
           type="button"
-          className="text-muted-foreground hover:text-foreground flex h-7 items-center gap-1.5 px-3 text-left"
+          className={SIDEBAR_GROUP}
         >
           <ChevronDownIcon
             className={cn(
@@ -1035,7 +1049,7 @@ function EpicStatusGroup({
               !open && "-rotate-90",
             )}
           />
-          <span className="min-w-0 flex-1 truncate text-[12px] font-medium">
+          <span className="min-w-0 flex-1 truncate">
             {status}
           </span>
           <span className="text-[11px] tabular-nums">{epics.length}</span>
@@ -1062,21 +1076,21 @@ function EpicStatusGroup({
 }
 
 function OpenFields({ fields }: { fields: OpenField[] }) {
+  const rows = fields.filter((field) => field.label !== "Jira URL" && field.label !== "Key");
   return (
-    <dl className="flex flex-col gap-3 p-4 text-[13px]">
-      {fields.map((field) => (
+    <div className="flex flex-col gap-3 p-4">
+      {rows.map((field) => (
         <div key={field.label} className="flex flex-col gap-1">
-          <dt className="text-muted-foreground text-[11px] font-medium">{field.label}</dt>
-          <dd className="whitespace-pre-wrap">
-            {field.label === "Jira URL" ? (
-              <a
-                className="text-foreground font-medium underline-offset-4 hover:underline"
-                href={field.value}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {field.value}
-              </a>
+          <div className="text-muted-foreground text-[11px] font-medium">{field.label}</div>
+          <div className="text-foreground text-[13px] whitespace-pre-wrap">
+            {field.label.toLowerCase() === "status" ? (
+              <span className="inline-flex items-center gap-2">
+                <span
+                  className="size-3.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: statusCircle(field.value) }}
+                />
+                <span>{field.value}</span>
+              </span>
             ) : field.pills?.length ? (
               <span className="flex flex-wrap gap-1">
                 {field.pills.map((pill) => (
@@ -1091,10 +1105,10 @@ function OpenFields({ fields }: { fields: OpenField[] }) {
             ) : (
               field.value
             )}
-          </dd>
+          </div>
         </div>
       ))}
-    </dl>
+    </div>
   );
 }
 
@@ -1123,7 +1137,7 @@ function WorkspacePicker({
         <button
           type="button"
           aria-label="Workspace"
-          className="bg-primary/10 text-primary inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium"
+          className="bg-primary/10 text-primary inline-flex h-7 items-center rounded-lg px-2 text-[11px] font-medium"
         >
           {slug}
         </button>
@@ -1676,11 +1690,15 @@ export function App() {
           labels: epic.labels,
         }
       : undefined);
+    const columnStatus = Object.entries(columns).find(([, list]) =>
+      list.some((item) => item.key === key),
+    )?.[0];
+    const status = columnStatus ?? epic?.status;
     const immediateUrl = `/browse/${key}`;
     setOpenKey(key);
     setOpenUrl(immediateUrl);
     setOpenError("");
-    setOpenFields(face ? fieldsFromCard(face, immediateUrl) : [{ label: "Jira URL", value: immediateUrl }]);
+    setOpenFields(face ? fieldsFromCard(face, immediateUrl, status) : [{ label: "Jira URL", value: immediateUrl }]);
     const data = await api<{ url: string; fields: OpenField[]; error?: string }>("/api/open", {
       method: "POST",
       body: JSON.stringify({ key }),
@@ -1688,7 +1706,7 @@ export function App() {
     setOpenUrl(data.url);
     if (data.error) {
       setOpenError(data.error);
-      setOpenFields(face ? fieldsFromCard(face, data.url) : [{ label: "Jira URL", value: data.url }]);
+      setOpenFields(face ? fieldsFromCard(face, data.url, status) : [{ label: "Jira URL", value: data.url }]);
       return;
     }
     setOpenFields(data.fields);
@@ -1957,48 +1975,28 @@ export function App() {
             <nav className="flex flex-1 flex-col gap-0.5 overflow-auto px-2 pb-2">
               <button
                 type="button"
-                className={cn(
-                  "h-8 rounded-lg px-3 text-left text-[13px]",
-                  boardKind === "stories" && selectedEpic === null
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "hover:bg-foreground/5",
-                )}
+                className={navButtonClass(boardKind === "stories" && selectedEpic === null)}
                 onClick={openStories}
               >
                 All stories
               </button>
               <button
                 type="button"
-                className={cn(
-                  "h-8 rounded-lg px-3 text-left text-[13px]",
-                  boardKind === "epics"
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "hover:bg-foreground/5",
-                )}
+                className={navButtonClass(boardKind === "epics")}
                 onClick={openEpics}
               >
                 All epics
               </button>
               <button
                 type="button"
-                className={cn(
-                  "h-8 rounded-lg px-3 text-left text-[13px]",
-                  boardKind === "combined"
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "hover:bg-foreground/5",
-                )}
+                className={navButtonClass(boardKind === "combined")}
                 onClick={openCombined}
               >
                 Combined
               </button>
               <button
                 type="button"
-                className={cn(
-                  "h-8 rounded-lg px-3 text-left text-[13px]",
-                  canvasTab === "calendar"
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "hover:bg-foreground/5",
-                )}
+                className={navButtonClass(canvasTab === "calendar")}
                 onClick={openCalendarTab}
               >
                 Calendar
@@ -2082,8 +2080,8 @@ export function App() {
         </ResizablePanel>
         <ResizableHandle className={cn(!sidebarOpen && "hidden")} />
         <ResizablePanel id="board" defaultSize="80%" minSize="24rem" className="min-h-0">
-          <div className="flex h-full min-h-0 flex-col p-2 pl-0">
-            <div className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border">
+          <div className="flex h-full min-h-0 flex-col p-2">
+            <div className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden rounded-[12px] border border-[var(--bg-border-color)]">
               <header className="flex min-h-11 shrink-0 flex-wrap items-center gap-2 px-3">
                 {!sidebarOpen ? (
                   <Button
@@ -2110,7 +2108,7 @@ export function App() {
                     role="tab"
                     aria-selected={canvasTab === "board"}
                     className={cn(
-                      "h-7 rounded-md px-2 text-[13px] font-medium",
+                      "h-7 rounded-lg px-2 text-[13px] font-medium",
                       canvasTab === "board"
                         ? "bg-muted text-foreground"
                         : "text-muted-foreground hover:text-foreground",
@@ -2124,7 +2122,7 @@ export function App() {
                     role="tab"
                     aria-selected={canvasTab === "calendar"}
                     className={cn(
-                      "h-7 rounded-md px-2 text-[13px] font-medium",
+                      "h-7 rounded-lg px-2 text-[13px] font-medium",
                       canvasTab === "calendar"
                         ? "bg-muted text-foreground"
                         : "text-muted-foreground hover:text-foreground",
@@ -2134,7 +2132,7 @@ export function App() {
                     Calendar
                   </button>
                 </div>
-                <span className="bg-primary/10 text-primary inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium">
+                <span className="bg-primary/10 text-primary inline-flex h-7 items-center rounded-lg px-2 text-[11px] font-medium">
                   {(() => {
                     const { projects } = parseFlags(flags);
                     return projects.length > 0 ? projects.join(", ") : "DEMO";
@@ -2171,7 +2169,7 @@ export function App() {
                   ) : null}
                 </InputGroup>
                 <input
-                  className="placeholder:text-muted-foreground h-7 min-w-40 flex-1 rounded-md bg-muted px-2.5 text-[13px] outline-none"
+                  className="placeholder:text-muted-foreground h-7 min-w-40 flex-1 rounded-md border border-transparent bg-muted px-2 text-[13px] outline-none"
                   value={flags}
                   onChange={(event) => setFlags(event.target.value)}
                   placeholder="Scope flags"
@@ -2180,7 +2178,7 @@ export function App() {
                 />
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm">
+                    <Button variant="ghost" size="sm" className={HEADER_CONTROL}>
                       <ListFilterIcon />
                       Filter
                     </Button>
@@ -2202,7 +2200,7 @@ export function App() {
                 </DropdownMenu>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm">
+                    <Button variant="ghost" size="sm" className={HEADER_CONTROL}>
                       <ArrowUpDownIcon />
                       Sort
                     </Button>
@@ -2224,7 +2222,7 @@ export function App() {
                 </DropdownMenu>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm">
+                    <Button variant="ghost" size="sm" className={HEADER_CONTROL}>
                       <Columns3Icon />
                       Columns
                     </Button>
@@ -2250,7 +2248,7 @@ export function App() {
                 </DropdownMenu>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm">
+                    <Button variant="ghost" size="sm" className={HEADER_CONTROL}>
                       <EyeIcon />
                       Display
                     </Button>
@@ -2278,13 +2276,14 @@ export function App() {
                     ))}
                   </DropdownMenuContent>
                 </DropdownMenu>
-                <Button variant="ghost" size="sm" onClick={() => openRefreshConfirm()} disabled={busy} aria-busy={busy}>
+                <Button variant="ghost" size="sm" className={HEADER_CONTROL} onClick={() => openRefreshConfirm()} disabled={busy} aria-busy={busy}>
                   {busy ? <Spinner className="size-3.5" /> : null}
                   Refresh
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
+                  className={HEADER_CONTROL}
                   onClick={() => setAgentOpen((o) => !o)}
                   aria-pressed={agentOpen}
                 >
@@ -2294,17 +2293,18 @@ export function App() {
                 <Button
                   variant="ghost"
                   size="icon-xs"
+                  className="size-7 rounded-lg"
                   onClick={toggleTheme}
                   aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
                 >
                   {theme === "dark" ? <SunIcon /> : <MoonIcon />}
                 </Button>
-                {error ? (
-                  <p className="text-destructive w-full text-[13px] whitespace-pre-wrap">
-                    {error}
-                  </p>
-                ) : null}
               </header>
+              {error ? (
+                <p className="text-destructive px-3 pb-2 text-[13px] whitespace-pre-wrap">
+                  {error}
+                </p>
+              ) : null}
               <ResizablePanelGroup
                 id="board-open"
                 orientation="horizontal"
@@ -2422,44 +2422,52 @@ export function App() {
                     <ResizableHandle />
                     <ResizablePanel
                       id="open"
-                      defaultSize="30%"
-                      minSize="16rem"
-                      className="min-h-0"
+                      defaultSize="320px"
+                      minSize="288px"
+                      className="min-h-0 w-80 min-w-72"
                     >
-                      <aside className="flex h-full min-h-0 flex-col border-l">
-                        <div className="flex h-10 items-center gap-2 px-3">
-                          <a
-                            className="min-w-0 flex-1 truncate text-[13px] font-medium underline-offset-4 hover:underline"
-                            href={openUrl ?? undefined}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            {openKey}
-                          </a>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 text-[12px]"
-                            type="button"
-                            onClick={() => {
-                              if (openKey) void openEdit(openKey);
-                            }}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            aria-label="Close issue"
-                            onClick={() => {
-                              setOpenKey(null);
-                              setOpenUrl(null);
-                              setOpenFields([]);
-                              setOpenError("");
-                            }}
-                          >
-                            <XIcon />
-                          </Button>
+                      <aside className="flex h-full min-h-0 w-80 min-w-72 flex-col border-l border-[var(--bg-border-color)]">
+                        <div className="flex flex-col gap-1 px-3 pt-3 pb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="bg-muted inline-flex h-7 max-w-full min-w-0 items-center truncate rounded-lg px-2 text-[13px] font-medium tabular-nums">
+                              {openKey}
+                            </span>
+                            <span className="flex-1" />
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className={HEADER_CONTROL}
+                              type="button"
+                              onClick={() => {
+                                if (openKey) void openEdit(openKey);
+                              }}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              aria-label="Close issue"
+                              onClick={() => {
+                                setOpenKey(null);
+                                setOpenUrl(null);
+                                setOpenFields([]);
+                                setOpenError("");
+                              }}
+                            >
+                              <XIcon />
+                            </Button>
+                          </div>
+                          {openUrl ? (
+                            <a
+                              className="text-foreground truncate text-[13px] underline-offset-4 hover:underline"
+                              href={openUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              {openUrl}
+                            </a>
+                          ) : null}
                         </div>
                         <div className="min-h-0 flex-1 overflow-auto">
                           {openError ? (
@@ -2472,7 +2480,7 @@ export function App() {
                             <iframe
                               title={openKey ?? "Issue"}
                               src={embed}
-                              className="min-h-64 w-full border-0 bg-background"
+                              className="min-h-64 w-full rounded-lg border-0 bg-background"
                             />
                           ) : openUrl ? (
                             <div className="text-muted-foreground px-4 pb-6 text-[13px]">
@@ -2706,12 +2714,12 @@ function FavouriteGroup({
         <CollapsibleTrigger asChild>
           <button
             type="button"
-            className="text-muted-foreground hover:text-foreground flex h-7 min-w-0 flex-1 items-center gap-1.5 px-2 text-left"
+            className={cn(SIDEBAR_GROUP, "min-w-0 flex-1 px-2")}
           >
             <ChevronDownIcon
               className={cn("size-3.5 shrink-0 transition-transform", !open && "-rotate-90")}
             />
-            <span className="min-w-0 flex-1 truncate text-[12px] font-medium">Favourites</span>
+            <span className="min-w-0 flex-1 truncate">Favourites</span>
           </button>
         </CollapsibleTrigger>
         <DropdownMenu>
@@ -2838,12 +2846,12 @@ function FavouriteFolderGroup({
       <CollapsibleTrigger asChild>
         <button
           type="button"
-          className="text-muted-foreground hover:text-foreground flex h-7 items-center gap-1.5 px-3 text-left"
+          className={SIDEBAR_GROUP}
         >
           <ChevronDownIcon
             className={cn("size-3.5 shrink-0 transition-transform", !open && "-rotate-90")}
           />
-          <span className="min-w-0 flex-1 truncate text-[12px] font-medium">{folder.name}</span>
+          <span className="min-w-0 flex-1 truncate">{folder.name}</span>
           <span className="text-[11px] tabular-nums">{folder.epics.length}</span>
         </button>
       </CollapsibleTrigger>
@@ -2911,12 +2919,12 @@ function PresetGroup({
         <CollapsibleTrigger asChild>
           <button
             type="button"
-            className="text-muted-foreground hover:text-foreground flex h-7 min-w-0 flex-1 items-center gap-1.5 px-2 text-left"
+            className={cn(SIDEBAR_GROUP, "min-w-0 flex-1 px-2")}
           >
             <ChevronDownIcon
               className={cn("size-3.5 shrink-0 transition-transform", !open && "-rotate-90")}
             />
-            <span className="min-w-0 flex-1 truncate text-[12px] font-medium">Presets</span>
+            <span className="min-w-0 flex-1 truncate">Presets</span>
           </button>
         </CollapsibleTrigger>
         <DropdownMenu>
@@ -2951,7 +2959,7 @@ function PresetGroup({
           <div key={preset.name} className="flex items-center gap-1">
             <button
               type="button"
-              className="hover:bg-foreground/5 flex h-7 min-w-0 flex-1 items-center rounded-lg px-[7px] text-left text-[13px] font-medium"
+              className="hover:bg-foreground/[0.05] dark:hover:bg-white/[0.05] flex h-7 min-w-0 flex-1 items-center rounded-lg px-[7px] text-left text-[13px] font-medium"
               onClick={() => onApplyPreset(preset.name)}
             >
               <span className="min-w-0 truncate">{preset.name}</span>

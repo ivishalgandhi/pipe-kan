@@ -1,0 +1,20 @@
+light {"dark":false,"sidebar":"#efeff0","background":"#f9f9fa","border":"#e2e2e2","muted":"#b0b5c0","accent":"#e4e4e6","sidebarAccent":"#e4e4e6","nav":{"w":242,"h":28,"radius":"8px"},"epic":null,"pane":{"w":1165,"h":797,"radius":"12px"},"card":{"w":358,"h":96,"radius":"9px"}}
+screenshot /Users/vishal/code/.factory-worktrees/gbj-20261017-014-pipecan-linear-ui-maker/docs/factory/plans/gbj-20261017-014/smoke/board-light.png
+open {"w":320,"dot":true,"sample":"DEMO-10\nEdit\n/browse/DEMO-10\nSummary\nFix the blocked badge\nPriority\nHighest\nAssignee\nAlice\nDue date\n2026-09-30\nLabels\nbug\nDescription\nHighest priority bug under the design epic.\ncreated\n2026-10-02T09:00:00.000+0000\ncustomfield_10014\nDEMO-9\ncustomfield_10099\n2026-09-15\nissuetype\nS"}
+screenshot /Users/vishal/code/.factory-worktrees/gbj-20261017-014-pipecan-linear-ui-maker/docs/factory/plans/gbj-20261017-014/smoke/open-pane.png
+command opened false
+screenshot /Users/vishal/code/.factory-worktrees/gbj-20261017-014-pipecan-linear-ui-maker/docs/factory/plans/gbj-20261017-014/smoke/command.png
+command closed true
+calendar {"radius":"12px","title":"13px","buttonH":28}
+screenshot /Users/vishal/code/.factory-worktrees/gbj-20261017-014-pipecan-linear-ui-maker/docs/factory/plans/gbj-20261017-014/smoke/calendar.png
+dark {"dark":true,"sidebar":"#09090a","background":"#121213","border":"#212224","muted":"#6b6f76","accent":"#ffffff08","sidebarAccent":"#ffffff08","nav":{"w":242,"h":28,"radius":"8px"},"epic":null,"pane":{"w":1165,"h":797,"radius":"12px"},"card":{"w":358,"h":96,"radius":"9px"}}
+screenshot /Users/vishal/code/.factory-worktrees/gbj-20261017-014-pipecan-linear-ui-maker/docs/factory/plans/gbj-20261017-014/smoke/board-dark.png
+move DEMO-11 ok=true done=DEMO-5,DEMO-11,DEMO-12,DEMO-15,DEMO-19
+
+browser:
+console.debug: [vite] connecting...
+console.debug: [vite] connected.
+console.info: %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+console.debug: [vite] connecting...
+console.info: %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+console.debug: [vite] connected.
