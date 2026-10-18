@@ -39,6 +39,7 @@ import {
   type Zoom,
 } from "~/parity.ts";
 import { RoadmapTable } from "~/components/linear-chrome.tsx";
+import { StatusMark } from "~/components/linear-look.tsx";
 import { rowMenuModel, type RowMenuAction, type RowMenuSection } from "~/row-menu.ts";
 import { cn } from "~/lib/utils";
 import {
@@ -460,7 +461,8 @@ export function IssueGroupList({
     <div className="flex flex-col gap-3" data-smoke="issue-groups">
       {groups.map((group) => (
         <section key={group.key}>
-          <h3 className="text-muted-foreground px-2 py-1 text-[11px] font-medium">
+          <h3 className="text-muted-foreground flex items-center gap-2 px-2 py-1 text-[11px] font-medium">
+            <StatusMark status={group.key} />
             {group.key} {group.cards.length}
           </h3>
           {group.cards.map((card) => (
@@ -796,7 +798,7 @@ export function RowContextMenu({
                 className="hover:bg-muted block w-full rounded px-2 py-1 text-left text-[13px]"
                 onClick={() => onPick(action)}
               >
-                {"value" in action ? action.value : "Copy link"}
+                {action.type === "copy" ? "Copy link" : action.type === "move-project" ? "Move to project" : action.value}
               </button>
             ))}
           </div>

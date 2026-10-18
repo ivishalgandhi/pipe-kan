@@ -65,7 +65,7 @@ Same `--projects` style as Jira: comma-separated, trimmed, uppercased. CLI flags
 
 Workspace discovery: Plane's public v1 API has no workspace-list endpoint, so the switcher lists every workspace the key can read by probing candidate slugs (startup flags, `PLANE_WORKSPACE`, `PLANE_WORKSPACES`, `PIPE_KAN_WORKSPACES`, plus `personal` and `work`) regardless of the startup scope. The startup flags bar is hidden by default; Display > Show startup flags bar brings it back.
 
-Plane mode adds Initiatives and Projects. Initiatives are modules (health, status, priority, target date) in a list, board, or timeline. Projects show completion, target date, and health. Display is Shift+V. The Filter menu (F) adds view filters, chips, and saved views. Right-click a row for status, assignee, priority, labels, or copy link. Cmd+K jumps to those views; `ow` lists workspaces.
+Plane mode adds Initiatives and Projects. Initiatives are modules (health, status, priority, target date) in a list, board, or timeline. Projects show completion, target date, and health. Display is Shift+V. `F` opens Add Filter; the header Filter button still opens the facet editor. Chips sit under the Board tabs. Right-click a row for status, assignee, priority, labels, Move to project, or copy link. Shift+P opens Move to project for the hovered or open Issue. Cmd+K jumps to those views; `ow` lists workspaces.
 
 When more than one Workspace is selected, issue keys are `workspace/KEY` so `work/PULSE` and `personal/PULSE` stay distinct. Catalog reads are serialized, cached, and keep trailing slashes.
 
@@ -145,6 +145,16 @@ Pipe is the first Board. Refresh and Move still go through `jira` when it is on 
 | `PLANE_WORKSPACE` | `personal` | default workspace if `--workspace` is omitted |
 | `PLANE_FIXTURE` | (unset) | `synthetic` or a JSON catalog path; skips the network and uses Fake Jira for the Jira source |
 
+## Views, Inbox, and the sidebar
+
+Views is a browser, not the filter menu. Personal and team groups list saved views (icon, name, scope). New view asks for an icon, title, description, Issues or Projects, and Personal or team, then stores that with the current chips.
+
+Inbox sits under the workspace switcher. Its badge counts `needs-input` labels (capped at `9+`). The rows are synthetic. Mark all read shows "You're all caught up". Inbox stays up in Jira mode, using that source's issue keys.
+
+The left rail is Inbox, Pulse, and Agent, then Workspace (Projects and Initiatives on Plane, Views, and More), Favorites (folders you can collapse and drop into), and Your teams (Home, Triage, Issues, Cycles, Projects, Views). The earlier All stories, My issues, All epics, Combined, Calendar, Favourites, and Presets stay under Board. The footer is Try, invite, and Connect GitHub; those rows do nothing yet. Cycles is disabled.
+
+Screenshot placeholders, not committed: views, add filter, move to project, inbox, sidebar.
+
 ## Limits
 
 - Jira write-back is `jira issue move`, `jira issue create`, and `jira issue edit`. Intra-column rank is not persisted.
@@ -161,7 +171,7 @@ bun run build
 bun run smoke
 ```
 
-Contributors still `bun install` and `bun run dev` (Vite). `bun run build` writes the published CLI to `dist/pipe-kan.js`. `bun run smoke` boots that flow with `PLANE_FIXTURE=synthetic` (and `dist/pipe-kan.js` when it exists) and writes `docs/factory/plans/gbj-20261018-019-pipekan-linear-parity/smoke-log.md` plus `smoke-logs/smoke.log`.
+Contributors still `bun install` and `bun run dev` (Vite). `bun run build` writes the published CLI to `dist/pipe-kan.js`. `bun run smoke` boots that flow with `PLANE_FIXTURE=synthetic` (and `dist/pipe-kan.js` when it exists) and writes the 019 parity log, then the linear-look log at `docs/factory/plans/gbj-20261018-023-pipekan-linear-look-plan/smoke-log.md`.
 
 ## Version
 
