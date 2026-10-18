@@ -497,7 +497,7 @@ export function AgentPanel({
 
   return (
     <ResizablePanel id="agent" defaultSize="320px" minSize="16rem" maxSize="50%" className="min-h-0">
-      <div className="bg-background flex h-full min-h-0 flex-col">
+      <div className="bg-background flex h-full min-h-0 flex-col" data-smoke="agent-panel">
         <header className="shrink-0 border-b px-3 py-2">
           <div className="flex items-center gap-2">
             <Avatar className="bg-primary/10 text-primary size-6">

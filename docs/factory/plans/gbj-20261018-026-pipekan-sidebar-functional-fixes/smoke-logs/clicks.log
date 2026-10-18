@@ -1,0 +1,155 @@
+pipe-kan sidebar click smoke
+-- plane
+PASS plane sidebar has at least two row levels
+PASS plane level 0 has multiple rows
+PASS plane level 0 icons share x (0.00)
+PASS plane level 0 labels share x (0.00)
+PASS plane level 0 counts share right edge (0.00)
+PASS plane level 1 has multiple rows
+PASS plane level 1 icons share x (0.00)
+PASS plane level 1 labels share x (0.00)
+PASS plane level 1 counts share right edge (0.00)
+PASS plane level 2 has multiple rows
+PASS plane level 2 icons share x (0.00)
+PASS plane level 2 labels share x (0.00)
+PASS plane level 2 counts share right edge (0.00)
+PASS plane shows Cycles
+PASS plane scope chip is the whole workspace
+PASS plane sidebar exposes its rows
+PASS plane clicked Inbox
+PASS plane clicked Pulse
+PASS plane clicked Agent
+PASS plane clicked Projects
+PASS plane clicked Views
+PASS plane clicked Initiatives
+PASS plane clicked Teams
+PASS plane clicked Settings
+PASS plane team click keeps every project
+PASS plane clicked work:Work
+PASS plane Home is not the issue board
+PASS plane clicked Home
+PASS plane Triage does not persist needs-input
+PASS plane Triage hides stories that do not need input
+PASS plane clicked Triage
+PASS plane clicked Issues
+PASS plane All stories clears the ephemeral lens
+PASS plane clicked All stories
+PASS plane clicked My issues
+PASS plane clicked All epics
+PASS plane clicked Cycles
+PASS plane clicked Current
+PASS plane clicked Upcoming
+PASS plane clicked Projects
+PASS plane clicked Views
+PASS plane clicked Combined
+PASS plane clicked Calendar
+PASS plane team click keeps every project
+PASS plane clicked personal:Personal
+PASS plane Home is not the issue board
+PASS plane clicked Home
+PASS plane Triage does not persist needs-input
+PASS plane Triage hides stories that do not need input
+PASS plane clicked Triage
+PASS plane clicked Issues
+PASS plane All stories clears the ephemeral lens
+PASS plane clicked All stories
+PASS plane clicked My issues
+PASS plane clicked All epics
+PASS plane clicked Cycles
+PASS plane clicked Current
+PASS plane clicked Upcoming
+PASS plane clicked Projects
+PASS plane clicked Views
+PASS plane clicked Combined
+PASS plane clicked Calendar
+PASS plane G then I opens Inbox
+PASS plane Ctrl+K opens the command overlay
+PASS plane collapsed Workspace stays collapsed
+PASS plane console stayed quiet
+-- jira
+PASS jira sidebar has at least two row levels
+PASS jira level 0 has multiple rows
+PASS jira level 0 icons share x (0.00)
+PASS jira level 0 labels share x (0.00)
+PASS jira level 0 counts share right edge (0.00)
+PASS jira level 1 has multiple rows
+PASS jira level 1 icons share x (0.00)
+PASS jira level 1 labels share x (0.00)
+PASS jira level 1 counts share right edge (0.00)
+PASS jira level 2 has multiple rows
+PASS jira level 2 icons share x (0.00)
+PASS jira level 2 labels share x (0.00)
+PASS jira level 2 counts share right edge (0.00)
+PASS jira hides Cycles
+PASS jira hides Initiatives
+PASS jira hides Projects
+PASS jira sidebar exposes its rows
+PASS jira clicked Inbox
+PASS jira clicked Pulse
+PASS jira clicked Agent
+PASS jira clicked Views
+PASS jira clicked Teams
+PASS jira clicked Settings
+PASS jira team click keeps every project
+PASS jira clicked jira:Jira
+PASS jira Home is not the issue board
+PASS jira clicked Home
+PASS jira Triage does not persist needs-input
+PASS jira Triage hides DEMO-2
+PASS jira clicked Triage
+PASS jira clicked Issues
+PASS jira All stories clears the ephemeral lens
+PASS jira clicked All stories
+PASS jira clicked My issues
+PASS jira clicked All epics
+PASS jira clicked Views
+PASS jira clicked Combined
+PASS jira clicked Calendar
+PASS jira G then I opens Inbox
+PASS jira Ctrl+K opens the command overlay
+PASS jira collapsed Workspace stays collapsed
+PASS jira console stayed quiet
+-- taskwarrior
+PASS taskwarrior sidebar has at least two row levels
+PASS taskwarrior level 0 has multiple rows
+PASS taskwarrior level 0 icons share x (0.00)
+PASS taskwarrior level 0 labels share x (0.00)
+PASS taskwarrior level 0 counts share right edge (0.00)
+PASS taskwarrior level 1 has multiple rows
+PASS taskwarrior level 1 icons share x (0.00)
+PASS taskwarrior level 1 labels share x (0.00)
+PASS taskwarrior level 1 counts share right edge (0.00)
+PASS taskwarrior level 2 has multiple rows
+PASS taskwarrior level 2 icons share x (0.00)
+PASS taskwarrior level 2 labels share x (0.00)
+PASS taskwarrior level 2 counts share right edge (0.00)
+PASS taskwarrior hides Cycles
+PASS taskwarrior hides Initiatives
+PASS taskwarrior hides Projects
+PASS taskwarrior sidebar exposes its rows
+PASS taskwarrior clicked Inbox
+PASS taskwarrior clicked Pulse
+PASS taskwarrior clicked Agent
+PASS taskwarrior clicked Views
+PASS taskwarrior clicked Teams
+PASS taskwarrior clicked Settings
+PASS taskwarrior team click keeps every project
+PASS taskwarrior clicked tasks:Tasks
+PASS taskwarrior Home is not the issue board
+PASS taskwarrior clicked Home
+PASS taskwarrior Triage does not persist needs-input
+PASS taskwarrior Triage hides TW-1
+PASS taskwarrior clicked Triage
+PASS taskwarrior clicked Issues
+PASS taskwarrior All stories clears the ephemeral lens
+PASS taskwarrior clicked All stories
+PASS taskwarrior clicked My issues
+PASS taskwarrior clicked All epics
+PASS taskwarrior clicked Views
+PASS taskwarrior clicked Combined
+PASS taskwarrior clicked Calendar
+PASS taskwarrior G then I opens Inbox
+PASS taskwarrior Ctrl+K opens the command overlay
+PASS taskwarrior collapsed Workspace stays collapsed
+PASS taskwarrior console stayed quiet
+sidebar click smoke ok

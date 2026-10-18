@@ -1,4 +1,4 @@
-import { readFileSync, writeSync } from "node:fs";
+import { existsSync, readFileSync, writeSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -26,8 +26,12 @@ export async function runServer(opts: {
   fallback?: (req: IncomingMessage, res: ServerResponse) => void;
 }) {
   const piped = await readPipe();
-  const raw =
-    piped ?? JSON.parse(readFileSync(join(opts.root, "fixtures/issues.json"), "utf8"));
+  const taskwarriorFixture = process.env.TASKWARRIOR_FIXTURE?.trim();
+  const fixturePath =
+    taskwarriorFixture && existsSync(taskwarriorFixture)
+      ? taskwarriorFixture
+      : join(opts.root, "fixtures/issues.json");
+  const raw = piped ?? JSON.parse(readFileSync(fixturePath, "utf8"));
   const flags = argvToFlags(process.argv);
   const booted = await createBoardApp({
     raw,

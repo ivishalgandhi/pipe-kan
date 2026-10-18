@@ -26,6 +26,8 @@ jobs:
       - run: bun test
       - run: bun run typecheck
       - run: bun run build
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run smoke
       - uses: cycjimmy/semantic-release-action@v4
         with:
           semantic_version: 25

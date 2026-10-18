@@ -720,6 +720,157 @@ export function TeamHome({
   );
 }
 
+export function HomeOverview({
+  scope,
+  issues,
+  epics,
+  needsInput,
+  recent,
+  onOpen,
+}: {
+  scope: string;
+  issues: number;
+  epics: number;
+  needsInput: number;
+  recent: { key: string; summary: string }[];
+  onOpen: (key: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3 px-3 py-3" data-smoke="home-overview">
+      <h1 className="text-[18px] font-medium">Home</h1>
+      <p className="text-muted-foreground text-[13px]">Overview for {scope}.</p>
+      <div className="grid max-w-xl grid-cols-3 gap-2">
+        <OverviewStat label="Issues" value={issues} />
+        <OverviewStat label="Epics" value={epics} />
+        <OverviewStat label="Needs input" value={needsInput} />
+      </div>
+      <section>
+        <h2 className="py-1 text-[13px] font-medium">Recent</h2>
+        {recent.length ? (
+          <ul className="flex flex-col">
+            {recent.map((row) => (
+              <li key={row.key}>
+                <button type="button" className="hover:bg-muted flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px]" onClick={() => onOpen(row.key)}>
+                  <span className="text-muted-foreground w-24 shrink-0 truncate">{row.key}</span>
+                  <span className="truncate">{row.summary}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-muted-foreground text-[13px]">No issues in this scope.</p>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function OverviewStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg border border-[var(--border)] px-3 py-2">
+      <div className="text-muted-foreground text-[11px]">{label}</div>
+      <div className="text-[18px] font-medium tabular-nums">{value}</div>
+    </div>
+  );
+}
+
+export function PulseFeed({
+  rows,
+  onOpen,
+}: {
+  rows: { key: string; summary: string; detail: string }[];
+  onOpen: (key: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1 px-3 py-3" data-smoke="pulse">
+      <h1 className="text-[18px] font-medium">Pulse</h1>
+      <p className="text-muted-foreground pb-2 text-[13px]">Recent updates in this scope.</p>
+      {rows.length ? (
+        rows.map((row) => (
+          <button
+            key={row.key}
+            type="button"
+            className="hover:bg-muted flex h-10 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px]"
+            onClick={() => onOpen(row.key)}
+          >
+            <span className="w-28 shrink-0 truncate font-medium">{row.key}</span>
+            <span className="min-w-0 flex-1 truncate">{row.summary}</span>
+            <span className="text-muted-foreground shrink-0 text-[12px]">{row.detail}</span>
+          </button>
+        ))
+      ) : (
+        <p className="text-muted-foreground text-[13px]">No recent updates.</p>
+      )}
+    </div>
+  );
+}
+
+export function CycleList({
+  phase,
+  cycles,
+  onOpen,
+}: {
+  phase: "current" | "upcoming";
+  cycles: { id: string; name: string; start_date?: string; end_date?: string }[];
+  onOpen: (key: string) => void;
+}) {
+  const title = phase === "current" ? "Current" : "Upcoming";
+  return (
+    <div className="flex flex-col gap-2 px-3 py-3" data-smoke="cycles" data-cycle-phase={phase}>
+      <h1 className="text-[18px] font-medium">{title}</h1>
+      {cycles.length ? (
+        <ul className="flex flex-col">
+          {cycles.map((cycle) => (
+            <li key={cycle.id}>
+              <button type="button" className="hover:bg-muted flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px]" onClick={() => onOpen(cycle.id)}>
+                <span className="min-w-0 flex-1 truncate font-medium">{cycle.name}</span>
+                <span className="text-muted-foreground text-[12px]">
+                  {[cycle.start_date, cycle.end_date].filter(Boolean).join(" – ") || "No dates"}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-muted-foreground text-[13px]">No {title.toLowerCase()} cycles.</p>
+      )}
+    </div>
+  );
+}
+
+export function SettingsPage({
+  scope,
+  theme,
+  viewer,
+  onTheme,
+  onViewer,
+}: {
+  scope: string;
+  theme: "light" | "dark";
+  viewer: string;
+  onTheme: () => void;
+  onViewer: (name: string) => void;
+}) {
+  return (
+    <div className="flex max-w-md flex-col gap-3 px-3 py-3" data-smoke="settings">
+      <h1 className="text-[18px] font-medium">Settings</h1>
+      <p className="text-muted-foreground text-[13px]">Scope is {scope}. Display options stay on Shift+V.</p>
+      <label className="flex items-center gap-2 text-[13px]">
+        Viewer
+        <input
+          aria-label="Viewer name"
+          className="bg-muted h-7 flex-1 rounded px-2"
+          value={viewer}
+          onChange={(event) => onViewer(event.target.value)}
+        />
+      </label>
+      <button type="button" className="bg-muted h-7 w-fit rounded-lg px-2 text-[13px]" onClick={onTheme}>
+        Theme: {theme}
+      </button>
+    </div>
+  );
+}
+
 export function UpdateSchedule({ onClose }: { onClose: () => void }) {
   const stored = readJson<{ mode: "default" | "custom" | "never"; frequency: string; day: string; time: string }>(SCHEDULE_KEY, {
     mode: "default",

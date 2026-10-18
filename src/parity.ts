@@ -482,7 +482,7 @@ export function layoutTimeline(
   return { width, todayX: xOf(today), ticks, bars, unscheduled };
 }
 
-export function sourceOptions(input: { planeKey: boolean; jiraBin: boolean }): SourceOption[] {
+export function sourceOptions(input: { planeKey: boolean; jiraBin: boolean; taskwarrior?: boolean }): SourceOption[] {
   return [
     {
       id: "plane",
@@ -499,8 +499,8 @@ export function sourceOptions(input: { planeKey: boolean; jiraBin: boolean }): S
     {
       id: "taskwarrior",
       label: "Taskwarrior",
-      enabled: false,
-      reason: "Taskwarrior is not connected",
+      enabled: Boolean(input.taskwarrior),
+      ...(input.taskwarrior ? {} : { reason: "Taskwarrior is not connected" }),
     },
   ];
 }

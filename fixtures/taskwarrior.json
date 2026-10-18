@@ -1,0 +1,34 @@
+[
+  {
+    "key": "TW-1",
+    "fields": {
+      "summary": "File the weekly export",
+      "description": "Store-mode task used by the sidebar smoke.",
+      "labels": ["task"],
+      "issueType": { "name": "Story" },
+      "issuetype": { "name": "Story" },
+      "status": { "name": "To Do" },
+      "priority": { "name": "Medium" },
+      "assignee": { "displayName": "Ada", "emailAddress": "ada@test.com" },
+      "reporter": { "displayName": "Ada" },
+      "created": "2026-10-01T09:00:00.000+0000",
+      "updated": "2026-10-02T09:00:00.000+0000"
+    }
+  },
+  {
+    "key": "TW-2",
+    "fields": {
+      "summary": "Ask for the missing field",
+      "description": "Needs input, so Triage can show it without saving a filter.",
+      "labels": ["needs-input"],
+      "issueType": { "name": "Story" },
+      "issuetype": { "name": "Story" },
+      "status": { "name": "To Do" },
+      "priority": { "name": "High" },
+      "assignee": { "displayName": "Ada", "emailAddress": "ada@test.com" },
+      "reporter": { "displayName": "Ada" },
+      "created": "2026-10-03T09:00:00.000+0000",
+      "updated": "2026-10-04T09:00:00.000+0000"
+    }
+  }
+]

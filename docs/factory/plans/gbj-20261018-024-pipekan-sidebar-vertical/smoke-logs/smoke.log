@@ -7,9 +7,9 @@ PASS Issues is a nested row
 PASS Cycles is a nested row
 PASS Projects is a nested row
 PASS Views is a nested row
-PASS cycles nest Current and Upcoming on a guide
+PASS cycles nest Current and Upcoming
 PASS nested rows are indented
-PASS cycles stay disabled
+PASS cycle rows are enabled
 PASS team row has a menu
 PASS All stories is reachable in the team tree
 PASS My issues is reachable in the team tree

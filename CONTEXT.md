@@ -56,7 +56,7 @@ A named, one-level group of Favourites in the left pane. Local only; not Scope, 
 _Avoid_: directory, collection, project (when meaning this)
 
 **Scope**:
-The jira-cli list invocation that fills All stories. All epics is filled by `jira issue list -tEpic`, not by typing that into Scope.
+The jira-cli list invocation that fills All stories. All epics is filled by `jira issue list -tEpic`, not by typing that into Scope. With no project keys, the header chip says All projects and the Board is the whole workspace. Choosing a team name does not narrow Scope to one project.
 _Avoid_: filter, view, query (when meaning this)
 
 **Search**:
@@ -160,7 +160,7 @@ Local layout, grouping, ordering, zoom, empty groups, and completed window for I
 _Avoid_: view settings, chrome
 
 **View filter**:
-Date and field constraints on the Board (Created, Updated, Due, Status, Status type, Assignee, Priority, Labels, Project, Health, Initiative), shown as chips under the Board tabs. `F` opens Add Filter. The header Filter button opens the facet editor. Local. It does not change Scope or Refresh. Placeholder rows (Agent, Creator, Estimate, and the rest of the coming-soon list) do not change which Cards match.
+Date and field constraints on the Board (Created, Updated, Due, Status, Status type, Assignee, Priority, Labels, Project, Health, Initiative), shown as chips under the Board tabs. `F` opens Add Filter. The header Filter button opens the facet editor. Local. It does not change Scope or Refresh. Sidebar Triage, Active, and Backlog are ephemeral lenses; leaving them clears the lens and does not write this filter. Placeholder rows (Agent, Creator, Estimate, and the rest of the coming-soon list) do not change which Cards match.
 _Avoid_: Search, Scope, JQL
 
 **View**:
@@ -180,9 +180,25 @@ A named one-level group of Favorites. It collapses, shows a count, and accepts a
 _Avoid_: Folder, directory, project
 
 **Your teams**:
-The sidebar section of checked workspace/project pairs. Each team is a vertical collapsible row (icon, name, caret, menu). It nests Home, Triage, Issues (All stories, My issues, All epics), Cycles (Current, Upcoming), Projects, and Views (Combined, Calendar, Presets). Cycles stays disabled. One sidebar row is current.
+The sidebar section of checked workspaces, or of checked workspace/project pairs when Scope names projects. Each team is a vertical collapsible row (icon, name, caret, menu) on the same icon column as the Workspace rows. It nests Home, Triage, Issues (All stories, My issues, All epics), and Views (Combined, Calendar, Presets). Plane also nests Cycles (Current, Upcoming) and Projects. One sidebar row is current. Collapsed sections stay collapsed locally.
 _Avoid_: Workspace, switcher, All stories
 
+**Home**:
+The team overview: issue, epic, and needs-input counts, plus recent issues. It is not All stories.
+_Avoid_: All stories, Pulse, Inbox
+
+**Triage**:
+An ephemeral lens on All stories that shows Cards with the `needs-input` label. Leaving it, including any other sidebar navigation, clears it. It does not write the view filter.
+_Avoid_: Inbox, Filter, View filter
+
+**Pulse**:
+A list of recent updates in the current scope, newest first. It is not the Kanban and it does not change Scope.
+_Avoid_: Home, Inbox, All stories
+
+**Cycles**:
+Plane cycles for the current scope, split into Current and Upcoming. Hidden when the source is not Plane. Not a disabled row.
+_Avoid_: sprint, milestone
+
 **Team**:
-One checked workspace/project pair in Your teams. Choosing the name applies that Scope and refreshes. The nested rows open the Board, Triage, Views, or a board mode. Not a Folder and not a Workspace.
+One workspace, or one workspace/project pair when Scope names projects, in Your teams. Choosing the name opens All stories. If a project was checked, that check is cleared so the workspace stays whole. It does not pick a single project. Not a Folder and not a Workspace.
 _Avoid_: Project (the identifier alone), Workspace

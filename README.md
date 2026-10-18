@@ -61,13 +61,13 @@ bunx pipe-kan --plane --projects APH,PULSE,PKAN,PUI,DEC
 | `PLANE_HOST` | `https://plane.tail48fe8.ts.net` | Plane origin; API is `{host}/api/v1` |
 | `PLANE_FIXTURE` | (unset) | `synthetic` uses the built-in fake catalog; otherwise a JSON file path |
 
-Same `--projects` style as Jira: comma-separated, trimmed, uppercased. CLI flags are startup defaults. The sidebar switcher (O then W) checks Sources, Workspaces, and Projects and refreshes the merged Board. The header project chip opens that same menu. Scope flags still round-trip the selection. Next launch uses argv, else `PLANE_WORKSPACE`, else `personal`.
+Same `--projects` style as Jira: comma-separated, trimmed, uppercased. CLI flags are startup defaults. The sidebar switcher (O then W) checks Sources, Workspaces, and Projects and refreshes the merged Board. The header scope chip opens that same menu. With no `--projects` it reads All projects. Scope flags still round-trip the selection. Next launch uses argv, else `PLANE_WORKSPACE`, else `personal`.
 
 Workspace discovery: Plane's public v1 API has no workspace-list endpoint, so the switcher lists every workspace the key can read by probing candidate slugs (startup flags, `PLANE_WORKSPACE`, `PLANE_WORKSPACES`, `PIPE_KAN_WORKSPACES`, plus `personal` and `work`) regardless of the startup scope. The startup flags bar is hidden by default; Display > Show startup flags bar brings it back.
 
 Plane mode adds Initiatives and Projects. Initiatives are modules (health, status, priority, target date) in a list, board, or timeline. Projects show completion, target date, and health. Display is Shift+V. `F` opens Add Filter; the header Filter button still opens the facet editor. Chips sit under the Board tabs. Right-click a row for status, assignee, priority, labels, Move to project, or copy link. Shift+P opens Move to project for the hovered or open Issue. Cmd+K jumps to those views; `ow` lists workspaces.
 
-When more than one Workspace is selected, issue keys are `workspace/KEY` so `work/PULSE` and `personal/PULSE` stay distinct. Catalog reads are serialized, cached, and keep trailing slashes.
+When more than one Workspace is selected, issue keys are `workspace/KEY` so `work/PULSE` and `personal/PULSE` stay distinct. Catalog GETs run up to four at a time, stay cached, and keep trailing slashes. Writes stay one at a time.
 
 On Refresh:
 
@@ -78,7 +78,7 @@ On Refresh:
 
 Create and Edit use Plane REST when `--plane` is set. Pulse, Plane Pro, scraping, and SQL workspace moves are out of scope.
 
-A Plane `429 RATE_LIMIT_EXCEEDED` does not fall back to Fake Jira. Plane waits the rate-limit window, then continues.
+A Plane `429 RATE_LIMIT_EXCEEDED` does not fall back to Fake Jira. Each request waits the Retry-After window once, then continues. If the limit is still exhausted, rows already loaded stay on the Board, the header shows partial, and the rest loads in the background. An empty first load shows the Plane error and does not present the Fixture.
 
 ## Multiple projects
 
@@ -94,7 +94,7 @@ That Scope becomes JQL `project in ("KEY1", "KEY2")`. `-a`, `-s`, `-t`, and `-P`
 
 With that Scope:
 
-- **Refresh** re-runs `jira issue list` for All stories (`project in (...)` plus the other Scope clauses) and lists All epics as `project in (...) AND type="Epic"`. Epic children are listed for those Epics. Header chip shows the keys, or `DEMO` when Scope has none.
+- **Refresh** re-runs `jira issue list` for All stories (`project in (...)` plus the other Scope clauses) and lists All epics as `project in (...) AND type="Epic"`. Epic children are listed for those Epics. Header chip shows the keys, or All projects when Scope has none.
 - **Favourites** stay local. When Scope has Project keys, Favourite writes stamp that set.
 - **Presets** stay Filter, Sort, and Hide. Save stamps the current Project set. Apply copies that chrome; it does not change Scope. Apply is a no-op when the Preset's Project set does not match the current Scope.
 
@@ -151,7 +151,7 @@ Views is a browser, not the filter menu. Personal and team groups list saved vie
 
 Inbox sits under the workspace switcher. Its badge counts `needs-input` labels (capped at `9+`). The rows are synthetic. Mark all read shows "You're all caught up". Inbox stays up in Jira mode, using that source's issue keys.
 
-The left rail is Inbox, Pulse, and Agent, then Workspace (Projects and Initiatives on Plane, Views, and More), Favorites (folders you can collapse and drop into), and Your teams. Each team is a vertical row (icon, name, caret, hover menu). Its children are Home, Triage, Issues (All stories, My issues, All epics), Cycles (Current, Upcoming), Projects, and Views (Combined, Calendar, Presets). One sidebar row is current. Favourites and the Epic list stay under Board. The footer is Try, invite, and Connect GitHub; those rows do nothing yet. Cycles is disabled.
+The left rail is Inbox, Pulse, and Agent, then Workspace (Projects and Initiatives on Plane, Views, and More), Favorites (folders you can collapse and drop into), and Your teams. Each team is a vertical row (icon, name, caret, hover menu) aligned with the Workspace rows. Its children are Home (an overview, not All stories), Triage (an ephemeral needs-input lens that is cleared on the next navigation and is not saved as a view filter), Issues (All stories, My issues, All epics), Cycles (Current and Upcoming, Plane only), Projects (Plane only), and Views (Combined, Calendar, Presets). Settings under More is a real page. One sidebar row is current. The header breadcrumb shows the scope and the view. G then I, M, A, B, E, T, C, V, W, P, U, S, D, or H jumps to Inbox, My issues, Active, Backlog, All stories, Triage, Cycles, Current, Upcoming, Projects, Views, Settings, the Board, or Home. Cmd+K or Ctrl+K still opens Command. Collapsed sections stay collapsed in `localStorage`. Dead footer rows are not shown.
 
 Screenshot placeholders, not committed: views, add filter, move to project, inbox, sidebar.
 
@@ -171,7 +171,7 @@ bun run build
 bun run smoke
 ```
 
-Contributors still `bun install` and `bun run dev` (Vite). `bun run build` writes the published CLI to `dist/pipe-kan.js`. `bun run smoke` boots that flow with `PLANE_FIXTURE=synthetic` (and `dist/pipe-kan.js` when it exists) and writes the 019 parity log, then the linear-look log at `docs/factory/plans/gbj-20261018-023-pipekan-linear-look-plan/smoke-log.md`.
+Contributors still `bun install` and `bun run dev` (Vite). `bun run build` writes the published CLI to `dist/pipe-kan.js`. `bun run smoke` boots that flow with `PLANE_FIXTURE=synthetic` (and `dist/pipe-kan.js` when it exists), writes the parity and look logs, and clicks every sidebar row for the Plane, Jira, and task fixtures. The click smoke needs `bun run build` first.
 
 ## Version
 

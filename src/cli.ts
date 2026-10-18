@@ -32,6 +32,9 @@ export type Cli = {
   listProjectIdentifiers?(workspace: string): Promise<string[]>;
   listProjects?(workspace: string): Promise<{ id: string; identifier: string; name: string }[]>;
   parity?(flags?: string): Promise<ParitySnapshot>;
+  cycles?(): Promise<{ id: string; name: string; start_date?: string; end_date?: string; projectId: string; workspace: string }[]>;
+  catalogState?(): { partial: boolean; pending: boolean; error?: string };
+  pumpCatalog?(): Promise<void>;
 };
 
 export function createdKeyFromOutput(text: string): string | undefined {

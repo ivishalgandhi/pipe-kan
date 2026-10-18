@@ -84,7 +84,20 @@ export function handleAppApi(
 
   if (url.pathname === "/api/board" && method === "GET") {
     reply(req, res, async () => {
+      if (app.board().partial) void app.pumpCatalog?.();
       json(res, 200, await boardEnvelope({ ...app.board(), flags: app.flags }, kind, app.flags, env, app));
+    });
+    return true;
+  }
+
+  if (url.pathname === "/api/cycles" && method === "GET") {
+    reply(req, res, async () => {
+      try {
+        json(res, 200, { cycles: (await app.cycles?.()) ?? [] });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "cycles failed";
+        json(res, 200, { cycles: [], error: message });
+      }
     });
     return true;
   }
@@ -121,13 +134,15 @@ export function handleAppApi(
 
   if (url.pathname === "/api/sources" && method === "GET") {
     reply(req, res, async () => {
-      const current = kind === "plane" ? "plane" : "jira";
+      const taskwarrior = Boolean(env.TASKWARRIOR_FIXTURE?.trim());
+      const current = taskwarrior ? "taskwarrior" : kind === "plane" ? "plane" : "jira";
       json(res, 200, {
         source: current,
         kind,
         sources: sourceOptions({
           planeKey: Boolean(env.PLANE_API_KEY?.trim() || env.PLANE_FIXTURE?.trim()),
           jiraBin: Boolean(resolveJiraBin(env.JIRA_BIN ?? "jira", env.PATH ?? "")),
+          taskwarrior,
         }),
       });
     });
