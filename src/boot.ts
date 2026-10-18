@@ -7,6 +7,7 @@ import {
 } from "./cli.ts";
 import { jiraCliConfigPath } from "./field-map.ts";
 import { wantsPlane } from "./flags.ts";
+import { resolvePlaneFetch } from "./plane-fixture.ts";
 import { createPlaneCli, planeHost, planeWorkspace } from "./plane.ts";
 import { IssueStore } from "./store.ts";
 
@@ -28,15 +29,17 @@ export async function createBoardApp(opts: {
   const store = IssueStore.fromRaw(opts.raw);
   const plane = wantsPlane(flags);
   const bin = resolveJiraBin(env.JIRA_BIN ?? "jira", env.PATH ?? "");
+  const fixtureMode = Boolean(env.PLANE_FIXTURE?.trim());
+  const useJira = Boolean(bin) && !fixtureMode;
   const cli: Cli = plane
     ? createPlaneCli({
         host: planeHost(env),
         apiKey: env.PLANE_API_KEY ?? "",
         workspace: planeWorkspace(flags, env),
         flags,
-        fetch: opts.fetch,
+        fetch: opts.fetch ?? resolvePlaneFetch(env),
       })
-    : bin
+    : useJira
       ? createJiraCli({
           bin,
           configPath: env.JIRA_CONFIG_FILE,
@@ -57,7 +60,7 @@ export async function createBoardApp(opts: {
     const local = createStoreCli(store, flags);
     app.hydrate(JSON.parse(await local.list(app.flags)), { fromStore: true });
   }
-  return { app, store, kind: plane ? "plane" : bin ? "jira" : "store" };
+  return { app, store, kind: plane ? "plane" : useJira ? "jira" : "store" };
 }
 
 export async function refreshFromJira(

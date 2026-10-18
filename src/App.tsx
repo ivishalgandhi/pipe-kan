@@ -23,7 +23,29 @@ import { toast } from "sonner";
 import { cardAge, epicsToColumns, isNeedsInputLabel, targetEndDistance, type Board, type Card, type Column, type Epic } from "./board.ts";
 import { workspacePickerRows, type CommandJump, type PlaneWorkspace } from "./command.ts";
 import { REFRESH_NO_FOCUS_WARNING, refreshRequestBody, refreshWorkspaceWarning } from "./refresh.ts";
-import { commitWorkspaceSlug, parseFlags, setProjectsFlag, setWorkspaceFlag } from "./flags.ts";
+import { applyScopeSelection, commitWorkspaceSlug, parseFlags, setPlaneFlag, setProjectsFlag, setWorkspaceFlag, type ScopePair } from "./flags.ts";
+import { copyText } from "./copy-text.ts";
+import {
+  DEFAULT_DISPLAY,
+  EMPTY_VIEW_FILTER,
+  clearViewChip,
+  defaultView,
+  dominantAssignee,
+  includeCompleted,
+  matchViewFilter,
+  projectIdentifier,
+  saveView,
+  setDefaultView,
+  sourceOptions,
+  toggleScope,
+  toggleWorkspace,
+  type DisplayOptions,
+  type LinearFavorite,
+  type Opener,
+  type ParitySnapshot,
+  type SourceId,
+  type ViewFilter,
+} from "./parity.ts";
 import {
   buildCreatePayload,
   buildEditPayload,
@@ -79,6 +101,30 @@ import {
 import { AgentPanel } from "~/components/agent/agent-panel.tsx";
 import { BoardCalendar } from "~/components/board-calendar.tsx";
 import { CommandOverlay } from "~/components/command-overlay.tsx";
+import {
+  DISPLAY_KEY,
+  DisplayOptionItems,
+  FavoriteRows,
+  IssueGroupList,
+  JoinedProjects,
+  LINEAR_FAVORITES_KEY,
+  RoadmapCanvas,
+  RowContextMenu,
+  SAVED_VIEWS_KEY,
+  ScopeMenuList,
+  ScopeSwitcher,
+  VIEW_FILTER_KEY,
+  ViewFilterChips,
+  ViewFilterEditor,
+  effectiveLayout,
+  isTypingTarget,
+  readJson,
+  rowMenuFor,
+  toggleLinearFavorite,
+  writeJson,
+  type CatalogProject,
+} from "~/components/linear-views.tsx";
+import { TeamHome, TeamsPage, UpdateSchedule } from "~/components/linear-chrome.tsx";
 import { IssueComposer } from "~/components/issue-composer.tsx";
 import { Toaster } from "~/components/ui/sonner.tsx";
 import { Badge } from "~/components/ui/badge.tsx";
@@ -145,6 +191,7 @@ const OPENER_KEY = "board-opener";
 const FAV_KEY = "favourite-epics";
 const PRESET_KEY = "board-presets";
 const SIDEBAR_OPEN_KEY = "board-sidebar-open";
+const VIEWER_KEY = "pipe-kan-viewer";
 const COLUMN_ORDER_KEY = "board-column-order";
 const DEFAULT_COLLAPSED_EPIC_STATUS = [
   "In Progress",
@@ -163,6 +210,41 @@ const ALL_CARD_DISPLAY_KEYS: CardDisplayKey[] = [
   "assignee",
   "dueDate",
 ];
+
+const PROPERTY_CARD_KEYS: [string, CardDisplayKey][] = [
+  ["Priority", "priority"],
+  ["Assignee", "assignee"],
+  ["Labels", "labels"],
+  ["Due date", "dueDate"],
+  ["Target date", "targetEnd"],
+];
+
+function shownForProperties(properties: string[] | undefined, current: CardDisplayKey[]): CardDisplayKey[] {
+  if (!properties) return current;
+  const next = new Set(current);
+  for (const [label, key] of PROPERTY_CARD_KEYS) {
+    if (properties.includes(label)) next.add(key);
+    else next.delete(key);
+  }
+  return ALL_CARD_DISPLAY_KEYS.filter((key) => next.has(key));
+}
+
+function propertiesForShown(shown: CardDisplayKey[], current: string[] | undefined): string[] {
+  const next = new Set(current ?? ["Status", "Priority", "Assignee", "Labels", "Project", "Due date", "Health", "Target date"]);
+  for (const [label, key] of PROPERTY_CARD_KEYS) {
+    if (shown.includes(key)) next.add(label);
+    else next.delete(label);
+  }
+  return [...next];
+}
+
+function readViewer(): string {
+  try {
+    return localStorage.getItem(VIEWER_KEY)?.trim() ?? "";
+  } catch {
+    return "";
+  }
+}
 
 type Chrome = {
   filter: BoardFilter;
@@ -346,17 +428,17 @@ function filterPresetsByProject(presets: Preset[], projects: string[]): Preset[]
   return presets.filter((preset) => projectsMatch(preset.projects, projects));
 }
 
-function readOpener(): "stories" | "epics" | "combined" {
+function readOpener(): Opener {
   try {
     const value = localStorage.getItem(OPENER_KEY);
-    if (value === "epics" || value === "combined") return value;
+    if (value === "epics" || value === "combined" || value === "initiatives" || value === "projects") return value;
     return "stories";
   } catch {
     return "stories";
   }
 }
 
-function writeOpener(next: "stories" | "epics" | "combined") {
+function writeOpener(next: Opener) {
   localStorage.setItem(OPENER_KEY, next);
 }
 
@@ -535,15 +617,17 @@ function FilterMenu({
   filter,
   onToggle,
   onClear,
+  viewSlot,
 }: {
   facets: FilterFacet[];
   filter: BoardFilter;
   onToggle: (key: string, value: string) => void;
   onClear: () => void;
+  viewSlot?: React.ReactNode;
 }) {
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   return (
-    <DropdownMenuContent align="end" className="w-56 max-h-[min(70vh,28rem)]">
+    <DropdownMenuContent align="end" className="w-80 max-h-[min(70vh,32rem)]">
       {groupedFacets(facets).map((block, index) => {
         const body = block.facets.map((facet) => (
           <FilterValues
@@ -589,7 +673,8 @@ function FilterMenu({
           </Fragment>
         );
       })}
-      {facets.length ? <DropdownMenuSeparator /> : null}
+      {viewSlot}
+      {facets.length || viewSlot ? <DropdownMenuSeparator /> : null}
       <DropdownMenuItem onClick={onClear}>Clear Filter, Sort, and Hide</DropdownMenuItem>
     </DropdownMenuContent>
   );
@@ -603,6 +688,7 @@ function IssueCard({
   selected,
   onClick,
   onDoubleClick,
+  onContextMenu,
   variant = "story",
   shown,
 }: {
@@ -613,6 +699,7 @@ function IssueCard({
   selected?: boolean;
   onClick?: (event: React.MouseEvent) => void;
   onDoubleClick?: (event: React.MouseEvent) => void;
+  onContextMenu?: (event: React.MouseEvent) => void;
   variant?: "story" | "epic";
   shown?: Set<CardDisplayKey>;
 }) {
@@ -650,6 +737,11 @@ function IssueCard({
     targetDistance;
   const body = (
     <div
+      onContextMenu={(event) => {
+        if (!onContextMenu) return;
+        event.preventDefault();
+        onContextMenu(event);
+      }}
       className={cn(
         "bg-card hover:bg-accent rounded-[9px] border border-[var(--bg-border-color)] pt-2 pr-2.5 pb-3 pl-3 transition-colors duration-150",
         selected && "ring-primary ring-2",
@@ -747,6 +839,7 @@ function StatusColumn({
   selected,
   onClick,
   onDoubleClick,
+  onContextMenu,
   onCreate,
   onHide,
   shown,
@@ -758,6 +851,7 @@ function StatusColumn({
   selected?: Set<string>;
   onClick?: (key: string, event: React.MouseEvent) => void;
   onDoubleClick?: (key: string, event: React.MouseEvent) => void;
+  onContextMenu?: (key: string, event: React.MouseEvent) => void;
   onCreate?: (status: string) => void;
   onHide?: () => void;
   shown?: Set<CardDisplayKey>;
@@ -850,6 +944,7 @@ function StatusColumn({
                   shown={shown}
                   onClick={(event) => onClick?.(card.key, event)}
                   onDoubleClick={(event) => onDoubleClick?.(card.key, event)}
+                  onContextMenu={(event) => onContextMenu?.(card.key, event)}
                 />
               ))}
               {onCreate ? (
@@ -1206,7 +1301,7 @@ export function App() {
   const [folderError, setFolderError] = useState("");
   const [presetName, setPresetName] = useState("");
   const [presetError, setPresetError] = useState("");
-  const [boardKind, setBoardKind] = useState<"stories" | "epics" | "combined">(readOpener);
+  const [boardKind, setBoardKind] = useState<Opener>(readOpener);
   const [canvasTab, setCanvasTab] = useState<CanvasTab>(readCanvasTab);
   const [sidebarOpen, setSidebarOpen] = useState(() => readSidebarOpen());
   const epicsPanelRef = usePanelRef();
@@ -1219,6 +1314,29 @@ export function App() {
   const [workspaceSlug, setWorkspaceSlug] = useState("");
   const [committedWorkspace, setCommittedWorkspace] = useState("");
   const [workspaces, setWorkspaces] = useState<PlaneWorkspace[] | undefined>(undefined);
+  const [parity, setParity] = useState<ParitySnapshot>({ initiatives: [], projects: [], workspaces: [] });
+  const [catalogProjects, setCatalogProjects] = useState<CatalogProject[]>([]);
+  const [display, setDisplay] = useState<DisplayOptions>(() => readJson(DISPLAY_KEY, DEFAULT_DISPLAY));
+  const [layoutTouched, setLayoutTouched] = useState(false);
+  const [viewFilter, setViewFilter] = useState<ViewFilter>(() => {
+    const views = readJson<Array<{ name: string; filter: ViewFilter; default?: boolean }>>(SAVED_VIEWS_KEY, []);
+    return defaultView(views)?.filter ?? readJson(VIEW_FILTER_KEY, EMPTY_VIEW_FILTER);
+  });
+  const [savedViews, setSavedViews] = useState(() => readJson<Array<{ name: string; filter: ViewFilter; default?: boolean }>>(SAVED_VIEWS_KEY, []));
+  const [linearFavorites, setLinearFavorites] = useState<LinearFavorite[]>(() => readJson(LINEAR_FAVORITES_KEY, []));
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [sidebarPage, setSidebarPage] = useState<"board" | "teams" | "team" | "schedule">("board");
+  const [teamKey, setTeamKey] = useState<string | null>(null);
+  const [sourceList, setSourceList] = useState(() => sourceOptions({ planeKey: false, jiraBin: false }));
+  const [activeSource, setActiveSource] = useState<SourceId>("jira");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [displayOpen, setDisplayOpen] = useState(false);
+  const [issueLens, setIssueLens] = useState<"all" | "mine">("all");
+  const [viewer, setViewer] = useState(readViewer);
+  const [viewName, setViewName] = useState("");
+  const [rowMenu, setRowMenu] = useState<{ x: number; y: number; key: string; kind: "issue" | "initiative" | "project" } | null>(null);
+  const scopeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chordRef = useRef<{ key: string; at: number } | null>(null);
   const [workspaceSwitch, setWorkspaceSwitch] = useState<{ previousFlags: string; previousSlug: string } | null>(null);
   const workspaceSwitchRef = useRef(workspaceSwitch);
   workspaceSwitchRef.current = workspaceSwitch;
@@ -1241,6 +1359,34 @@ export function App() {
       visibleOpts,
     );
   }, [columns, selectedEpic, search, chrome, epics, epicBoard, pipeBoard, boardKind]);
+  const presented = useMemo(() => {
+    const next: Record<string, Card[]> = {};
+    for (const [title, cards] of Object.entries(visible)) {
+      const kept = cards.filter(
+        (card) =>
+          matchViewFilter(
+            {
+              created: card.created,
+              updated: card.updated,
+              due: card.targetEnd || card.dueDate,
+              status: title,
+              assignee: card.assignee,
+              priority: card.priority,
+              labels: card.labels,
+              project: projectIdentifier(card.key),
+            },
+            viewFilter,
+          ) &&
+          includeCompleted(title, card.updated ?? card.targetEnd ?? card.created, display.completed) &&
+          (issueLens !== "mine" || !viewer || (card.assignee ?? "") === viewer),
+      );
+      if (!display.showEmptyGroups && kept.length === 0) continue;
+      next[title] = kept;
+    }
+    return next;
+  }, [visible, viewFilter, display.completed, display.showEmptyGroups, issueLens, viewer]);
+  const layout = effectiveLayout(boardKind, display, layoutTouched);
+  const roadmap = boardKind === "initiatives" || boardKind === "projects";
   const allCards = useMemo(() => Object.values(columns).flat(), [columns]);
   const childrenList = epicChildren ?? allCards;
   const commandCards = useMemo(() => {
@@ -1262,7 +1408,7 @@ export function App() {
     () => listedFavourites(epics, favourites, search, childrenList, chrome.filter),
     [epics, favourites, search, childrenList, chrome.filter],
   );
-  const columnIds = Object.keys(visible);
+  const columnIds = Object.keys(presented);
   const boardKey = `${boardKind}:${[...activeProjects].sort().join(",")}`;
   const boardOpenIds = openKey ? ["cards", "open"] : ["cards"];
   const shellLayout = useDefaultLayout({
@@ -1295,6 +1441,10 @@ export function App() {
   function persistChrome(next: Chrome) {
     setChrome(next);
     writeChrome(next);
+    const properties = propertiesForShown(next.shown, display.properties);
+    const nextDisplay = { ...display, properties };
+    setDisplay(nextDisplay);
+    writeJson(DISPLAY_KEY, nextDisplay);
   }
 
   function persistFavourites(next: FavouriteState, workspace = committedWorkspace) {
@@ -1359,6 +1509,15 @@ export function App() {
     applyBoard(data);
     if (data.flags) setFlags(data.flags);
     setProcessKind(data.kind ?? "store");
+    setActiveSource(data.kind === "plane" ? "plane" : "jira");
+    if (data.kind === "plane") void loadPlaneChrome(data.flags ?? "", data.workspace);
+    else if (boardKind === "initiatives" || boardKind === "projects") openStories();
+    void api<{ source: SourceId; sources: typeof sourceList }>("/api/sources")
+      .then((listed) => {
+        setSourceList(listed.sources);
+        setActiveSource(listed.source);
+      })
+      .catch(() => undefined);
     if (data.kind === "plane") {
       setWorkspaces(data.workspaces);
       if (data.workspace) {
@@ -1411,6 +1570,32 @@ export function App() {
         commandOpenRef.current = true;
         setCommandOpen(true);
         return;
+      }
+      if (!isTypingTarget(event.target) && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        if (event.key.toLowerCase() === "f" && !event.shiftKey) {
+          event.preventDefault();
+          setFilterOpen(true);
+          return;
+        }
+        if (event.shiftKey && event.key.toLowerCase() === "v") {
+          event.preventDefault();
+          setDisplayOpen(true);
+          return;
+        }
+        if (event.key.toLowerCase() === "o") {
+          chordRef.current = { key: "o", at: Date.now() };
+        } else if (
+          event.key.toLowerCase() === "w" &&
+          chordRef.current?.key === "o" &&
+          Date.now() - chordRef.current.at < 1000
+        ) {
+          event.preventDefault();
+          chordRef.current = null;
+          setSwitcherOpen(true);
+          return;
+        } else if (event.key.toLowerCase() !== "o") {
+          chordRef.current = null;
+        }
       }
       if (event.key === "Escape" && commandOpenRef.current) {
         event.preventDefault();
@@ -1494,6 +1679,7 @@ export function App() {
           setWorkspaceSlug(data.workspace);
           setWorkspaces(data.workspaces);
           persistFavourites(favouritesForWorkspace(favourites, data.workspace), data.workspace);
+          void loadPlaneChrome(body.flags, data.workspace);
         }
       }
     } catch (err) {
@@ -1562,7 +1748,7 @@ export function App() {
     return {
       ...(status ? { status } : {}),
       selectedEpic,
-      boardKind,
+      boardKind: boardKind === "initiatives" || boardKind === "projects" ? "stories" as const : boardKind,
     };
   }
 
@@ -1786,13 +1972,26 @@ export function App() {
   }
 
   function openStories() {
+    setSidebarPage("board");
+    setIssueLens("all");
     writeOpener("stories");
     setBoardKind("stories");
     setSelectedEpic(null);
     if (lastBoard.current) paintBoard(lastBoard.current, "stories");
   }
 
+  function openMine() {
+    openStories();
+    const name = viewer || dominantAssignee(allCards.map((card) => card.assignee));
+    if (name && name !== viewer) {
+      setViewer(name);
+      localStorage.setItem(VIEWER_KEY, name);
+    }
+    setIssueLens("mine");
+  }
+
   function openEpics() {
+    setSidebarPage("board");
     writeOpener("epics");
     setBoardKind("epics");
     setSelectedEpic(null);
@@ -1800,6 +1999,7 @@ export function App() {
   }
 
   function openCombined() {
+    setSidebarPage("board");
     writeOpener("combined");
     setBoardKind("combined");
     setSelectedEpic(null);
@@ -1812,11 +2012,175 @@ export function App() {
   }
 
   function openCalendarTab() {
+    setSidebarPage("board");
     selectCalendarTab();
     setCanvasTab("calendar");
   }
 
+  function openInitiatives() {
+    setSidebarPage("board");
+    writeOpener("initiatives");
+    setBoardKind("initiatives");
+    setSelectedEpic(null);
+    persistCanvasTab("board");
+  }
+
+  function openProjects() {
+    setSidebarPage("board");
+    writeOpener("projects");
+    setBoardKind("projects");
+    setSelectedEpic(null);
+    persistCanvasTab("board");
+  }
+
+  function persistDisplay(next: DisplayOptions, touch = true) {
+    if (touch) setLayoutTouched(true);
+    setDisplay(next);
+    writeJson(DISPLAY_KEY, next);
+    if (next.properties) {
+      const shown = shownForProperties(next.properties, chrome.shown);
+      const nextChrome = { ...chrome, shown };
+      setChrome(nextChrome);
+      writeChrome(nextChrome);
+    }
+  }
+
+  function persistViewFilter(next: ViewFilter) {
+    setViewFilter(next);
+    writeJson(VIEW_FILTER_KEY, next);
+  }
+
+  async function loadPlaneChrome(flagText: string, workspaceHint?: string) {
+    let snapshot: ParitySnapshot = { initiatives: [], projects: [], workspaces: [] };
+    try {
+      snapshot = await api<ParitySnapshot>("/api/parity");
+      setParity(snapshot);
+    } catch {
+      setParity(snapshot);
+    }
+    const parsed = parseFlags(flagText || flags);
+    const slugs = parsed.workspaces.length
+      ? parsed.workspaces
+      : parsed.workspace
+        ? [parsed.workspace]
+        : workspaceHint
+          ? [workspaceHint]
+          : snapshot.workspaces;
+    const rows: CatalogProject[] = [];
+    for (const slug of slugs.length ? slugs : (workspaces ?? []).map((item) => item.slug)) {
+      try {
+        const data = await api<{ details?: { id: string; identifier: string; name: string }[] }>(
+          `/api/projects?workspace=${encodeURIComponent(slug)}`,
+        );
+        for (const project of data.details ?? []) {
+          rows.push({ ...project, workspace: slug });
+        }
+      } catch {
+        /* keep the rows already loaded */
+      }
+    }
+    if (rows.length) setCatalogProjects(rows);
+  }
+
+  function queueScope(nextFlags: string) {
+    setFlags(nextFlags);
+    if (scopeTimer.current) clearTimeout(scopeTimer.current);
+    scopeTimer.current = setTimeout(() => {
+      void refresh({ scope: "all", flags: nextFlags });
+    }, 400);
+  }
+
+  function toggleWorkspaceScope(slug: string) {
+    const parsed = parseFlags(flags);
+    const current = parsed.workspaces.length ? parsed.workspaces : parsed.workspace ? [parsed.workspace] : [];
+    const workspacesNext = toggleWorkspace(current, slug);
+    const scopes = (parsed.scopes.length ? parsed.scopes : []).filter((scope) => workspacesNext.includes(scope.workspace));
+    queueScope(applyScopeSelection(setPlaneFlag(flags, processKind === "plane"), { workspaces: workspacesNext, scopes }));
+  }
+
+  function toggleProjectScope(scope: ScopePair) {
+    const parsed = parseFlags(flags);
+    const base = parsed.scopes.length
+      ? parsed.scopes
+      : parsed.projects.map((project) => ({ workspace: scope.workspace, project }));
+    const scopes = toggleScope(base, scope);
+    const workspacesNext = parsed.workspaces.length ? parsed.workspaces : [scope.workspace];
+    queueScope(
+      applyScopeSelection(setPlaneFlag(flags, processKind === "plane" || scope.workspace !== "jira"), {
+        workspaces: workspacesNext,
+        scopes,
+      }),
+    );
+  }
+
+  async function switchSource(source: SourceId) {
+    const data = await api<{ ok: boolean; kind?: "jira" | "store" | "plane"; reason?: string; error?: string }>(
+      "/api/source",
+      { method: "POST", body: JSON.stringify({ source }) },
+    );
+    if (!data.ok) {
+      toast.error(data.reason || data.error || "Source switch failed");
+      return;
+    }
+    if (data.kind) setProcessKind(data.kind);
+    if (source !== "plane" && (boardKind === "initiatives" || boardKind === "projects")) openStories();
+    await load();
+  }
+
+  function openRowMenu(event: { clientX: number; clientY: number; preventDefault: () => void }, key: string, kind: "issue" | "initiative" | "project") {
+    event.preventDefault();
+    setRowMenu({ x: event.clientX, y: event.clientY, key, kind });
+  }
+
+  async function applyRowAction(action: { type: "status"; value: string } | { type: "assignee"; value: string } | { type: "priority"; value: string } | { type: "label"; value: string } | { type: "copy" }) {
+    if (!rowMenu) return;
+    const key = rowMenu.key;
+    setRowMenu(null);
+    if (action.type === "copy") {
+      try {
+        const data = await api<{ url?: string }>("/api/open", { method: "POST", body: JSON.stringify({ key }) });
+        await copyText(data.url || key);
+        toast.success("Copied link");
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Copy failed";
+        toast.error(message);
+      }
+      return;
+    }
+    if (action.type === "status") {
+      move(key, action.value);
+      return;
+    }
+    const body: Record<string, unknown> = { key };
+    if (action.type === "priority") body.priority = action.value;
+    if (action.type === "assignee") body.assignee = action.value;
+    if (action.type === "label") {
+      const card = allCards.find((item) => item.key === key) ?? epics.find((item) => item.key === key);
+      const labels = new Set(card?.labels ?? []);
+      if (labels.has(action.value)) labels.delete(action.value);
+      else labels.add(action.value);
+      body.labels = [...labels];
+    }
+    const data = await api<{ ok: boolean; error?: string; board?: Board }>("/api/issue/edit", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    if (!data.ok) {
+      toast.error(data.error ?? "Edit failed");
+      return;
+    }
+    if (data.board) applyBoard(data.board);
+    if (processKind === "plane") void loadPlaneChrome(flags);
+  }
+
+  function rememberFavorite(item: LinearFavorite) {
+    const next = toggleLinearFavorite(linearFavorites, item);
+    setLinearFavorites(next);
+    writeJson(LINEAR_FAVORITES_KEY, next);
+  }
+
   async function selectEpic(key: string | null) {
+    if (key) setIssueLens("all");
     const fromEpics = boardKind === "epics" || boardKind === "combined";
     if (fromEpics) openStories();
     setSelectedEpic(key);
@@ -1878,6 +2242,10 @@ export function App() {
       openCombined();
     } else if (nextKind === "epics") {
       openEpics();
+    } else if (nextKind === "initiatives") {
+      openInitiatives();
+    } else if (nextKind === "projects") {
+      openProjects();
     } else if (boardKind !== "stories") {
       openStories();
     }
@@ -1890,6 +2258,20 @@ export function App() {
     if (jump.kind === "all-stories") openStories();
     else if (jump.kind === "all-epics") openEpics();
     else if (jump.kind === "all-combined") openCombined();
+    else if (jump.kind === "initiatives") openInitiatives();
+    else if (jump.kind === "projects") openProjects();
+    else if (jump.kind === "source") void switchSource(jump.source);
+    else if (jump.kind === "display") setDisplayOpen(true);
+    else if (jump.kind === "set-status") move(jump.key, jump.status);
+    else if (jump.kind === "set-assignee") {
+      void api<{ ok: boolean; error?: string; board?: Board }>("/api/issue/edit", {
+        method: "POST",
+        body: JSON.stringify({ key: jump.key, assignee: jump.assignee }),
+      }).then((data) => {
+        if (!data.ok) toast.error(data.error ?? "Edit failed");
+        else if (data.board) applyBoard(data.board);
+      });
+    }
     else if (jump.kind === "refresh") openRefreshConfirm();
     else if (jump.kind === "workspace") void commitWorkspace(jump.slug);
     else if (jump.kind === "agent") setAgentOpen(true);
@@ -1951,8 +2333,51 @@ export function App() {
           className="min-h-0 overflow-hidden"
         >
           <aside className="text-sidebar-foreground flex h-full min-h-0 flex-col">
-            <div className="flex h-10 items-center justify-between px-4">
-              <span className="text-[13px] font-medium">pipe-kan</span>
+            <div className="flex h-10 items-center justify-between gap-1 px-2">
+              <div className="min-w-0 flex-1">
+                <ScopeSwitcher
+                  label={activeSource === "plane" ? (parseFlags(flags).workspaces.join(", ") || workspaceSlug || "Plane") : "Jira"}
+                  open={switcherOpen}
+                  onOpenChange={setSwitcherOpen}
+                  menu={
+                    <ScopeMenuList
+                      source={activeSource}
+                      sources={sourceList}
+                      workspaces={(workspaces ?? []).map((item) => ({ slug: item.slug, name: item.name }))}
+                      selectedWorkspaces={parseFlags(flags).workspaces.length ? parseFlags(flags).workspaces : workspaceSlug ? [workspaceSlug] : []}
+                      projects={
+                        processKind === "plane"
+                          ? catalogProjects
+                          : [...new Set(parseFlags(flags).projects)].map((identifier) => ({
+                              id: identifier,
+                              identifier,
+                              name: identifier,
+                              workspace: "jira",
+                            }))
+                      }
+                      selectedScopes={
+                        parseFlags(flags).scopes.length
+                          ? parseFlags(flags).scopes
+                          : parseFlags(flags).projects.map((project) => ({
+                              workspace: processKind === "plane" ? workspaceSlug || "personal" : "jira",
+                              project,
+                            }))
+                      }
+                      onSource={(id) => void switchSource(id)}
+                      onToggleWorkspace={toggleWorkspaceScope}
+                      onToggleProject={toggleProjectScope}
+                      onPreferences={() => {
+                        setSwitcherOpen(false);
+                        setDisplayOpen(true);
+                      }}
+                      onWorkspaceSettings={() => {
+                        setSwitcherOpen(false);
+                        setSidebarPage("schedule");
+                      }}
+                    />
+                  }
+                />
+              </div>
               <div className="flex items-center gap-1">
                 <span className="text-muted-foreground text-[12px] tabular-nums">
                   {visibleEpics.length}
@@ -1975,10 +2400,18 @@ export function App() {
             <nav className="flex flex-1 flex-col gap-0.5 overflow-auto px-2 pb-2">
               <button
                 type="button"
-                className={navButtonClass(boardKind === "stories" && selectedEpic === null)}
+                className={navButtonClass(sidebarPage === "board" && boardKind === "stories" && selectedEpic === null && issueLens !== "mine")}
                 onClick={openStories}
               >
                 All stories
+              </button>
+              <button
+                type="button"
+                className={navButtonClass(sidebarPage === "board" && issueLens === "mine" && selectedEpic === null)}
+                onClick={openMine}
+                title={viewer ? `Assigned to ${viewer}` : "Assigned to you"}
+              >
+                My issues
               </button>
               <button
                 type="button"
@@ -1996,11 +2429,68 @@ export function App() {
               </button>
               <button
                 type="button"
-                className={navButtonClass(canvasTab === "calendar")}
+                className={navButtonClass(sidebarPage === "board" && canvasTab === "calendar")}
                 onClick={openCalendarTab}
               >
                 Calendar
               </button>
+              <button
+                type="button"
+                className={navButtonClass(false)}
+                onClick={() => setFilterOpen(true)}
+              >
+                Views
+              </button>
+              <button
+                type="button"
+                className={navButtonClass(sidebarPage === "teams" || sidebarPage === "team")}
+                onClick={() => setSidebarPage("teams")}
+              >
+                Teams
+              </button>
+              {processKind === "plane" ? (
+                <>
+                  <button
+                    type="button"
+                    className={navButtonClass(boardKind === "initiatives")}
+                    onClick={openInitiatives}
+                  >
+                    Initiatives
+                  </button>
+                  <button
+                    type="button"
+                    className={navButtonClass(boardKind === "projects")}
+                    onClick={openProjects}
+                  >
+                    Projects
+                  </button>
+                </>
+              ) : null}
+              <JoinedProjects
+                scopes={parseFlags(flags).scopes}
+                onOpen={(scope) => {
+                  queueScope(applyScopeSelection(flags, { workspaces: [scope.workspace], scopes: [scope] }));
+                  openStories();
+                }}
+              />
+              <FavoriteRows
+                favorites={linearFavorites}
+                onOpen={(item) => {
+                  if (item.kind === "initiative") {
+                    openInitiatives();
+                    void selectEpic(item.id);
+                  } else if (item.kind === "project") {
+                    const [workspace, project] = item.id.split("/");
+                    if (workspace && project) {
+                      queueScope(applyScopeSelection(flags, { workspaces: [workspace], scopes: [{ workspace, project }] }));
+                    }
+                    openProjects();
+                  } else {
+                    openStories();
+                    void open(item.id);
+                  }
+                }}
+              />
               {showFavourites ? (
                 <FavouriteGroup
                   pane={favouritePane}
@@ -2113,10 +2603,32 @@ export function App() {
                         ? "bg-muted text-foreground"
                         : "text-muted-foreground hover:text-foreground",
                     )}
-                    onClick={() => persistCanvasTab("board")}
+                    onClick={() => {
+                      persistCanvasTab("board");
+                      if (display.layout === "timeline") persistDisplay({ ...display, layout: roadmap ? "list" : "board" });
+                    }}
                   >
                     Board
                   </button>
+                  {roadmap ? (
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={canvasTab !== "calendar" && display.layout === "timeline"}
+                      className={cn(
+                        "h-7 rounded-lg px-2 text-[13px] font-medium",
+                        canvasTab !== "calendar" && display.layout === "timeline"
+                          ? "bg-muted text-foreground"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                      onClick={() => {
+                        persistCanvasTab("board");
+                        persistDisplay({ ...display, layout: "timeline" });
+                      }}
+                    >
+                      Timeline
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     role="tab"
@@ -2132,19 +2644,17 @@ export function App() {
                     Calendar
                   </button>
                 </div>
-                <span className="bg-primary/10 text-primary inline-flex h-7 items-center rounded-lg px-2 text-[11px] font-medium">
+                <button
+                  type="button"
+                  className="bg-primary/10 text-primary inline-flex h-7 items-center rounded-lg px-2 text-[11px] font-medium"
+                  onClick={() => setSwitcherOpen(true)}
+                  aria-label="Projects"
+                >
                   {(() => {
                     const { projects } = parseFlags(flags);
                     return projects.length > 0 ? projects.join(", ") : "DEMO";
                   })()}
-                </span>
-                {processKind === "plane" ? (
-                  <WorkspacePicker
-                    slug={workspaceSlug}
-                    workspaces={workspaces}
-                    onCommit={(typed) => void commitWorkspace(typed)}
-                  />
-                ) : null}
+                </button>
                 <InputGroup className="h-7 max-w-72 min-w-40 flex-1 border-transparent bg-muted shadow-none">
                   <InputGroupAddon>
                     <SearchIcon className="size-3.5" />
@@ -2176,14 +2686,48 @@ export function App() {
                   spellCheck={false}
                   aria-label="Scope flags"
                 />
-                <DropdownMenu>
+                <DropdownMenu open={filterOpen} onOpenChange={setFilterOpen}>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className={HEADER_CONTROL}>
+                    <Button variant="ghost" size="sm" className={HEADER_CONTROL} title="Filter (F)">
                       <ListFilterIcon />
                       Filter
                     </Button>
                   </DropdownMenuTrigger>
                   <FilterMenu
+                    viewSlot={
+                      <ViewFilterEditor
+                        filter={viewFilter}
+                        options={{
+                          status: memoryStatuses,
+                          assignee: [...new Set(allCards.map((card) => card.assignee).filter((item): item is string => Boolean(item)))],
+                          priority: [...new Set(allCards.map((card) => card.priority).filter((item): item is string => Boolean(item)))],
+                          labels: labelCatalog,
+                          project: [...new Set(allCards.map((card) => projectIdentifier(card.key)).filter(Boolean))],
+                        }}
+                        views={savedViews}
+                        viewName={viewName}
+                        onViewName={setViewName}
+                        onChange={persistViewFilter}
+                        onSave={() => {
+                          const result = saveView(savedViews, viewName, viewFilter);
+                          if (!result.ok) return;
+                          setSavedViews(result.views);
+                          writeJson(SAVED_VIEWS_KEY, result.views);
+                          setViewName("");
+                        }}
+                        onApply={(name) => {
+                          const view = savedViews.find((item) => item.name === name);
+                          if (view) persistViewFilter(view.filter);
+                        }}
+                        onMakeDefault={(name) => {
+                          const next = setDefaultView(savedViews, name);
+                          setSavedViews(next);
+                          writeJson(SAVED_VIEWS_KEY, next);
+                          const view = next.find((item) => item.name === name);
+                          if (view) persistViewFilter(view.filter);
+                        }}
+                      />
+                    }
                     facets={facets}
                     filter={chrome.filter}
                     onToggle={(key, value) =>
@@ -2246,14 +2790,14 @@ export function App() {
                     ))}
                   </DropdownMenuContent>
                 </DropdownMenu>
-                <DropdownMenu>
+                <DropdownMenu open={displayOpen} onOpenChange={setDisplayOpen}>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className={HEADER_CONTROL}>
+                    <Button variant="ghost" size="sm" className={HEADER_CONTROL} title="Display (Shift+V)">
                       <EyeIcon />
                       Display
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-44">
+                  <DropdownMenuContent align="end" className="max-h-[min(70vh,32rem)] w-80 overflow-auto">
                     <DropdownMenuLabel>Card properties</DropdownMenuLabel>
                     {ALL_CARD_DISPLAY_KEYS.map((key) => (
                       <DropdownMenuCheckboxItem
@@ -2274,6 +2818,7 @@ export function App() {
                         {key === "dueDate" && "Due date"}
                       </DropdownMenuCheckboxItem>
                     ))}
+                    <DisplayOptionItems display={display} onChange={persistDisplay} />
                   </DropdownMenuContent>
                 </DropdownMenu>
                 <Button variant="ghost" size="sm" className={HEADER_CONTROL} onClick={() => openRefreshConfirm()} disabled={busy} aria-busy={busy}>
@@ -2324,15 +2869,97 @@ export function App() {
                       canvasTab === "calendar" ? "overflow-hidden" : "overflow-auto",
                     )}
                   >
+                    {sidebarPage === "teams" ? (
+                      <TeamsPage
+                        projects={parity.projects}
+                        onOpen={(row) => {
+                          setTeamKey(`${row.workspace}/${row.identifier}`);
+                          setSidebarPage("team");
+                        }}
+                      />
+                    ) : sidebarPage === "team" ? (
+                      (() => {
+                        const project = parity.projects.find((row) => `${row.workspace}/${row.identifier}` === teamKey) ?? parity.projects[0];
+                        return project ? (
+                          <TeamHome project={project} onBack={() => setSidebarPage("teams")} onSchedule={() => setSidebarPage("schedule")} />
+                        ) : (
+                          <p className="text-muted-foreground px-3 text-[13px]">No teams in this scope.</p>
+                        );
+                      })()
+                    ) : sidebarPage === "schedule" ? (
+                      <UpdateSchedule onClose={() => setSidebarPage(teamKey ? "team" : "board")} />
+                    ) : (
+                    <>
+                    {error ? null : <ViewFilterChips filter={viewFilter} onClear={(id) => persistViewFilter(clearViewChip(viewFilter, id))} />}
                     {canvasTab === "calendar" ? (
                       <BoardCalendar
-                        cards={Object.values(visible).flat()}
+                        cards={Object.values(presented).flat()}
                         onOpen={(key) => void open(key)}
+                      />
+                    ) : roadmap ? (
+                      <RoadmapCanvas
+                        kind={boardKind === "projects" ? "projects" : "initiatives"}
+                        initiatives={parity.initiatives.filter((row) =>
+                          matchViewFilter(
+                            { updated: row.updated, due: row.targetDate, status: row.status, priority: row.priority, project: row.project, health: row.health },
+                            viewFilter,
+                          ),
+                        )}
+                        projects={parity.projects.filter((row) =>
+                          matchViewFilter(
+                            { updated: row.updated, due: row.targetDate, status: row.status, project: row.identifier, health: row.health },
+                            viewFilter,
+                          ),
+                        )}
+                        display={display}
+                        layout={layout}
+                        favorites={linearFavorites}
+                        onOpenInitiative={(key) => void selectEpic(key)}
+                        onOpenProject={(row) => {
+                          queueScope(applyScopeSelection(flags, { workspaces: [row.workspace], scopes: [{ workspace: row.workspace, project: row.identifier }] }));
+                          openStories();
+                        }}
+                        onContext={(event, key, kind) => openRowMenu(event, key, kind)}
+                        onToggleFavorite={rememberFavorite}
+                        onZoom={(zoom) => persistDisplay({ ...display, zoom })}
+                      />
+                    ) : layout !== "board" || display.grouping !== "status" ? (
+                      <IssueGroupList
+                        groups={(() => {
+                          if (display.grouping === "status") {
+                            return Object.entries(presented).map(([key, cards]) => ({ key, cards }));
+                          }
+                          const buckets = new Map<string, Card[]>();
+                          for (const [status, cards] of Object.entries(presented)) {
+                            for (const card of cards) {
+                              const key =
+                                display.grouping === "assignee"
+                                  ? card.assignee || "Unassigned"
+                                  : display.grouping === "priority"
+                                    ? card.priority || "None"
+                                    : display.grouping === "project"
+                                      ? projectIdentifier(card.key) || "None"
+                                      : display.grouping === "label"
+                                        ? card.labels?.[0] || "No label"
+                                        : display.grouping === "initiative"
+                                          ? card.epic || "No initiative"
+                                          : display.grouping === "target"
+                                            ? card.targetEnd || "No target"
+                                            : status;
+                              const list = buckets.get(key) ?? [];
+                              list.push(card);
+                              buckets.set(key, list);
+                            }
+                          }
+                          return [...buckets.entries()].map(([key, cards]) => ({ key, cards }));
+                        })()}
+                        onOpen={(key) => void open(key)}
+                        onContext={(event, key) => openRowMenu(event, key, "issue")}
                       />
                     ) : (
                     <Kanban
                       className="h-full min-h-0"
-                      value={visible}
+                      value={presented}
                       onValueChange={(next) =>
                         setColumns((previous) =>
                           mergeValue(next, previous, selectedEpic, search, visibleOpts),
@@ -2351,7 +2978,7 @@ export function App() {
                           defaultLayout={columnLayout.defaultLayout}
                           onLayoutChanged={columnLayout.onLayoutChanged}
                         >
-                          {Object.entries(visible).map(([title, cards], index, all) => (
+                          {Object.entries(presented).map(([title, cards], index, all) => (
                             <Fragment key={title}>
                               {index > 0 ? <ResizableHandle /> : null}
                               <ResizablePanel
@@ -2368,6 +2995,7 @@ export function App() {
                                   shown={shownSet}
                                   onClick={handleCardClick}
                                   onDoubleClick={handleCardDoubleClick}
+                                  onContextMenu={(key, event) => openRowMenu(event, key, "issue")}
                                   onCreate={openCreate}
                                   onHide={() =>
                                     persistChrome({ ...chrome, hide: [...chrome.hide, title] })
@@ -2385,7 +3013,7 @@ export function App() {
                             return (
                               <StatusColumn
                                 title={String(value)}
-                                cards={visible[String(value)] ?? []}
+                                cards={presented[String(value)] ?? []}
                                 isOverlay
                                 shown={shownSet}
                               />
@@ -2414,6 +3042,8 @@ export function App() {
                         }}
                       </KanbanOverlay>
                     </Kanban>
+                    )}
+                    </>
                     )}
                   </main>
                 </ResizablePanel>
@@ -2505,13 +3135,13 @@ export function App() {
               selectedIssueKey={openKey ?? selectedEpic ?? undefined}
               boardView={{
                 scope: "view",
-                kind: boardKind,
+                kind: boardKind === "initiatives" || boardKind === "projects" ? "stories" : boardKind,
                 selectedEpic: epicBoard ? null : selectedEpic,
                 search,
                 filter: chrome.filter,
                 sort: chrome.sort,
                 hide: chrome.hide,
-                columns: Object.entries(visible).map(([title, cards]) => ({
+                columns: Object.entries(presented).map(([title, cards]) => ({
                   title,
                   cards: cards.map((card) => ({
                     key: card.key,
@@ -2637,6 +3267,19 @@ export function App() {
           }
         />
       ) : null}
+      {rowMenu ? (
+        <RowContextMenu
+          x={rowMenu.x}
+          y={rowMenu.y}
+          sections={rowMenuFor({
+            statuses: memoryStatuses.length ? memoryStatuses : ["Backlog", "Todo", "In Progress", "Done", "Cancelled"],
+            assignees: [...new Set(allCards.map((card) => card.assignee).filter((item): item is string => Boolean(item)))],
+            labels: labelCatalog,
+          })}
+          onPick={(action) => void applyRowAction(action)}
+          onClose={() => setRowMenu(null)}
+        />
+      ) : null}
       {commandOpen ? (
         <CommandOverlay
           presets={presets.map((preset) => preset.name)}
@@ -2645,6 +3288,9 @@ export function App() {
           favouriteKeys={favourites.keys}
           plane={processKind === "plane"}
           workspaces={workspaces}
+          selectedKey={openKey ?? selectedEpic ?? [...selectedCards][0]}
+          statuses={memoryStatuses}
+          assignees={[...new Set(allCards.map((card) => card.assignee).filter((item): item is string => Boolean(item)))]}
           onPick={applyCommand}
           onClose={() => {
             commandOpenRef.current = false;

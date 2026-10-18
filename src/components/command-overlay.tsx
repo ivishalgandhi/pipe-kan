@@ -22,6 +22,9 @@ export function CommandOverlay({
   favouriteKeys,
   plane,
   workspaces,
+  selectedKey,
+  statuses,
+  assignees,
   onPick,
   onClose,
 }: {
@@ -31,12 +34,26 @@ export function CommandOverlay({
   favouriteKeys: string[];
   plane?: boolean;
   workspaces?: PlaneWorkspace[];
+  selectedKey?: string;
+  statuses?: string[];
+  assignees?: string[];
   onPick: (jump: CommandJump) => void;
   onClose: () => void;
 }) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
-  const groups = commandCatalog({ presets, query, epics, cards, favouriteKeys, plane, workspaces });
+  const groups = commandCatalog({
+    presets,
+    query,
+    epics,
+    cards,
+    favouriteKeys,
+    plane,
+    workspaces,
+    ...(selectedKey ? { selectedKey } : {}),
+    statuses,
+    assignees,
+  });
   const rows = groups.flatMap((group) => group.rows);
   const highlight = rows.length ? Math.min(active, rows.length - 1) : 0;
 

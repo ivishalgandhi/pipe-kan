@@ -23,6 +23,10 @@ _Avoid_: dashboard, Jira board (that is Atlassian's saved board), view (Linear's
 The left-pane opener for the Board whose Cards are non-Epic Issues.
 _Avoid_: inbox, home, all issues
 
+**My issues**:
+A lens on All stories. It shows only Cards assigned to the viewer name stored in the browser. When that name is empty, opening the lens stores the assignee that appears most often on the current Board. Selecting an Epic leaves the lens. Not Scope and not Filter.
+_Avoid_: inbox, mine
+
 **All epics**:
 The left-pane opener for the Board whose Cards are Epics. Sibling of All stories. Last opener persists locally. Not Favourite, Preset, Scope, or selecting an Epic.
 _Avoid_: epic view, epic board (Atlassian's), toggle
@@ -32,11 +36,11 @@ The left-pane opener for the Board whose Cards are Epics and non-Epic Issues tog
 _Avoid_: all combined, mix, everything
 
 **Project**:
-A Jira project identified by its key, or a Plane project identified by its identifier (`--projects`). Refresh and the default Scope are one Project unless `--projects` lists several. A Pipe may hold Issues from several keys until Refresh.
+A Jira project identified by its key, or a Plane project identified by its identifier. The sidebar switcher can check several Projects across Workspaces (`--scopes workspace/PROJECT`). `--projects` stays in sync with that selection. CLI flags are the startup selection only.
 _Avoid_: repo, codebase (those are this tool), Workspace (that is the Plane tenant slug)
 
 **Workspace**:
-The Plane tenant slug in `/workspaces/{slug}/…`. Present only in Plane mode. Not a Project, not Scope, not Google SSO.
+The Plane tenant slug in `/workspaces/{slug}/…`. The sidebar switcher can check more than one (`--workspaces`). Jira has no Workspace slug. Not a Project, not Scope, not Google SSO.
 _Avoid_: tenant, Plane workspace (say Workspace), project (when meaning this)
 
 **Epic**:
@@ -60,8 +64,8 @@ Typing in the header that hides Epics and Cards that do not match. An Epic match
 _Avoid_: filter, query (when meaning this)
 
 **Command**:
-A keyboard overlay that jumps to an Epic, Card, opener, Favourite, Preset, Refresh, or Agent from Issues already listed by Refresh, and in Plane mode can switch Workspace. It is not Search, Scope, or a live jira-cli lookup.
-_Avoid_: palette, cmd+k, launcher, search (when meaning this)
+A keyboard overlay (Cmd+K or Ctrl+K) that jumps to an Epic, Card, opener, Favourite, Preset, Refresh, or Agent from Issues already listed by Refresh. In Plane mode it also jumps to Initiatives and Projects. Typing `ow` lists Workspaces. It can switch Source and open Display. With an Issue selected, it can set status or assignee. It is not Search, Scope, or a live jira-cli lookup.
+_Avoid_: palette, launcher, search (when meaning this)
 
 **Filter**:
 Persisted Board controls that hide Cards without changing Scope or Refresh. An Epic row stays when the Epic's own field matches or a remaining child matches; it hides when neither does.
@@ -132,5 +136,33 @@ Checked-in fake `jira issue list --raw` JSON that seeds store-mode first paint a
 _Avoid_: mock, stub, sample (when meaning this file)
 
 **Fake Jira**:
-A local HTTP stand-in for Jira's REST API so jira-cli can be tested without a real site.
+A local HTTP stand-in for Jira's REST API so jira-cli can be tested without a real site. Used when Source is Jira and jira-cli is not on PATH, including fixture smoke.
 _Avoid_: mock Jira, stub API
+
+**Source**:
+Plane, Jira, or Taskwarrior in the sidebar switcher. The checkmark is the running backend. Switching replaces the Board without restarting the process. Taskwarrior is shown and disabled. Jira write-back stays jira-cli.
+_Avoid_: backend, driver
+
+**Initiative**:
+A Plane module in the Initiatives view: name, status, priority, target date, and Health. Clicking it shows its work items. Jira mode hides this view. A module is still listed as an Epic in the left rail.
+_Avoid_: Epic (when meaning this view), OKR
+
+**Health**:
+A synthetic dot on an Initiative or Project: green, yellow, red, or gray. Derived from status and target date. Plane has no native health field.
+_Avoid_: progress, risk score
+
+**Timeline**:
+The Initiatives or Projects canvas that draws dated bars, a today line, and an unscheduled group. Zoom is week, month, quarter, or year.
+_Avoid_: Gantt, calendar (Calendar is the issue date grid)
+
+**Display options**:
+Local layout, grouping, ordering, zoom, empty groups, and completed window for Initiatives, Projects, and the issue Board. Shift+V opens them. Not Scope and not Filter.
+_Avoid_: view settings, chrome
+
+**View filter**:
+The Filter menu's date and field constraints (Created, Updated, Due, Status, Assignee, Priority, Labels, Project), chips, and saved views with one default. Shortcut F. Local. It does not change Scope or Refresh.
+_Avoid_: Search, Scope, JQL
+
+**Favorite**:
+A locally saved Initiative, Project, or Issue in the sidebar Favorites group. Distinct from Favourite, which is an Epic.
+_Avoid_: pin, bookmark, star (the control)

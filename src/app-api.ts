@@ -2,8 +2,18 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import type { App } from "./app.ts";
 import type { Boot } from "./boot.ts";
+import { resolveJiraBin } from "./cli.ts";
 import { readLedger } from "./factory-ledger.ts";
+import { sourceOptions } from "./parity.ts";
 import { planeWorkspace } from "./plane.ts";
+
+export type SourceSwitchResult = {
+  ok: boolean;
+  kind: Boot["kind"];
+  source: string;
+  reason?: string;
+  error?: string;
+};
 
 function json(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status;
@@ -60,7 +70,11 @@ export function handleAppApi(
   req: IncomingMessage,
   res: ServerResponse,
   app: App,
-  opts: { kind?: Boot["kind"]; env?: NodeJS.ProcessEnv } = {},
+  opts: {
+    kind?: Boot["kind"];
+    env?: NodeJS.ProcessEnv;
+    onSource?: (source: string) => Promise<SourceSwitchResult>;
+  } = {},
 ): boolean {
   const kind = opts.kind ?? "store";
   const env = opts.env ?? process.env;
@@ -86,11 +100,48 @@ export function handleAppApi(
         return;
       }
       try {
-        json(res, 200, { projects: await app.listProjectIdentifiers?.(workspace) ?? [] });
+        const projects = await app.listProjectIdentifiers?.(workspace) ?? [];
+        const details = await app.listProjects?.(workspace) ?? [];
+        json(res, 200, { projects, ...(details.length ? { details } : {}) });
       } catch (err) {
         const message = err instanceof Error ? err.message : "catalog failed";
         json(res, 409, { error: message });
       }
+    });
+    return true;
+  }
+
+  if (url.pathname === "/api/parity" && method === "GET") {
+    reply(req, res, async () => {
+      json(res, 200, (await app.parity?.()) ?? { initiatives: [], projects: [], workspaces: [] });
+    });
+    return true;
+  }
+
+  if (url.pathname === "/api/sources" && method === "GET") {
+    reply(req, res, async () => {
+      const current = kind === "plane" ? "plane" : "jira";
+      json(res, 200, {
+        source: current,
+        kind,
+        sources: sourceOptions({
+          planeKey: Boolean(env.PLANE_API_KEY?.trim() || env.PLANE_FIXTURE?.trim()),
+          jiraBin: Boolean(resolveJiraBin(env.JIRA_BIN ?? "jira", env.PATH ?? "")),
+        }),
+      });
+    });
+    return true;
+  }
+
+  if (url.pathname === "/api/source" && method === "POST") {
+    reply(req, res, async (text) => {
+      if (!opts.onSource) {
+        json(res, 404, { error: "source switch unavailable" });
+        return;
+      }
+      const body = text ? JSON.parse(text) : {};
+      const result = await opts.onSource(String(body.source ?? ""));
+      json(res, result.ok ? 200 : 409, result);
     });
     return true;
   }
@@ -172,9 +223,11 @@ export function handleAppApi(
   if (url.pathname === "/api/issue/edit" && method === "POST") {
     reply(req, res, async (text) => {
       const body = text ? JSON.parse(text) : {};
-      const input: { summary?: string; description?: string; labels?: string[] } = {};
+      const input: { summary?: string; description?: string; labels?: string[]; assignee?: string; priority?: string } = {};
       if (body.summary !== undefined) input.summary = String(body.summary);
       if (body.description !== undefined) input.description = String(body.description);
+      if (body.assignee !== undefined) input.assignee = String(body.assignee);
+      if (body.priority !== undefined) input.priority = String(body.priority);
       if (Array.isArray(body.labels)) {
         input.labels = body.labels.filter((item: unknown) => typeof item === "string");
       }

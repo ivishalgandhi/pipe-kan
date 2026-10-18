@@ -665,7 +665,7 @@ export type Preset = {
   filter: BoardFilter;
   sort: BoardSort;
   hide: string[];
-  boardKind?: "stories" | "epics" | "combined";
+  boardKind?: "stories" | "epics" | "combined" | "initiatives" | "projects";
   projects?: string[];
 };
 

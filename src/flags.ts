@@ -1,10 +1,14 @@
 export const DEFAULT_FLAGS = "";
 
+export type ScopePair = { workspace: string; project: string };
+
 export type ParsedFlags = {
   jql: string;
   projects: string[];
   plane: boolean;
   workspace?: string;
+  workspaces: string[];
+  scopes: ScopePair[];
 };
 
 function tokens(input: string): string[] {
@@ -30,6 +34,8 @@ export function parseFlags(flags: string): ParsedFlags {
   let type = "";
   let raw = "";
   let projectsValue = "";
+  let workspacesValue = "";
+  let scopesValue = "";
   let plane = false;
   let workspace = "";
   const statusEq: string[] = [];
@@ -40,6 +46,26 @@ export function parseFlags(flags: string): ParsedFlags {
     if (token === "--raw") continue;
     if (token === "--plane") {
       plane = true;
+      continue;
+    }
+    if (token === "--workspaces" || token.startsWith("--workspaces=")) {
+      const parts: string[] = [];
+      if (token.startsWith("--workspaces=")) parts.push(token.slice("--workspaces=".length));
+      while (i + 1 < list.length && !list[i + 1].startsWith("-")) {
+        i++;
+        parts.push(list[i]!);
+      }
+      workspacesValue = parts.join(",");
+      continue;
+    }
+    if (token === "--scopes" || token.startsWith("--scopes=")) {
+      const parts: string[] = [];
+      if (token.startsWith("--scopes=")) parts.push(token.slice("--scopes=".length));
+      while (i + 1 < list.length && !list[i + 1].startsWith("-")) {
+        i++;
+        parts.push(list[i]!);
+      }
+      scopesValue = parts.join(",");
       continue;
     }
     if (token === "--workspace" || token.startsWith("--workspace=")) {
@@ -98,11 +124,13 @@ export function parseFlags(flags: string): ParsedFlags {
     .split(",")
     .map((p) => p.trim().toUpperCase())
     .filter(Boolean);
+  const workspaces = uniqueSlugs(workspacesValue);
+  const scopes = parseScopes(scopesValue);
 
   const workspaceSlug = workspace.trim() || undefined;
 
   if (raw) {
-    return { jql: raw, projects, plane, workspace: workspaceSlug };
+    return { jql: raw, projects, plane, workspace: workspaceSlug, workspaces, scopes };
   }
 
   const projectClause = projects.length
@@ -115,7 +143,60 @@ export function parseFlags(flags: string): ParsedFlags {
   if (epic) clauses.push(`parent="${epic}"`);
   for (const status of statusEq) clauses.push(`status="${status}"`);
   for (const status of statusNeq) clauses.push(`status!="${status}"`);
-  return { jql: clauses.join(" AND "), projects, plane, workspace: workspaceSlug };
+  return { jql: clauses.join(" AND "), projects, plane, workspace: workspaceSlug, workspaces, scopes };
+}
+
+function uniqueSlugs(value: string): string[] {
+  const seen = new Set<string>();
+  const slugs: string[] = [];
+  for (const part of value.split(",")) {
+    const slug = part.trim().toLowerCase();
+    if (!slug || seen.has(slug)) continue;
+    seen.add(slug);
+    slugs.push(slug);
+  }
+  return slugs;
+}
+
+function parseScopes(value: string): ScopePair[] {
+  const seen = new Set<string>();
+  const scopes: ScopePair[] = [];
+  for (const part of value.split(",")) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const slash = trimmed.indexOf("/");
+    if (slash <= 0) continue;
+    const workspace = trimmed.slice(0, slash).trim().toLowerCase();
+    const project = trimmed.slice(slash + 1).trim().toUpperCase();
+    if (!workspace || !project) continue;
+    const key = `${workspace}/${project}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    scopes.push({ workspace, project });
+  }
+  return scopes;
+}
+
+function replaceFlag(flags: string, name: string, values: string[]): string {
+  const list = tokens(flags.trim());
+  const out: string[] = [];
+  let wrote = false;
+  for (let i = 0; i < list.length; i++) {
+    const token = list[i]!;
+    if (token === name || token.startsWith(`${name}=`)) {
+      if (token === name) i += 1;
+      if (!wrote && values.length) {
+        out.push(name, values.join(","));
+        wrote = true;
+      } else {
+        wrote = true;
+      }
+      continue;
+    }
+    out.push(token);
+  }
+  if (!wrote && values.length) out.push(name, values.join(","));
+  return out.join(" ");
 }
 
 export function commitWorkspaceSlug(
@@ -148,6 +229,43 @@ export function setWorkspaceFlag(flags: string, slug: string): string {
   }
   if (!wrote) out.push("--workspace", trimmed);
   return out.join(" ");
+}
+
+export function setPlaneFlag(flags: string, on: boolean): string {
+  const list = tokens(flags.trim()).filter((token) => token !== "--plane");
+  if (on) list.unshift("--plane");
+  return list.join(" ");
+}
+
+export function setWorkspacesFlag(flags: string, slugs: string[]): string {
+  return replaceFlag(flags, "--workspaces", uniqueSlugs(slugs.join(",")));
+}
+
+export function setScopesFlag(flags: string, scopes: ScopePair[]): string {
+  const value = parseScopes(scopes.map((scope) => `${scope.workspace}/${scope.project}`).join(","));
+  return replaceFlag(
+    flags,
+    "--scopes",
+    value.map((scope) => `${scope.workspace}/${scope.project}`),
+  );
+}
+
+export function applyScopeSelection(
+  flags: string,
+  selection: { workspaces: string[]; scopes: ScopePair[] },
+): string {
+  const scopes = parseScopes(selection.scopes.map((scope) => `${scope.workspace}/${scope.project}`).join(","));
+  const workspaces = uniqueSlugs(
+    [...selection.workspaces, ...scopes.map((scope) => scope.workspace)].join(","),
+  );
+  let next = setWorkspacesFlag(flags, workspaces);
+  if (workspaces[0]) next = setWorkspaceFlag(next, workspaces[0]);
+  next = setScopesFlag(next, scopes);
+  next = setProjectsFlag(
+    next,
+    [...new Set(scopes.map((scope) => scope.project))],
+  );
+  return next;
 }
 
 export function setProjectsFlag(flags: string, identifiers: string[]): string {

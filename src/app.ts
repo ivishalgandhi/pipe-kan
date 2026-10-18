@@ -3,6 +3,7 @@ import { availableParallelism, homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { issuesToBoard, mergeEpics, type Board, type Card } from "./board.ts";
+import type { ParitySnapshot } from "./parity.ts";
 import { createStoreCli, type Cli } from "./cli.ts";
 import { DEFAULT_FLAGS, flagsToJql } from "./flags.ts";
 import { flattenIssue, type OpenField } from "./open.ts";
@@ -39,6 +40,8 @@ export type App = {
   open(key: string): Promise<{ url: string; fields: OpenField[]; error?: string }>;
   listWorkspaces?(): Promise<{ id: string; name: string; slug: string }[]>;
   listProjectIdentifiers?(workspace: string): Promise<string[]>;
+  listProjects?(workspace: string): Promise<{ id: string; identifier: string; name: string }[]>;
+  parity?(): Promise<ParitySnapshot>;
 };
 
 function columnsOf(raw: unknown, fieldId?: string): Record<string, Card[]> {
@@ -426,6 +429,12 @@ export function createApp(opts: {
     },
     async listProjectIdentifiers(workspace: string) {
       return cli.listProjectIdentifiers?.(workspace) ?? [];
+    },
+    async listProjects(workspace: string) {
+      return cli.listProjects?.(workspace) ?? [];
+    },
+    async parity() {
+      return cli.parity?.() ?? { initiatives: [], projects: [], workspaces: [] };
     },
   };
   return app;

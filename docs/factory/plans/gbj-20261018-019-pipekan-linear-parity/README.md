@@ -5,8 +5,9 @@ Plan directory for making pipe-kan's Initiatives views and workspace/project swi
 ## Files
 
 - `spec.md` — Gap analysis, Plane mapping, design direction, acceptance criteria
-- `tickets.md` — Tickets T1–T11 with acceptance criteria, verification steps, and ordering
-- `linear-refs/` — Placeholder for Linear screenshots from Vishal (T11)
+- `tickets.md` — Tickets T1–T15 with acceptance criteria, verification steps, and ordering
+- `smoke-logs/` — Output of `bun run smoke`
+- `linear-refs/` — Linear screenshots used as the visual source for the workspace menu, initiatives, projects, display options, teams, and update schedule
   - `.gitkeep` — Keeps directory in git
 
 ## Prior art

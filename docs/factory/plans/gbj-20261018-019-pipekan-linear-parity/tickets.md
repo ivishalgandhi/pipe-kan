@@ -350,7 +350,7 @@ New concepts (Initiatives, Projects, Timeline, Health) need definitions in CONTE
 ### T11 — TODO: Linear screenshot reference integration
 
 **What**
-Vishal will send Linear screenshots later. They should be placed in `docs/factory/plans/gbj-20261018-019-pipekan-linear-parity/linear-refs/` and referenced in spec.md/tickets.md to validate visual parity.
+Linear screenshots are in `docs/factory/plans/gbj-20261018-019-pipekan-linear-parity/linear-refs/` and are the visual source for the workspace menu, initiative table, display popover, teams page, and update schedule.
 
 **Acceptance**
 1. `linear-refs/` directory exists with a `.gitkeep` (already created).
@@ -398,3 +398,39 @@ Acceptance:
 - Plane workspaces `work` and `personal` both selectable; PULSE in each.
 - Respect ~60 req/min Plane limit (cache/debounce) and trailing slashes.
 - Tests, typecheck, build green; docs (README, CONTEXT.md, status files) updated.
+- **Multi-select (overrides the single-workspace rewrite in T4/T5):** the sidebar menu is a checkable list. Several workspaces and several projects can be selected together, including `work/PULSE` and `personal/PULSE` at the same time. The resulting Initiatives, Projects, issue board, and Timeline are one merged view. `--workspace` / `--projects` remain startup defaults and stay in sync with the selection.
+
+### T13 — View filters
+
+**What**
+Linear-style filters on the current view: Filter menu, `F` shortcut, removable chips, and saved views with one default.
+
+**Acceptance**
+1. Filter menu includes Created date, Updated date, Due date, Status, Assignee, Priority, Labels, and Project.
+2. `F` opens the menu unless focus is in a text field.
+3. Active filters render as chips. Removing a chip drops that constraint.
+4. A view can be saved locally and marked default. The default reapplies on the next load.
+5. Filters compose with the existing Filter / Sort / Hide chrome.
+
+### T14 — Row context menus
+
+**What**
+Right-click an issue, initiative, or project row to change status, assignee, priority, or labels, or to copy a link.
+
+**Acceptance**
+1. The menu opens at the pointer on issue, initiative, and project rows.
+2. Status changes use the existing Move path (`jira issue move` or Plane state PATCH).
+3. Assignee, priority, and label edits use the existing edit path. Jira assignee goes through `jira issue edit`. No direct Jira REST.
+4. Copy link writes the issue URL.
+
+### T15 — Command palette actions
+
+**What**
+Extend Command (Cmd+K) so it searches, jumps to a view / issue / project, switches workspace or source, changes status or assignee on the selected item, and opens Display.
+
+**Acceptance**
+1. Plane mode lists Initiatives and Projects jumps.
+2. Palette can switch source (Plane, Jira, Taskwarrior). Taskwarrior stays disabled with a reason.
+3. With an item selected, the palette lists status and assignee changes for that item.
+4. Display options is a palette row.
+5. Typing `ow` in the palette, or pressing `O` then `W` outside a text field, opens Switch workspace.
