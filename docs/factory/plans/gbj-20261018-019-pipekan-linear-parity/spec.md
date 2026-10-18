@@ -146,7 +146,7 @@ Source: `https://linear.app/docs/timeline`
 
 - Host: `https://plane.tail48fe8.ts.net`
 - API: `{host}/api/v1`
-- Workspaces: `/workspaces/{slug}/` — two known workspaces: `personal`, `team`
+- Workspaces: `/workspaces/{slug}/` — two known workspaces: `personal`, `work`
 - Projects: `/workspaces/{slug}/projects/` — returns 24+10 projects across both workspaces
 - Modules: `/workspaces/{slug}/projects/{project_id}/modules/`
 - Work items: `/workspaces/{slug}/projects/{project_id}/issues/` or `inbox-issues/`
@@ -158,7 +158,7 @@ Source: `https://linear.app/docs/timeline`
 
 ### 3.3 PULSE project
 
-- `PULSE` exists in both `personal` and `team` workspaces.
+- `PULSE` exists in both `personal` and `work` workspaces.
 - When switching workspaces, the project list refreshes.
 - Module list is per-project per-workspace.
 

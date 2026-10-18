@@ -121,7 +121,7 @@ Current workspace picker is a small pill hidden in the board header among many c
 2. Pill is ~36px height, rounded-lg, includes a small icon or avatar placeholder, and the workspace name.
 3. Clicking the pill opens a dropdown with:
    - Heading: "Switch workspace"
-   - List of fetched workspaces (`personal`, `team`, etc.) with name + slug
+   - List of fetched workspaces (`personal`, `work`, etc.) with name + slug
    - A "Settings" link (can be a no-op for now)
 4. The old `WorkspacePicker` in the board header is removed.
 5. Keyboard shortcut `O` then `W` from Command overlay jumps to workspace list.
