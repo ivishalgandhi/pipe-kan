@@ -177,3 +177,5 @@ Pushes to `main` run `bun audit --audit-level=high`, tests, then [semantic-relea
 It writes `package.json`, tags `vX.Y.Z`, opens a GitHub Release, and publishes to npm from this workflow via [trusted publishing](https://docs.npmjs.com/trusted-publishers/). No `NPM_TOKEN`. Provenance is attached automatically.
 
 First Board is tagged `v0.1.0`. Later `fix:` / `feat:` commits on `main` bump from there. Without a `v*` tag the first release is `1.0.0`.
+
+> Deploy note (2026-10-18): CT 425 runs 0.34.1 (workspace discovery fix, PR #83). UI asset `index-Ci-6UWvl.js`.
