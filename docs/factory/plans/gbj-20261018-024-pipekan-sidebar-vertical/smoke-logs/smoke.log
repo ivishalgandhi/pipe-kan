@@ -1,0 +1,38 @@
+PASS sidebar team list is a vertical tree
+PASS sidebar team list has no horizontal pill row
+PASS each team exposes its scope
+PASS Home is a nested row
+PASS Triage is a nested row
+PASS Issues is a nested row
+PASS Cycles is a nested row
+PASS Projects is a nested row
+PASS Views is a nested row
+PASS cycles nest Current and Upcoming on a guide
+PASS nested rows are indented
+PASS cycles stay disabled
+PASS team row has a menu
+PASS All stories is reachable in the team tree
+PASS My issues is reachable in the team tree
+PASS All epics is reachable in the team tree
+PASS Combined is reachable in the team tree
+PASS Calendar is reachable in the team tree
+PASS presets nest under Views
+PASS exactly one selected row
+PASS selected row is marked current
+PASS All stories is the selected row
+PASS My issues can be the only selected row
+PASS My issues does not select a second row
+PASS All epics can be the only selected row
+PASS All epics does not select a second row
+PASS Combined can be the only selected row
+PASS Combined does not select a second row
+PASS Calendar can be the only selected row
+PASS Calendar does not select a second row
+PASS Home can be the only selected row
+PASS Home does not select a second row
+PASS Triage can be the only selected row
+PASS Triage does not select a second row
+PASS Projects can be the only selected row
+PASS Projects does not select a second row
+PASS Views can be the only selected row
+PASS Views does not select a second row

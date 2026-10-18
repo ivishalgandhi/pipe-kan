@@ -179,7 +179,14 @@ Use existing label colours from `src/index.css` or computed HSL. No new tokens n
 | Home | `Home` |
 | Triage | `Inbox` |
 | Issues | `CircleDot` |
+| All stories | `List` |
+| My issues | `User` |
+| All epics | `Target` |
 | Cycles | `Clock` |
+| Current / Upcoming | `Clock` at 12px |
+| Combined | `Layers` |
+| Calendar (sidebar row) | `Calendar` |
+| Presets | `SlidersHorizontal` |
 | Views (team) | `LayoutGrid` |
 | Try | `Zap` |
 | Invite | `UserPlus` |

@@ -20,7 +20,7 @@ The Kanban of Cards grouped into Columns. All stories, All epics, and Combined e
 _Avoid_: dashboard, Jira board (that is Atlassian's saved board), view (Linear's saved query)
 
 **All stories**:
-The left-pane opener for the Board whose Cards are non-Epic Issues.
+The left-pane opener for the Board whose Cards are non-Epic Issues. It is a vertical row under Issues in Your teams.
 _Avoid_: inbox, home, all issues
 
 **My issues**:
@@ -48,7 +48,7 @@ An Issue of type Epic, listed from `jira issue list -tEpic`. On All stories it l
 _Avoid_: parent (jira-cli's `-P` flag name)
 
 **Favourite**:
-A user-curated Epic in a collapsible group after All epics. Clicking it still shows only its children on All stories. Local only; not Scope, Filter, Hide, or Preset.
+A user-curated Epic in a collapsible group in the Board section. Clicking it still shows only its children on All stories. Local only; not Scope, Filter, Hide, or Preset.
 _Avoid_: pin, bookmark, star (the control)
 
 **Folder**:
@@ -80,7 +80,7 @@ User action that removes a Column from the Board until they put it back. Distinc
 _Avoid_: collapse, remove (when meaning this)
 
 **Preset**:
-A named, local snapshot of Filter, Sort, and Hide. Listed in a collapsible group after Favourites. Apply copies it into last-used chrome; Save names the current last-used chrome. Not Scope, Search, Favourite, or Open.
+A named, local snapshot of Filter, Sort, and Hide. Listed in a collapsible group under Views in Your teams. Apply copies it into last-used chrome; Save names the current last-used chrome. Not Scope, Search, Favourite, or Open.
 _Avoid_: view, layout, saved filter
 
 **Pipe**:
@@ -100,7 +100,7 @@ Showing an Issue's properties and Jira URL in the right rail. Properties are sta
 _Avoid_: view, browse (when meaning this)
 
 **Calendar**:
-A read-only month tab on the main canvas of Issue created and Target End days for currently visible Cards (the same set after Search, Filter, and Hide as the Board). Each event shows the Issue key and summary. Board | Calendar tabs sit where the Board title was; a left-nav Calendar control selects the Calendar tab. It does not replace All stories, All epics, or Combined.
+A read-only month tab on the main canvas of Issue created and Target End days for currently visible Cards (the same set after Search, Filter, and Hide as the Board). Each event shows the Issue key and summary. Board | Calendar tabs sit where the Board title was; the Calendar row under Views selects the Calendar tab. It does not replace All stories, All epics, or Combined.
 _Avoid_: Board, scheduler, Jira calendar, sidebar calendar
 
 **Write-back**:
@@ -180,9 +180,9 @@ A named one-level group of Favorites. It collapses, shows a count, and accepts a
 _Avoid_: Folder, directory, project
 
 **Your teams**:
-The sidebar section of checked workspace/project pairs. Each team nests Home, Triage, Issues, Cycles, Projects, and Views. Cycles stays disabled.
+The sidebar section of checked workspace/project pairs. Each team is a vertical collapsible row (icon, name, caret, menu). It nests Home, Triage, Issues (All stories, My issues, All epics), Cycles (Current, Upcoming), Projects, and Views (Combined, Calendar, Presets). Cycles stays disabled. One sidebar row is current.
 _Avoid_: Workspace, switcher, All stories
 
 **Team**:
-One checked workspace/project pair in Your teams. Choosing the name applies that Scope and refreshes. The nested rows open the Board, Triage, or Views. Not a Folder and not a Workspace.
+One checked workspace/project pair in Your teams. Choosing the name applies that Scope and refreshes. The nested rows open the Board, Triage, Views, or a board mode. Not a Folder and not a Workspace.
 _Avoid_: Project (the identifier alone), Workspace

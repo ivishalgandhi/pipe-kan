@@ -13,6 +13,7 @@ import {
   MoonIcon,
   MoreHorizontalIcon,
   PlusIcon,
+  SlidersHorizontalIcon,
   SearchIcon,
   StarIcon,
   SunIcon,
@@ -152,8 +153,10 @@ import {
   inboxBadgeCount,
   inboxNotifications,
   issueProjectId,
+  sidebarSelection,
   switchKind,
   triageCount,
+  type SidebarNavIntent,
   type ViewDraft,
 } from "~/linear-look.ts";
 import { TeamHome, TeamsPage, UpdateSchedule } from "~/components/linear-chrome.tsx";
@@ -577,15 +580,6 @@ function statusCircle(title?: string) {
     (name) => value.includes(name),
   );
   return `var(--kanban-board-circle-${match ? STATUS_CIRCLE[match] : "gray"})`;
-}
-
-function navButtonClass(active: boolean) {
-  return cn(
-    "h-7 rounded-lg px-[7px] text-left text-[13px] font-medium",
-    active
-      ? "bg-sidebar-accent text-sidebar-accent-foreground"
-      : "hover:bg-foreground/[0.05] dark:hover:bg-white/[0.05]",
-  );
 }
 
 const SIDEBAR_GROUP =
@@ -1028,6 +1022,7 @@ function EpicButton({
   onFile,
   onMove,
   onOpen,
+  current,
 }: {
   epic: Epic;
   selected: boolean;
@@ -1040,6 +1035,7 @@ function EpicButton({
   onFile?: (key: string, folder: string | null) => void;
   onMove?: (key: string, status: string) => void;
   onOpen?: (key: string) => void;
+  current?: boolean;
 }) {
   const destinations = moveTo ?? [];
   const fileMenu = Boolean(onFile && favourited);
@@ -1056,6 +1052,7 @@ function EpicButton({
       <button
         type="button"
         className="flex min-w-0 flex-1 items-center gap-3 px-3 text-left"
+        aria-current={current ? "page" : undefined}
         onClick={() => void onSelect(epic.key)}
       >
         <span
@@ -1145,6 +1142,7 @@ function EpicStatusGroup({
   onToggleFavourite,
   onMove,
   onOpen,
+  currentEpic,
 }: {
   status: string;
   epics: Epic[];
@@ -1156,6 +1154,7 @@ function EpicStatusGroup({
   onToggleFavourite: (key: string) => void;
   onMove: (key: string, status: string) => void;
   onOpen: (key: string) => void;
+  currentEpic?: string | null;
 }) {
   const [open, setOpen] = useState(
     () => !hasStatus(readCollapsed(COLLAPSED_EPIC_STATUS_KEY, DEFAULT_COLLAPSED_EPIC_STATUS), status),
@@ -1204,6 +1203,7 @@ function EpicStatusGroup({
             moveTo={epicMoveTargets(listedEpics, epic.status)}
             onMove={onMove}
             onOpen={onOpen}
+            current={currentEpic === epic.key}
           />
         ))}
       </CollapsibleContent>
@@ -1392,6 +1392,7 @@ export function App() {
     }
   });
   const [issueLens, setIssueLens] = useState<"all" | "mine">("all");
+  const [navIntent, setNavIntent] = useState<SidebarNavIntent>(null);
   const [viewer, setViewer] = useState(readViewer);
   const [viewName, setViewName] = useState("");
   const [rowMenu, setRowMenu] = useState<{ x: number; y: number; key: string; kind: "issue" | "initiative" | "project" } | null>(null);
@@ -2071,6 +2072,7 @@ export function App() {
   }
 
   function openStories() {
+    setNavIntent("all-stories");
     setSidebarPage("board");
     setIssueLens("all");
     writeOpener("stories");
@@ -2090,6 +2092,7 @@ export function App() {
   }
 
   function openEpics() {
+    setNavIntent("all-epics");
     setSidebarPage("board");
     writeOpener("epics");
     setBoardKind("epics");
@@ -2098,6 +2101,7 @@ export function App() {
   }
 
   function openCombined() {
+    setNavIntent("combined");
     setSidebarPage("board");
     writeOpener("combined");
     setBoardKind("combined");
@@ -2111,12 +2115,14 @@ export function App() {
   }
 
   function openCalendarTab() {
+    setNavIntent("calendar");
     setSidebarPage("board");
     selectCalendarTab();
     setCanvasTab("calendar");
   }
 
   function openInitiatives() {
+    setNavIntent("initiatives");
     setSidebarPage("board");
     writeOpener("initiatives");
     setBoardKind("initiatives");
@@ -2125,6 +2131,7 @@ export function App() {
   }
 
   function openProjects() {
+    setNavIntent("workspace-projects");
     setSidebarPage("board");
     writeOpener("projects");
     setBoardKind("projects");
@@ -2422,6 +2429,28 @@ export function App() {
     persistPresets(result.presets);
   }
 
+  const sidebarScopes: ScopePair[] = (() => {
+    const parsed = parseFlags(flags);
+    if (parsed.scopes.length) return parsed.scopes;
+    if (parsed.projects.length) {
+      return parsed.projects.map((project) => ({
+        workspace: processKind === "plane" ? workspaceSlug || "personal" : "jira",
+        project,
+      }));
+    }
+    return [{ workspace: processKind === "plane" ? workspaceSlug || "personal" : "jira", project: "DEMO" }];
+  })();
+  const sidebarPick = sidebarSelection({
+    sidebarPage,
+    boardKind,
+    issueLens,
+    canvasTab,
+    epicSelected: selectedEpic !== null,
+    plane: processKind === "plane",
+    intent: navIntent,
+  });
+  const teamScopeId = sidebarScopes[0] ? `${sidebarScopes[0].workspace}/${sidebarScopes[0].project}` : undefined;
+
   return (
     <div className="bg-sidebar flex h-screen">
       <ResizablePanelGroup
@@ -2512,22 +2541,22 @@ export function App() {
                 </Button>
               </div>
             </div>
-            <nav className="flex flex-1 flex-col gap-0.5 overflow-auto px-2 pb-2">
-              <NavRow icon="Inbox" label="Inbox" badge={inboxBadgeCount(allCards, inboxRead)} active={sidebarPage === "inbox"} onClick={() => setSidebarPage("inbox")} />
-              <NavRow icon="Activity" label="Pulse" badge={allCards.length ? String(Math.min(allCards.length, 99)) : undefined} active={sidebarPage === "board" && boardKind === "stories"} onClick={openStories} />
-              <NavRow icon="Bot" label="Agent" active={agentOpen} onClick={() => setAgentOpen(true)} />
+            <nav className="flex flex-1 flex-col gap-0.5 overflow-auto px-2 pb-2" aria-label="Sidebar">
+              <NavRow icon="Inbox" label="Inbox" badge={inboxBadgeCount(allCards, inboxRead)} active={sidebarPick.kind === "inbox"} onClick={() => { setNavIntent(null); setSidebarPage("inbox"); }} />
+              <NavRow icon="Activity" label="Pulse" badge={allCards.length ? String(Math.min(allCards.length, 99)) : undefined} active={sidebarPick.kind === "pulse"} onClick={() => { openStories(); setNavIntent("pulse"); }} />
+              <NavRow icon="Bot" label="Agent" onClick={() => setAgentOpen(true)} />
               <SidebarSection title="Workspace" open={sectionsOpen.workspace !== false} onToggle={() => setSectionsOpen((current) => ({ ...current, workspace: current.workspace === false }))}>
                 {processKind === "plane" ? (
-                  <NavRow icon="Box" label="Projects" active={boardKind === "projects"} onClick={openProjects} />
+                  <NavRow icon="Box" label="Projects" active={sidebarPick.kind === "workspace" && sidebarPick.item === "projects"} onClick={openProjects} />
                 ) : null}
-                <NavRow icon="LayoutGrid" label="Views" active={sidebarPage === "views"} onClick={() => setSidebarPage("views")} />
+                <NavRow icon="LayoutGrid" label="Views" active={sidebarPick.kind === "workspace" && sidebarPick.item === "views"} onClick={() => { setNavIntent(null); setSidebarPage("views"); }} />
                 {processKind === "plane" ? (
-                  <NavRow icon="Target" label="Initiatives" active={boardKind === "initiatives"} onClick={openInitiatives} />
+                  <NavRow icon="Target" label="Initiatives" active={sidebarPick.kind === "workspace" && sidebarPick.item === "initiatives"} onClick={openInitiatives} />
                 ) : null}
-                <NavRow icon="MoreHorizontal" label="More" active={sectionsOpen.more === true} onClick={() => setSectionsOpen((current) => ({ ...current, more: current.more !== true }))} />
+                <NavRow icon="MoreHorizontal" label="More" onClick={() => setSectionsOpen((current) => ({ ...current, more: current.more !== true }))} />
                 {sectionsOpen.more ? (
                   <>
-                    <NavRow icon="Users" label="Teams" indent active={sidebarPage === "teams" || sidebarPage === "team"} onClick={() => setSidebarPage("teams")} />
+                    <NavRow icon="Users" label="Teams" indent active={sidebarPick.kind === "workspace" && sidebarPick.item === "teams"} onClick={() => { setNavIntent(null); setSidebarPage("teams"); }} />
                     <NavRow icon="Settings" label="Settings" indent disabled title="Coming soon" />
                   </>
                 ) : null}
@@ -2566,66 +2595,50 @@ export function App() {
               </SidebarSection>
               <SidebarSection title="Your teams" open={sectionsOpen.teams !== false} onToggle={() => setSectionsOpen((current) => ({ ...current, teams: current.teams === false }))}>
                 <TeamNav
-                  scopes={
-                    parseFlags(flags).scopes.length
-                      ? parseFlags(flags).scopes
-                      : parseFlags(flags).projects.map((project) => ({
-                          workspace: processKind === "plane" ? workspaceSlug || "personal" : "jira",
-                          project,
-                        }))
-                  }
+                  scopes={sidebarScopes}
                   triage={triageCount(allCards.filter((card) => card.labels?.some((label) => isNeedsInputLabel(label))).length)}
+                  current={sidebarPick.kind === "team" ? { item: sidebarPick.item, scope: teamScopeId } : undefined}
+                  mineTitle={viewer ? `Assigned to ${viewer}` : "Assigned to you"}
+                  preset={
+                    <PresetGroup
+                      presets={presets}
+                      presetName={presetName}
+                      presetError={presetError}
+                      onPresetName={setPresetName}
+                      onCreatePreset={createPreset}
+                      onApplyPreset={applyNamedPreset}
+                      onOverwritePreset={overwriteNamedPreset}
+                      onRenamePreset={renameNamedPreset}
+                      onDeletePreset={(name) => persistPresets(removePreset(presets, name))}
+                    />
+                  }
                   onOpenScope={(scope) => {
                     queueScope(applyScopeSelection(flags, { workspaces: [scope.workspace], scopes: [scope] }));
                     openStories();
                   }}
                   onNav={(_scope, item) => {
-                    if (item === "Projects" && processKind === "plane") openProjects();
-                    else if (item === "Views") setSidebarPage("views");
-                    else if (item === "Triage") {
+                    if (item === "Home") {
                       openStories();
+                      setNavIntent("home");
+                    } else if (item === "Projects" && processKind === "plane") {
+                      openProjects();
+                      setNavIntent("team-projects");
+                    } else if (item === "Views") {
+                      setNavIntent("team-views");
+                      setSidebarPage("views");
+                    } else if (item === "Triage") {
+                      openStories();
+                      setNavIntent("triage");
                       if (!viewFilter.labels.includes("needs-input")) persistViewFilter({ ...viewFilter, labels: [...viewFilter.labels, "needs-input"] });
-                    } else openStories();
+                    } else if (item === "My issues") openMine();
+                    else if (item === "All epics") openEpics();
+                    else if (item === "Combined") openCombined();
+                    else if (item === "Calendar") openCalendarTab();
+                    else openStories();
                   }}
                 />
               </SidebarSection>
               <SidebarSection title="Board" open={sectionsOpen.board !== false} onToggle={() => setSectionsOpen((current) => ({ ...current, board: current.board === false }))}>
-              <button
-                type="button"
-                className={navButtonClass(sidebarPage === "board" && boardKind === "stories" && selectedEpic === null && issueLens !== "mine")}
-                onClick={openStories}
-              >
-                All stories
-              </button>
-              <button
-                type="button"
-                className={navButtonClass(sidebarPage === "board" && issueLens === "mine" && selectedEpic === null)}
-                onClick={openMine}
-                title={viewer ? `Assigned to ${viewer}` : "Assigned to you"}
-              >
-                My issues
-              </button>
-              <button
-                type="button"
-                className={navButtonClass(boardKind === "epics")}
-                onClick={openEpics}
-              >
-                All epics
-              </button>
-              <button
-                type="button"
-                className={navButtonClass(boardKind === "combined")}
-                onClick={openCombined}
-              >
-                Combined
-              </button>
-              <button
-                type="button"
-                className={navButtonClass(sidebarPage === "board" && canvasTab === "calendar")}
-                onClick={openCalendarTab}
-              >
-                Calendar
-              </button>
               {showFavourites ? (
                 <FavouriteGroup
                   pane={favouritePane}
@@ -2654,17 +2667,6 @@ export function App() {
                   onOpen={open}
                 />
               ) : null}
-              <PresetGroup
-                presets={presets}
-                presetName={presetName}
-                presetError={presetError}
-                onPresetName={setPresetName}
-                onCreatePreset={createPreset}
-                onApplyPreset={applyNamedPreset}
-                onOverwritePreset={overwriteNamedPreset}
-                onRenamePreset={renameNamedPreset}
-                onDeletePreset={(name) => persistPresets(removePreset(presets, name))}
-              />
               <div className="text-muted-foreground px-3 pt-3 pb-1 text-[11px] font-medium">
                 Epics
               </div>
@@ -2682,6 +2684,7 @@ export function App() {
                     onToggleFavourite={(key) => persistFavourites(toggleFavourite(favourites, key))}
                     onMove={move}
                     onOpen={open}
+                    currentEpic={sidebarPick.kind === "epic" ? selectedEpic : null}
                   />
                 ) : (
                   group.epics.map((epic) => (
@@ -2696,6 +2699,7 @@ export function App() {
                       onToggleFavourite={(key) => persistFavourites(toggleFavourite(favourites, key))}
                       onMove={move}
                       onOpen={open}
+                      current={sidebarPick.kind === "epic" && selectedEpic === epic.key}
                     />
                   ))
                 ),
@@ -2776,7 +2780,10 @@ export function App() {
                         ? "bg-muted text-foreground"
                         : "text-muted-foreground hover:text-foreground",
                     )}
-                    onClick={() => persistCanvasTab("calendar")}
+                    onClick={() => {
+                      persistCanvasTab("calendar");
+                      setNavIntent("calendar");
+                    }}
                   >
                     Calendar
                   </button>
@@ -3820,6 +3827,7 @@ function PresetGroup({
             <ChevronDownIcon
               className={cn("size-3.5 shrink-0 transition-transform", !open && "-rotate-90")}
             />
+            <SlidersHorizontalIcon className="size-4 shrink-0" strokeWidth={1.5} aria-hidden="true" />
             <span className="min-w-0 flex-1 truncate">Presets</span>
           </button>
         </CollapsibleTrigger>

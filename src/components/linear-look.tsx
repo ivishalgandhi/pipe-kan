@@ -44,6 +44,12 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu.tsx";
 import { HEALTH_FILTERS, type InboxNotification, type LinearFavorite, type SavedView, type ScopePair, type ViewFilter } from "~/parity.ts";
 import {
   ADD_FILTER_ROWS,
@@ -52,7 +58,6 @@ import {
   ICON_SPEC,
   PRIORITY_VALUES,
   STATUS_TYPES,
-  TEAM_ITEMS,
   VIEW_ICONS,
   filterPickerProjects,
   groupLinearFavorites,
@@ -115,6 +120,8 @@ function Glyph({ name, className, stroke = ICON_SPEC.navStroke }: { name: string
   const Icon = ICONS[name] ?? CircleDot;
   return <Icon aria-hidden="true" className={className} strokeWidth={stroke} />;
 }
+
+const ROW_FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]";
 
 export function StatusMark({ status }: { status?: string }) {
   const mark = statusMark(status ?? "");
@@ -193,6 +200,7 @@ export function NavRow({
       data-smoke={smoke}
       className={cn(
         "flex h-7 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px] font-medium",
+        ROW_FOCUS,
         indent && "pl-6",
         active ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground hover:bg-foreground/[0.05] dark:hover:bg-white/[0.05]",
         disabled && "cursor-not-allowed opacity-50",
@@ -228,7 +236,7 @@ export function SidebarSection({
     <section data-smoke="sidebar-section" data-section={title}>
       <button
         type="button"
-        className="text-muted-foreground flex h-7 w-full items-center gap-1 px-2 text-left text-[11px] font-medium tracking-wide uppercase"
+        className="text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] flex h-7 w-full items-center gap-1 px-2 text-left text-[11px] font-medium tracking-wide uppercase"
         aria-expanded={open}
         onClick={onToggle}
       >
@@ -247,7 +255,7 @@ export function SidebarFooter() {
         <button
           key={label}
           type="button"
-          className="text-muted-foreground hover:bg-foreground/[0.05] flex h-7 w-full items-center gap-2 rounded-lg px-2 text-left text-[12px]"
+          className="text-muted-foreground hover:bg-foreground/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] flex h-7 w-full items-center gap-2 rounded-lg px-2 text-left text-[12px]"
           title="Coming soon"
           onClick={() => undefined}
         >
@@ -370,37 +378,136 @@ function FavoriteLeaf({ item, indent, onOpen }: { item: LinearFavorite; indent?:
   );
 }
 
+const VIEW_MODES = ["Combined", "Calendar"] as const;
+
+function TreeRow({
+  icon,
+  label,
+  depth,
+  active,
+  disabled,
+  muted,
+  title,
+  badge,
+  expanded,
+  inset,
+  onClick,
+  onToggle,
+}: {
+  icon: string;
+  label: string;
+  depth: 1 | 2 | 3;
+  active?: boolean;
+  disabled?: boolean;
+  muted?: boolean;
+  title?: string;
+  badge?: string;
+  expanded?: boolean;
+  inset?: boolean;
+  onClick?: () => void;
+  onToggle?: () => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex h-7 w-full items-center rounded-lg",
+        inset ? "pl-3" : depth === 1 ? "pl-6" : "pl-10",
+        active ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground",
+        !active && !disabled && "hover:bg-foreground/[0.05] dark:hover:bg-white/[0.05]",
+        (muted || disabled) && "opacity-50",
+      )}
+    >
+      <button
+        type="button"
+        role="treeitem"
+        aria-level={depth}
+        aria-current={active ? "page" : undefined}
+        aria-expanded={onToggle ? expanded : undefined}
+        data-depth={depth}
+        data-mode={label}
+        className={cn(
+          "flex h-7 min-w-0 flex-1 items-center gap-2 text-left text-[13px] font-medium",
+          ROW_FOCUS,
+          disabled && "cursor-not-allowed",
+        )}
+        title={title}
+        disabled={disabled}
+        onClick={onClick}
+      >
+        <Glyph
+          name={icon}
+          className={cn("shrink-0", depth === 3 ? "size-3" : "size-4", active ? "text-foreground" : "text-muted-foreground")}
+        />
+        <span className="min-w-0 flex-1 truncate">{label}</span>
+        {badge ? <span className="text-muted-foreground pr-1 text-[11px] tabular-nums">{badge}</span> : null}
+      </button>
+      {onToggle ? (
+        <button
+          type="button"
+          aria-label={`Toggle ${label}`}
+          aria-expanded={expanded}
+          className={cn("text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-lg", ROW_FOCUS)}
+          onClick={onToggle}
+        >
+          <ChevronDown className={cn("size-3", !expanded && "-rotate-90")} strokeWidth={ICON_SPEC.chevronStroke} aria-hidden="true" />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 export function TeamNav({
   scopes,
   triage,
-  activeScope,
+  current,
+  preset,
+  mineTitle,
   onOpenScope,
   onNav,
 }: {
   scopes: ScopePair[];
   triage: number;
-  activeScope?: string;
+  current?: { item: string; scope?: string };
+  preset?: ReactNode;
+  mineTitle?: string;
   onOpenScope: (scope: ScopePair) => void;
   onNav: (scope: ScopePair, item: string) => void;
 }) {
   const [closed, setClosed] = useState<Record<string, boolean>>({});
   const [cyclesClosed, setCyclesClosed] = useState<Record<string, boolean>>({});
+  const [issuesClosed, setIssuesClosed] = useState<Record<string, boolean>>({});
+  const [viewsClosed, setViewsClosed] = useState<Record<string, boolean>>({});
   return (
-    <div className="flex flex-col gap-0.5" data-smoke="team-nav">
-      {scopes.map((scope) => {
+    <div role="tree" aria-label="Your teams" data-smoke="team-nav" data-orientation="vertical" className="flex flex-col gap-0.5">
+      {scopes.map((scope, index) => {
         const id = `${scope.workspace}/${scope.project}`;
         const open = !closed[id];
+        const issuesOpen = !issuesClosed[id];
+        const viewsOpen = !viewsClosed[id];
+        const cyclesOpen = !cyclesClosed[id];
+        const selectedHere = Boolean(current && (current.scope == null || current.scope === id));
+        const picked = selectedHere ? current?.item : undefined;
+        const issueChild = picked === "All stories" || picked === "My issues" || picked === "All epics";
+        const viewChild = picked === "Combined" || picked === "Calendar" || picked === "Views";
+        const teamActive = !open && selectedHere && picked != null;
         return (
-          <div key={id}>
-            <div className="flex items-center">
+          <div key={id} role="group" aria-label={id}>
+            <div
+              className={cn(
+                "group flex h-7 w-full items-center rounded-lg",
+                teamActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "hover:bg-foreground/[0.05] dark:hover:bg-white/[0.05]",
+              )}
+            >
               <button
                 type="button"
+                role="treeitem"
+                aria-level={1}
+                aria-expanded={open}
+                aria-current={teamActive ? "page" : undefined}
                 data-smoke="team-scope"
                 data-team={id}
-                className={cn(
-                  "flex h-7 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left text-[13px] font-medium",
-                  activeScope === id ? "bg-sidebar-accent" : "hover:bg-foreground/[0.05]",
-                )}
+                data-depth={1}
+                className={cn("flex h-7 min-w-0 flex-1 items-center gap-2 pl-2 text-left text-[13px] font-medium", ROW_FOCUS)}
                 onClick={() => onOpenScope(scope)}
               >
                 <PersonAvatar name={scope.project} />
@@ -409,52 +516,105 @@ export function TeamNav({
               <button
                 type="button"
                 aria-label={`Toggle ${id}`}
-                className="text-muted-foreground flex size-7 items-center justify-center rounded-lg"
-                onClick={() => setClosed((current) => ({ ...current, [id]: !current[id] }))}
+                aria-expanded={open}
+                className={cn("text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-lg", ROW_FOCUS)}
+                onClick={() => setClosed((state) => ({ ...state, [id]: !state[id] }))}
               >
-                <ChevronDown className={cn("size-3", !open && "-rotate-90")} strokeWidth={2} aria-hidden="true" />
+                <ChevronDown className={cn("size-3", !open && "-rotate-90")} strokeWidth={ICON_SPEC.chevronStroke} aria-hidden="true" />
               </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={`Team menu ${id}`}
+                    aria-haspopup="menu"
+                    className={cn(
+                      "text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+                      ROW_FOCUS,
+                    )}
+                  >
+                    <Ellipsis className="size-4" strokeWidth={ICON_SPEC.navStroke} aria-hidden="true" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => onOpenScope(scope)}>Open</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
-            {open
-              ? TEAM_ITEMS.map((item) =>
-                  item === "Cycles" ? (
-                    <div key={item}>
-                      <button
-                        type="button"
-                        className="text-muted-foreground flex h-7 w-full items-center gap-2 rounded-lg pr-2 pl-6 text-left text-[13px] opacity-50"
-                        title="Coming soon"
-                        onClick={() => setCyclesClosed((current) => ({ ...current, [id]: !current[id] }))}
-                      >
-                        <Clock className="size-3 shrink-0" strokeWidth={1.5} aria-hidden="true" />
-                        Cycles
-                        <ChevronDown className={cn("ml-auto size-3", cyclesClosed[id] && "-rotate-90")} strokeWidth={2} aria-hidden="true" />
-                      </button>
-                      {!cyclesClosed[id]
-                        ? CYCLE_ITEMS.map((cycle) => (
-                            <button
-                              key={cycle}
-                              type="button"
-                              className="text-muted-foreground flex h-7 w-full items-center rounded-lg pr-2 pl-10 text-left text-[13px] opacity-50"
-                              title="Coming soon"
-                              disabled
-                            >
-                              {cycle}
-                            </button>
-                          ))
-                        : null}
-                    </div>
-                  ) : (
-                    <NavRow
-                      key={item}
-                      icon={item === "Home" ? "Home" : item === "Triage" ? "Inbox" : item === "Issues" ? "CircleDot" : item === "Projects" ? "Box" : "LayoutGrid"}
-                      label={item}
-                      indent
-                      badge={item === "Triage" ? String(triage) : undefined}
-                      onClick={() => onNav(scope, item)}
-                    />
-                  ),
-                )
-              : null}
+            {open ? (
+              <div role="group">
+                <TreeRow icon="Home" label="Home" depth={1} active={picked === "Home"} onClick={() => onNav(scope, "Home")} />
+                <TreeRow
+                  icon="Inbox"
+                  label="Triage"
+                  depth={1}
+                  active={picked === "Triage"}
+                  badge={triage > 0 ? String(triage) : undefined}
+                  onClick={() => onNav(scope, "Triage")}
+                />
+                <TreeRow
+                  icon="CircleDot"
+                  label="Issues"
+                  depth={1}
+                  expanded={issuesOpen}
+                  active={!issuesOpen && issueChild}
+                  onClick={() => onNav(scope, "All stories")}
+                  onToggle={() => setIssuesClosed((state) => ({ ...state, [id]: !state[id] }))}
+                />
+                {issuesOpen ? (
+                  <div role="group" aria-label="Issues">
+                    <TreeRow icon="List" label="All stories" depth={2} active={picked === "All stories"} onClick={() => onNav(scope, "All stories")} />
+                    <TreeRow icon="User" label="My issues" depth={2} active={picked === "My issues"} title={mineTitle} onClick={() => onNav(scope, "My issues")} />
+                    <TreeRow icon="Target" label="All epics" depth={2} active={picked === "All epics"} onClick={() => onNav(scope, "All epics")} />
+                  </div>
+                ) : null}
+                <TreeRow
+                  icon="Clock"
+                  label="Cycles"
+                  depth={1}
+                  muted
+                  title="Coming soon"
+                  expanded={cyclesOpen}
+                  onToggle={() => setCyclesClosed((state) => ({ ...state, [id]: !state[id] }))}
+                />
+                {cyclesOpen ? (
+                  <div className="ml-6 border-l border-[var(--border)]" data-smoke="cycle-guide" role="group" aria-label="Cycles">
+                    {CYCLE_ITEMS.map((cycle) => (
+                      <TreeRow key={cycle} icon="Clock" label={cycle} depth={3} inset disabled title="Coming soon" />
+                    ))}
+                  </div>
+                ) : null}
+                <TreeRow icon="Box" label="Projects" depth={1} active={picked === "Projects"} onClick={() => onNav(scope, "Projects")} />
+                <TreeRow
+                  icon="LayoutGrid"
+                  label="Views"
+                  depth={1}
+                  expanded={viewsOpen}
+                  active={picked === "Views" || (!viewsOpen && viewChild)}
+                  onClick={() => onNav(scope, "Views")}
+                  onToggle={() => setViewsClosed((state) => ({ ...state, [id]: !state[id] }))}
+                />
+                {viewsOpen ? (
+                  <div role="group" aria-label="Views">
+                    {VIEW_MODES.map((mode) => (
+                      <TreeRow
+                        key={mode}
+                        icon={mode === "Combined" ? "Layers" : "Calendar"}
+                        label={mode}
+                        depth={2}
+                        active={picked === mode}
+                        onClick={() => onNav(scope, mode)}
+                      />
+                    ))}
+                    {index === 0 && preset ? (
+                      <div className="pl-4" data-smoke="team-presets">
+                        {preset}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         );
       })}
