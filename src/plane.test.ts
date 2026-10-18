@@ -870,3 +870,45 @@ test("listWorkspaces prefers a real list endpoint when Plane serves one", async 
   const cli = createPlaneCli({ host: "https://plane.test", apiKey: "k", flags: "--plane --workspaces alpha", fetch: fakeFetch });
   expect((await cli.listWorkspaces!()).map((w) => w.slug)).toEqual(["alpha", "beta"]);
 });
+
+import { readApiJson } from "./api-json.ts";
+
+test("readApiJson turns an HTML proxy error page into a clear error (fake 502)", async () => {
+  const html = new Response("<!DOCTYPE html><html>502</html>", { status: 502, headers: { "content-type": "text/html" } });
+  await expect(readApiJson(html)).rejects.toThrow(/502.*instead of JSON/);
+  const ok = new Response(JSON.stringify({ a: 1 }), { headers: { "content-type": "application/json" } });
+  expect(await readApiJson(ok)).toEqual({ a: 1 });
+});
+
+test("workspace probing is cached within the TTL (no repeat Plane calls)", async () => {
+  let calls = 0;
+  const fakeFetch = (async (input: RequestInfo | URL) => {
+    calls++;
+    return String(input).includes("/workspaces/alpha/projects/") ? jsonResponse({ results: [] }) : jsonResponse({}, 404);
+  }) as typeof fetch;
+  const cli = createPlaneCli({ host: "https://plane.test", apiKey: "k", flags: "--plane --workspaces alpha", fetch: fakeFetch });
+  await cli.listWorkspaces!();
+  const first = calls;
+  await cli.listWorkspaces!();
+  expect(calls).toBe(first);
+});
+
+test("unknown /api routes return 404 JSON, never the SPA HTML", async () => {
+  const store = IssueStore.fromRaw(fixture);
+  const app = createApp({ store });
+  const { createServer } = await import("node:http");
+  const server = createServer((req, res) => {
+    if (!handleRequest(req, res, { app, store, kind: "plane" })) {
+      res.setHeader("content-type", "text/html");
+      res.end("<!DOCTYPE html>");
+    }
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const addr = server.address() as { port: number };
+  const res = await fetch(`http://127.0.0.1:${addr.port}/api/nope`);
+  const ui = await fetch(`http://127.0.0.1:${addr.port}/some/page`);
+  server.close();
+  expect(res.status).toBe(404);
+  expect(res.headers.get("content-type")).toContain("json");
+  expect(ui.headers.get("content-type")).toContain("html");
+});

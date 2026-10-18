@@ -523,7 +523,16 @@ export function createPlaneCli(opts: PlaneOpts): Cli {
   const known = new Set<string>();
 
   /** Plane v1 cannot list workspaces; probe candidate slugs and keep those the key can read. */
+  let probeCache: { at: number; rows: { id: string; name: string; slug: string }[] } | undefined;
   async function probeWorkspaces(): Promise<{ id: string; name: string; slug: string }[]> {
+    const ttl = opts.cacheTtlMs ?? 300_000;
+    if (ttl > 0 && probeCache && nowFn() - probeCache.at < ttl) return probeCache.rows;
+    const rows = await probeWorkspacesUncached();
+    probeCache = { at: nowFn(), rows };
+    return rows;
+  }
+
+  async function probeWorkspacesUncached(): Promise<{ id: string; name: string; slug: string }[]> {
     const env = opts.env ?? process.env;
     const fromFlags = parseFlags(`${defaultFlags} ${lastFlags}`);
     const candidates = new Set<string>([
@@ -536,19 +545,21 @@ export function createPlaneCli(opts: PlaneOpts): Cli {
       ...(env.PIPE_KAN_WORKSPACES ?? "").split(","),
       ...COMMON_WORKSPACE_SLUGS,
     ]);
-    const found: { id: string; name: string; slug: string }[] = [];
-    for (const raw of candidates) {
-      const slug = raw.trim();
-      if (!slug || !/^[A-Za-z0-9_-]+$/.test(slug)) continue;
-      try {
-        await requestJson(queryPath(`/workspaces/${slug}/projects/`, { per_page: "1" }));
-        known.add(slug);
-        found.push({ id: slug, name: slug, slug });
-      } catch {
-        known.delete(slug);
-      }
-    }
-    return found;
+    const results = await Promise.all(
+      [...candidates].map(async (raw) => {
+        const slug = raw.trim();
+        if (!slug || !/^[A-Za-z0-9_-]+$/.test(slug)) return undefined;
+        try {
+          await requestJson(queryPath(`/workspaces/${slug}/projects/`, { per_page: "1" }));
+          known.add(slug);
+          return { id: slug, name: slug, slug };
+        } catch {
+          known.delete(slug);
+          return undefined;
+        }
+      }),
+    );
+    return results.filter((row): row is { id: string; name: string; slug: string } => Boolean(row));
   }
 
   function parseWorkspaceList(raw: unknown): { id: string; name: string; slug: string }[] | undefined {
@@ -625,7 +636,7 @@ export function createPlaneCli(opts: PlaneOpts): Cli {
   }
 
   const projectCache = new Map<string, { at: number; rows: PlaneProject[] }>();
-  const cacheTtlMs = opts.cacheTtlMs ?? 30_000;
+  const cacheTtlMs = opts.cacheTtlMs ?? 300_000;
 
   async function projectsFor(slug: string): Promise<PlaneProject[]> {
     const hit = projectCache.get(slug);
@@ -929,6 +940,8 @@ export function createPlaneCli(opts: PlaneOpts): Cli {
       return loaded.columns;
     },
     async listWorkspaces() {
+      const ttl = opts.cacheTtlMs ?? 300_000;
+      if (ttl > 0 && probeCache && nowFn() - probeCache.at < ttl) return probeCache.rows;
       for (const path of ["/users/me/workspaces/", "/workspaces/"] as const) {
         try {
           const listed = parseWorkspaceList(await requestJson(path));
