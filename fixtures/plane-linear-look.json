@@ -1,0 +1,47 @@
+{
+  "workspaces": [{ "id": "ws-acme", "name": "Acme-product", "slug": "acme" }],
+  "projects": {
+    "acme": [{ "id": "acme-demo", "identifier": "DEMO", "name": "Acme Demo" }]
+  },
+  "states": [
+    { "id": "st-backlog", "name": "Backlog", "group": "backlog", "sequence": 1 },
+    { "id": "st-todo", "name": "Todo", "group": "unstarted", "sequence": 2 },
+    { "id": "st-progress", "name": "In Progress", "group": "started", "sequence": 3 },
+    { "id": "st-done", "name": "Done", "group": "completed", "sequence": 4 },
+    { "id": "st-cancelled", "name": "Cancelled", "group": "cancelled", "sequence": 5 }
+  ],
+  "labels": [{ "id": "lbl-needs", "name": "needs-input" }],
+  "members": [
+    { "id": "user-ada", "display_name": "Ada" },
+    { "id": "user-grace", "display_name": "Grace" }
+  ],
+  "modules": {
+    "acme-demo": [{ "id": "mod-demo", "name": "Acme Demo module", "status": "started" }]
+  },
+  "issues": {
+    "acme-demo": [
+      { "id": "wi-demo-12", "name": "Acme Demo issue", "sequence_id": 12, "priority": "high", "state": "st-progress", "labels": ["lbl-needs"], "assignee": "Ada", "module_ids": ["mod-demo"] },
+      { "id": "wi-demo-3", "name": "Acme Demo follow-up", "sequence_id": 3, "priority": "medium", "state": "st-todo", "assignee": "Grace" },
+      { "id": "wi-demo-8", "name": "Acme Demo note", "sequence_id": 8, "priority": "low", "state": "st-backlog", "assignee": "Ada" }
+    ]
+  },
+  "views": [
+    { "name": "Acme Demo", "icon": "List", "description": "Issues on the demo board", "scope": "personal", "kind": "issues" },
+    { "name": "Launch", "icon": "Bug", "description": "Needs a look", "scope": "team", "kind": "issues" },
+    { "name": "Demo projects", "icon": "LayoutGrid", "description": "Project rows", "scope": "team", "kind": "projects" }
+  ],
+  "inbox": [
+    { "id": "DEMO-12:update", "kind": "update", "issueKey": "DEMO-12", "text": "DEMO-12 was updated", "actor": "Ada" },
+    { "id": "DEMO-12:assign", "kind": "assign", "issueKey": "DEMO-12", "text": "DEMO-12 assigned to you", "actor": "Ada" },
+    { "id": "DEMO-3:mention", "kind": "mention", "issueKey": "DEMO-3", "text": "DEMO-3 mentioned you", "actor": "Grace" },
+    { "id": "DEMO-8:update", "kind": "update", "issueKey": "DEMO-8", "text": "DEMO-8 was updated", "actor": "Ada" },
+    { "id": "DEMO-3:assign", "kind": "assign", "issueKey": "DEMO-3", "text": "DEMO-3 assigned to you", "actor": "Grace" }
+  ],
+  "teams": [
+    { "name": "Acme-product", "nav": ["Home", "Triage", "Issues", "Cycles", "Projects", "Views"] }
+  ],
+  "favorites": [
+    { "kind": "issue", "id": "DEMO-12", "label": "Acme Demo", "folder": "Launch" },
+    { "kind": "project", "id": "acme/DEMO", "label": "Acme Demo", "folder": "Launch" }
+  ]
+}

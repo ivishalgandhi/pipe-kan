@@ -1,6 +1,6 @@
 # gbj-20261018-023 pipe-kan Linear look plan
 
-**Scope:** Make pipe-kan's UI match Linear's interface in detail. Plan only — no maker, no merge.
+**Scope:** Make pipe-kan's UI match Linear's interface in detail. Maker implementation is on `feat/pipekan-linear-look-maker-20261018`. T1–T7, T9, and T10 are done. T8's independent review is still pending.
 
 **Branch:** `docs/pipekan-linear-look-plan-20261018`
 

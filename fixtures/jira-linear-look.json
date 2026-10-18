@@ -1,0 +1,22 @@
+{
+  "source": "jira",
+  "keys": ["DEMO-12", "DEMO-3", "DEMO-8", "DEMO-15", "DEMO-21"],
+  "views": [
+    { "name": "Acme Demo", "icon": "List", "description": "Jira issues on the demo board", "scope": "personal", "kind": "issues" },
+    { "name": "Launch", "icon": "Bug", "description": "Needs a look", "scope": "team", "kind": "issues" },
+    { "name": "Demo projects", "icon": "LayoutGrid", "description": "Project rows", "scope": "personal", "kind": "projects" }
+  ],
+  "inbox": [
+    { "id": "DEMO-12:update", "kind": "update", "issueKey": "DEMO-12", "text": "DEMO-12 was updated", "actor": "Ada" },
+    { "id": "DEMO-12:assign", "kind": "assign", "issueKey": "DEMO-12", "text": "DEMO-12 assigned to you", "actor": "Ada" },
+    { "id": "DEMO-3:mention", "kind": "mention", "issueKey": "DEMO-3", "text": "DEMO-3 mentioned you", "actor": "Grace" },
+    { "id": "DEMO-8:update", "kind": "update", "issueKey": "DEMO-8", "text": "DEMO-8 was updated", "actor": "Ada" },
+    { "id": "DEMO-15:assign", "kind": "assign", "issueKey": "DEMO-15", "text": "DEMO-15 assigned to you", "actor": "Grace" }
+  ],
+  "teams": [
+    { "name": "Acme-product", "nav": ["Home", "Triage", "Issues", "Cycles", "Projects", "Views"] }
+  ],
+  "favorites": [
+    { "kind": "issue", "id": "DEMO-12", "label": "Acme Demo", "folder": "Launch" }
+  ]
+}

@@ -142,6 +142,7 @@ describe("linear parity", () => {
       "Assignee",
       "Priority",
       "Labels",
+      "Project",
       "Copy link",
     ]);
     const sources = sourceOptions({ planeKey: false, jiraBin: false });

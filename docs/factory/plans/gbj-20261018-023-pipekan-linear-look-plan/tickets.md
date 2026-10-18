@@ -1,5 +1,20 @@
 # tickets.md — gbj-20261018-023 pipe-kan Linear look plan
 
+## Status
+
+| Ticket | Status |
+|---|---|
+| T1 Views | done |
+| T2 Add Filter | done. The named list is 23 rows; the "21" in the ticket text under-counts that list. |
+| T3 Move to project | done. Local assignment plus refresh. No remote project write. |
+| T4 Inbox | done |
+| T5 Sidebar | done. Existing Board openers stay under a Board section. |
+| T6 Icons | done. Connect GitHub uses `GitFork` because this Lucide build has no `Github` export. |
+| T7 Smoke | done |
+| T8 UI review | maker checklist written. Independent specialist review is still pending. |
+| T9 Performance | done. See `perf.md`. |
+| T10 Docs | done |
+
 ## Dependencies
 - gbj-20261017-014 (board/sidebar/command restyle) — design tokens on `main`.
 - gbj-20261018-019 (Initiatives/Projects/Timeline/Display options/Workspace switcher) — functional parity on `main`.

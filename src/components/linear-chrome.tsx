@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { CheckIcon, StarIcon } from "lucide-react";
 
+import { PriorityMark, StatusMark } from "~/components/linear-look.tsx";
 import { cn } from "~/lib/utils";
 import {
   HEALTH_COLOR,
@@ -407,9 +408,15 @@ function InitiativeCells({
 }) {
   return (
     <>
-      <span className="min-w-0">
-        <span className="block truncate font-medium">{row.name}</span>
-        <span className="text-muted-foreground block truncate text-[11px]">{row.project}</span>
+      <span className="flex min-w-0 items-center gap-2">
+        <StatusMark status={row.status} />
+        <span className="min-w-0">
+          <span className="block truncate font-medium">{row.name}</span>
+          <span className="text-muted-foreground flex items-center gap-1 truncate text-[11px]">
+            {row.priority ? <PriorityMark priority={row.priority} /> : null}
+            {row.project}
+          </span>
+        </span>
       </span>
       {columns.owner ? <OwnerCell /> : null}
       {columns.target ? <span className="text-muted-foreground truncate text-[12px]">{targetLabel(row.targetDate)}</span> : null}
@@ -434,9 +441,12 @@ function ProjectCells({
 }) {
   return (
     <>
-      <span className="min-w-0">
-        <span className="block truncate font-medium">{row.name}</span>
-        <span className="text-muted-foreground block truncate text-[11px]">{row.identifier}</span>
+      <span className="flex min-w-0 items-center gap-2">
+        <StatusMark status={row.status} />
+        <span className="min-w-0">
+          <span className="block truncate font-medium">{row.name}</span>
+          <span className="text-muted-foreground block truncate text-[11px]">{row.identifier}</span>
+        </span>
       </span>
       {columns.owner ? <OwnerCell /> : null}
       {columns.target ? <span className="text-muted-foreground truncate text-[12px]">{targetLabel(row.targetDate)}</span> : null}

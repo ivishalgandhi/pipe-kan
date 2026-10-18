@@ -120,6 +120,21 @@ export type ViewFilter = {
   labels: string[];
   project: string[];
   health?: string[];
+  statusType?: string[];
+  initiative?: string[];
+  /** Placeholder keys. They render in the Add Filter menu and do not change the match. */
+  agent?: string[];
+  creator?: string[];
+  estimate?: string[];
+  relations?: string[];
+  suggestedLabel?: string[];
+  cycle?: string[];
+  addedToCycle?: string[];
+  subscribers?: string[];
+  autoClosed?: string[];
+  content?: string[];
+  links?: string[];
+  template?: string[];
 };
 
 export const EMPTY_VIEW_FILTER: ViewFilter = {
@@ -130,10 +145,29 @@ export const EMPTY_VIEW_FILTER: ViewFilter = {
   project: [],
 };
 
+export type ViewScope = "personal" | "team";
+export type ViewKind = "issues" | "projects";
+
 export type SavedView = {
   name: string;
   filter: ViewFilter;
   default?: boolean;
+  icon?: string;
+  description?: string;
+  scope?: ViewScope;
+  kind?: ViewKind;
+};
+
+export type InboxKind = "update" | "assign" | "mention";
+
+export type InboxNotification = {
+  id: string;
+  kind: InboxKind;
+  issueKey: string;
+  text: string;
+  actor: string;
+  ago: string;
+  unread: boolean;
 };
 
 export type ScopePair = { workspace: string; project: string };
@@ -186,6 +220,7 @@ export type LinearFavorite = {
   kind: "initiative" | "project" | "issue";
   id: string;
   label: string;
+  folder?: string;
 };
 
 const STATUS_RANK = ["backlog", "todo", "to do", "in progress", "paused", "done", "cancelled", "canceled"];
@@ -193,6 +228,17 @@ const PRIORITY_RANK = ["urgent", "high", "medium", "low", "none"];
 
 export function normalizeStatus(status: string): string {
   return status.trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
+}
+
+export function statusTypeOf(status: string): string {
+  const key = normalizeStatus(status);
+  if (key === "backlog") return "Backlog";
+  if (key === "done" || key === "completed" || key === "complete" || key === "closed" || key === "resolved") return "Completed";
+  if (key === "cancelled" || key === "canceled") return "Cancelled";
+  if (key === "in progress" || key === "started" || key === "active" || key === "paused" || key.includes("progress") || key.includes("review")) {
+    return "Started";
+  }
+  return "Unstarted";
 }
 
 export function parseDay(value: string | undefined): Date | undefined {
@@ -484,6 +530,7 @@ export type Filterable = {
   labels?: string[];
   project?: string;
   health?: Health;
+  initiative?: string;
 };
 
 export function matchViewFilter(item: Filterable, filter: ViewFilter): boolean {
@@ -504,6 +551,12 @@ export function matchViewFilter(item: Filterable, filter: ViewFilter): boolean {
     if (!filter.labels.some((label) => labels.has(label.toLowerCase()))) return false;
   }
   if (filter.project.length && !filter.project.some((project) => project.toUpperCase() === (item.project ?? "").toUpperCase())) {
+    return false;
+  }
+  if (filter.statusType?.length && !filter.statusType.some((type) => type.toLowerCase() === statusTypeOf(item.status ?? "").toLowerCase())) {
+    return false;
+  }
+  if (filter.initiative?.length && !filter.initiative.some((name) => name.toLowerCase() === (item.initiative ?? "").toLowerCase())) {
     return false;
   }
   if (filter.health?.length && !healthMatches(item.health ?? "gray", filter.health, item.status, item.due)) return false;
@@ -527,6 +580,8 @@ export function viewFilterChips(filter: ViewFilter): { id: string; label: string
   for (const priority of filter.priority) chips.push({ id: `priority:${priority}`, label: `Priority ${priority}` });
   for (const label of filter.labels) chips.push({ id: `label:${label}`, label: `Label ${label}` });
   for (const project of filter.project) chips.push({ id: `project:${project}`, label: `Project ${project}` });
+  for (const type of filter.statusType ?? []) chips.push({ id: `statusType:${type}`, label: `Status type ${type}` });
+  for (const initiative of filter.initiative ?? []) chips.push({ id: `initiative:${initiative}`, label: `Initiative ${initiative}` });
   return chips;
 }
 
@@ -539,6 +594,8 @@ export function clearViewChip(filter: ViewFilter, id: string): ViewFilter {
     labels: [...filter.labels],
     project: [...filter.project],
     ...(filter.health ? { health: [...filter.health] } : {}),
+    ...(filter.statusType ? { statusType: [...filter.statusType] } : {}),
+    ...(filter.initiative ? { initiative: [...filter.initiative] } : {}),
     ...(filter.created ? { created: { ...filter.created } } : {}),
     ...(filter.updated ? { updated: { ...filter.updated } } : {}),
     ...(filter.due ? { due: { ...filter.due } } : {}),
@@ -554,6 +611,12 @@ export function clearViewChip(filter: ViewFilter, id: string): ViewFilter {
   else if (id.startsWith("health:")) {
     next.health = (next.health ?? []).filter((item) => `health:${item}` !== id);
     if (!next.health.length) delete next.health;
+  } else if (id.startsWith("statusType:")) {
+    next.statusType = (next.statusType ?? []).filter((item) => `statusType:${item}` !== id);
+    if (!next.statusType.length) delete next.statusType;
+  } else if (id.startsWith("initiative:")) {
+    next.initiative = (next.initiative ?? []).filter((item) => `initiative:${item}` !== id);
+    if (!next.initiative.length) delete next.initiative;
   }
   return next;
 }
@@ -566,10 +629,11 @@ export function saveView(
   views: SavedView[],
   name: string,
   filter: ViewFilter,
+  extra?: Partial<Pick<SavedView, "icon" | "description" | "scope" | "kind">>,
 ): { ok: true; views: SavedView[] } | { ok: false } {
   const trimmed = name.trim();
   if (!trimmed || views.some((view) => view.name.toLowerCase() === trimmed.toLowerCase())) return { ok: false };
-  return { ok: true, views: [...views, { name: trimmed, filter }] };
+  return { ok: true, views: [...views, { name: trimmed, filter, ...extra }] };
 }
 
 export function setDefaultView(views: SavedView[], name: string): SavedView[] {

@@ -183,7 +183,7 @@ Use existing label colours from `src/index.css` or computed HSL. No new tokens n
 | Views (team) | `LayoutGrid` |
 | Try | `Zap` |
 | Invite | `UserPlus` |
-| Connect GitHub | `Github` |
+| Connect GitHub | `GitFork` |
 
 ---
 
@@ -263,3 +263,4 @@ Use existing label colours from `src/index.css` or computed HSL. No new tokens n
 4. **Hover states** — Every clickable icon must have a visible hover state (colour change or background wash).
 5. **Disabled states** — Non-functional icons (e.g. Cycle in Plane mode) use `opacity-50` and `cursor-not-allowed`.
 6. **Accessibility** — All icons inside buttons must have `aria-label`. Decorative icons must have `aria-hidden="true"`.
+7. **Footer connect row** — Lucide 1.40 has no `Github` export. The muted footer row keeps the label Connect GitHub and draws `GitFork` at 16px, stroke 1.5.

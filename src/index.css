@@ -72,6 +72,24 @@
   --sidebar-border: #e2e2e2;
   --sidebar-ring: #7180ff;
 
+  --status-backlog: #6b7280;
+  --status-todo: #6b7280;
+  --status-active: #3b82f6;
+  --status-done: #22c55e;
+  --status-cancelled: #ef4444;
+  --status-paused: #eab308;
+  --priority-urgent: #ef4444;
+  --priority-high: #f97316;
+  --priority-medium: #eab308;
+  --priority-low: #3b82f6;
+  --priority-none: #9ca3af;
+  --label-1: #6d78d5;
+  --label-2: #3b82f6;
+  --label-3: #22c55e;
+  --label-4: #eab308;
+  --label-5: #f97316;
+  --label-6: #ef4444;
+
   --kanban-board-circle-primary: oklch(0.439 0 0);
   --kanban-board-circle-gray:    oklch(0.5513 0.0233 264.36);
   --kanban-board-circle-red:     oklch(0.6368 0.2078 25.33);
@@ -141,6 +159,13 @@
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: #212224;
   --sidebar-ring: #7180ff;
+
+  --status-backlog: #9ca3af;
+  --status-todo: #9ca3af;
+  --status-active: #60a5fa;
+  --status-done: #4ade80;
+  --status-cancelled: #f87171;
+  --status-paused: #facc15;
 
   --kanban-board-circle-primary: oklch(0.556 0 0);
   --kanban-board-circle-gray:    oklch(0.7137 0.0192 261.33);

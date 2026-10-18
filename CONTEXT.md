@@ -160,9 +160,29 @@ Local layout, grouping, ordering, zoom, empty groups, and completed window for I
 _Avoid_: view settings, chrome
 
 **View filter**:
-The Filter menu's date and field constraints (Created, Updated, Due, Status, Assignee, Priority, Labels, Project), chips, and saved views with one default. Shortcut F. Local. It does not change Scope or Refresh.
+Date and field constraints on the Board (Created, Updated, Due, Status, Status type, Assignee, Priority, Labels, Project, Health, Initiative), shown as chips under the Board tabs. `F` opens Add Filter. The header Filter button opens the facet editor. Local. It does not change Scope or Refresh. Placeholder rows (Agent, Creator, Estimate, and the rest of the coming-soon list) do not change which Cards match.
 _Avoid_: Search, Scope, JQL
+
+**View**:
+A named local query in the view browser. It stores an icon, a description, an Issues or Projects kind, a Personal or team scope, and the view filter at save time. Opening it applies that filter. Not Scope, not Preset, and not Favourite.
+_Avoid_: board, saved filter (when meaning a Preset)
+
+**Inbox**:
+The notification list under the workspace switcher. The unread badge is the number of Cards with the `needs-input` label, capped at `9+`. Mark all read clears the badge and shows an empty state. The rows are synthetic. Inbox stays visible when Source is Jira.
+_Avoid_: All stories, Pulse, triage
 
 **Favorite**:
 A locally saved Initiative, Project, or Issue in the sidebar Favorites group. Distinct from Favourite, which is an Epic.
 _Avoid_: pin, bookmark, star (the control)
+
+**Favorite folder**:
+A named one-level group of Favorites. It collapses, shows a count, and accepts a drag from another Favorite. An empty folder says so. Distinct from Folder, which groups Favourites.
+_Avoid_: Folder, directory, project
+
+**Your teams**:
+The sidebar section of checked workspace/project pairs. Each team nests Home, Triage, Issues, Cycles, Projects, and Views. Cycles stays disabled.
+_Avoid_: Workspace, switcher, All stories
+
+**Team**:
+One checked workspace/project pair in Your teams. Choosing the name applies that Scope and refreshes. The nested rows open the Board, Triage, or Views. Not a Folder and not a Workspace.
+_Avoid_: Project (the identifier alone), Workspace

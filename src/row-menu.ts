@@ -3,6 +3,7 @@ export type RowMenuAction =
   | { type: "assignee"; value: string }
   | { type: "priority"; value: string }
   | { type: "label"; value: string }
+  | { type: "move-project" }
   | { type: "copy" };
 
 export type RowMenuSection = {
@@ -23,6 +24,7 @@ export function rowMenuModel(input: {
     { id: "assignee", label: "Assignee", actions: input.assignees.map((value) => ({ type: "assignee", value })) },
     { id: "priority", label: "Priority", actions: PRIORITIES.map((value) => ({ type: "priority", value })) },
     { id: "labels", label: "Labels", actions: input.labels.map((value) => ({ type: "label", value })) },
+    { id: "project", label: "Project", actions: [{ type: "move-project" }] },
     { id: "copy", label: "Copy link", actions: [{ type: "copy" }] },
   ];
 }
