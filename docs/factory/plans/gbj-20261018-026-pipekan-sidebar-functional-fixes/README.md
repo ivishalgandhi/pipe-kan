@@ -14,3 +14,8 @@ Patch on 0.35.1. Fake fixtures only.
 ## Checks
 
 `bun run typecheck`, `bun run test`, `bun run build`, then `bun run smoke`. The click smoke opens the built UI against the Plane synthetic catalog, `fixtures/issues.json`, and `fixtures/taskwarrior.json`, clicks every sidebar row, and checks icon and label x with `getBoundingClientRect`.
+
+## Follow-ups
+
+- UI review nit (non-blocking): `Projects` and `Views` appear in both the Workspace section and under each team. Consider one entry with a scope switch, as Linear does. Also collapse the empty trailing count gutter on rows with no count.
+- Deployed: CT 425 on 0.35.2 (UI asset matches npm). Work workspace holds 28 projects and 247 issues.
