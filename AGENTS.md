@@ -39,13 +39,22 @@ Before a feature or bug: `git fetch` and `git pull --ff-only` so work starts
 on published `main`. After CI ships (`chore(release)` + `v*` tag): pull again
 so the clone matches origin. Diverged trees, conflicts, failed CI, or a
 missing tag when a release was expected: **stop for a human**. Do not force.
-Do not stash product work to make a pull succeed.
+Do not stash product work to make a pull succeed. Landing on `main` is the
+job PR merge, not `git push origin main` (Product PRs below).
+
+## Product PRs
+
+Product commits live on a readable branch `feat|fix|docs|chore/<short-slug>`
+(e.g. `docs/readme-projects-and-preset`). The `gbj-` job id stays on the card
+and in the PR body, not in the branch name. Push that branch. Do **not**
+`git push origin main`. Open a GitHub PR with the evidence pack before checks
+PASS. Operator **ship** is merge of that PR. Factory Intake `PR.md`.
 
 ## After ship (panes)
 
-Job tabs are ephemeral. After publish to `main`, Factory Intake closes idle
-planner / maker / Referee / UI tabs. Keep this session’s orch (`w1:p1`) and
-`pipe-kan-grok` (`w2:p1`). Factory Intake `PANES.md`.
+Job tabs are ephemeral. After the job PR is merged to `main`, Factory Intake
+closes idle planner / maker / Referee / UI tabs. Keep this session’s orch
+(`w1:p1`) and `pipe-kan-grok` (`w2:p1`). Factory Intake `PANES.md`.
 
 ## UI reviewer
 
@@ -68,6 +77,15 @@ Independent of the builder, Referee, UI review, and `code-review`. Host skills
 `improve-codebase-architecture` + `codebase-design`. Default **before makers**.
 HTML report in `$TMPDIR`; operator picks a candidate. Not a PQC PASS/FAIL.
 Do not copy skills into git.
+
+## Documentation
+
+Independent of the builder. Host skill `~/.agents/skills/writing-for-agents/SKILL.md`
+(operator may say wiring-for-agents). Factory Intake `DOCS.md`. Docs-only jobs:
+this agent is stage 2 (`docs: maker`), not `implement`. Product-code jobs may
+name `extra-checkers: docs` after Referee PASS. Prompt:
+`docs/factory/prompts/docs.md`. Read source; do not invent. Commit `docs:` when
+`VERSION-IMPACT` is `none`. Do not copy the skill into git. Not `w1:p1` / `w2:p1`.
 
 ## Agent skills
 

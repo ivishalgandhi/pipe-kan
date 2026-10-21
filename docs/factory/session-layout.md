@@ -47,8 +47,8 @@ tab + `agent start`**. Those two omp panes are treated as busy/fat.
 Durable: `w1:p1` (unnamed orch) and `w2:p1` (`pipe-kan-grok`). Do not dump
 new jobs there. Do not close them after ship.
 
-Job tabs (planner / maker / Referee / UI / `code-review`) are **ephemeral**.
-Each job gets a **new** tab. After publish to `main`, Factory Intake closes
+Job tabs (planner / maker / Referee / UI / `code-review` / docs) are **ephemeral**.
+Each job gets a **new** tab. After the job PR is merged to `main`, Factory Intake closes
 those idle tabs (Factory Intake `PANES.md`). Do not reuse a previous job’s
 Referee or UI tab. Do not treat `ui-review` as a pinned lane.
 
@@ -103,8 +103,14 @@ Versioning.
 (diverged, conflicts, failed CI, missing `v*` tag) is a human gate. See
 `AGENTS.md` Git alignment.
 
-**After ship:** close idle job tabs (planner / maker / Referee / UI). Keep
-`w1:p1` and `w2:p1`. Factory Intake `PANES.md`.
+**PR:** makers commit on a readable `feat|fix|docs|chore/<slug>` branch
+(not `gbj-*`). Factory Intake opens a GitHub PR with the evidence pack.
+**Ship** is merge of that PR, not `git push origin main`. See `AGENTS.md`
+Product PRs. Factory Intake `PR.md`.
+
+**After ship:** close idle job tabs (planner / maker / Referee / UI / docs)
+after the job PR is merged. Keep `w1:p1` and `w2:p1`. Factory Intake
+`PANES.md`.
 
 **UI reviewer** is a separate checker (BuJo `ui-review` shape): OMP
 `--model cursor/claude-4.5-sonnet` (Cursor Claude 4.5 Sonnet, Cursor
@@ -124,6 +130,10 @@ HTML in `$TMPDIR`; operator pick is a human gate. Not a PQC. Never on the
 
 **Intake desk:** `desk-pipe-kan` on Herdr session `grokbot-coordinator`,
 not a pane in `jira-kan`. Factory Intake `DESKS.md`.
+
+**Documentation:** separate OMP on tab `docs`, skill `writing-for-agents`.
+Docs-only (`docs: maker`) is stage 2, not `implement`. Prompt:
+`docs/factory/prompts/docs.md`. Factory Intake `DOCS.md`.
 
 **Specs/tickets:** product **planner** (not builder, not intake switchboard).
 Matt Pocock `grill-with-docs` → `to-spec` → `to-tickets` in one window;
