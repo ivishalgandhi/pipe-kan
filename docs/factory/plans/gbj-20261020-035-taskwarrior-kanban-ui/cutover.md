@@ -4,7 +4,9 @@
 Replace what is served at `https://taskwarrior.tail48fe8.ts.net/` with the new pipe-kan Taskwarrior profile, while keeping `/timebox` untouched and preserving a rollback path.
 
 ## Assumption
-The app runs on a **fresh, clean host/CT**. Discovery found host-integrity issues on the current taskwarrior node (CT 400); the operator provisions a new CT before cutover. This plan does not describe modifying the compromised host.
+The app runs on a **fresh, dedicated host/CT**; the operator provisions a new CT before cutover. This plan does not describe modifying the existing taskwarrior node.
+
+> Superseded: this plan moved to a standalone repo and host (job gbj-20261020-035). This branch is kept for reference and will not be merged.
 
 ---
 
@@ -141,7 +143,7 @@ Follow the `proxmox/pipekan` pattern (CT 425), adapted for Taskwarrior:
 
 | Decision | Options | Recommended default |
 |---|---|---|
-| Clean host | New CT or wipe old CT | **New CT** (security) |
+| Clean host | New CT or wipe old CT | **New CT** |
 | Auth | Tailnet-only or Google SSO | **Tailnet-only** (simpler) |
 | Data path | Local replica (A) or sync server (B) | **Local replica (A)** |
 | Funnel | Keep on or turn off | **Keep on** (no change; Tailscale ACLs gate access) |
